@@ -1,8 +1,0 @@
-[workspace]
-
-members = ["Projects/*"]
-default-members = [
-  "Projects/base",
-  "Projects/nyar-vm",
-  "Projects/parser",
-]

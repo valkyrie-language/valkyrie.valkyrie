@@ -1,7 +1,18 @@
 # IDE
+.vscode
 .idea
 *.iml
+time-travel.*
 
-# Rust
-target/
-Cargo.lock
+# Valkyrie
+
+# Node
+node_modules/
+cache/
+dist/
+package-lock.json
+*.wasm
+
+# Antlr
+.antlr/
+*.jar
