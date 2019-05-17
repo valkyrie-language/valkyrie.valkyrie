@@ -23,7 +23,7 @@ Nyar is a high-performance **virtual machine platform**, **optimization engine**
 **Valkyrie** is the primary programming language that targets the Nyar platform. It's a modern functional programming language with algebraic effects, designed to showcase Nyar's capabilities.
 
 ```valkyrie
-// Valkyrie code compiles to Nyar bytecode
+# Valkyrie code compiles to Nyar bytecode
 effect Http {
     get(url: String): String
 }

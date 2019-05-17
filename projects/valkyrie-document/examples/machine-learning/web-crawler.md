@@ -7,9 +7,9 @@ Valkyrie 提供了强大的网络爬虫框架，支持异步并发、智能调�
 ### 异步 HTTP 客户端
 
 ```valkyrie
-use std::http::{HttpClient, Request, Response, Method}
-use std::async::{Future, Stream}
-use std::time::Duration
+using std::http::{HttpClient, Request, Response, Method}
+using std::async::{Future, Stream}
+using std::time::Duration
 
 # HTTP 客户端配置
 struct CrawlerConfig {
@@ -89,9 +89,9 @@ enum CrawlerError {
 ### URL 管理和调度
 
 ```valkyrie
-use std::collections::{HashSet, VecDeque}
-use std::sync::{Arc, Mutex}
-use std::hash::{Hash, Hasher}
+using std::collections::{HashSet, VecDeque}
+using std::sync::{Arc, Mutex}
+using std::hash::{Hash, Hasher}
 
 # URL 优先级队列
 struct UrlQueue {
@@ -122,8 +122,8 @@ struct TaskMetadata {
     custom_headers: HashMap<String, String>
 }
 
-impl UrlQueue {
-    micro new() -> UrlQueue {
+imply UrlQueue {
+    new() -> UrlQueue {
         UrlQueue {
             high_priority: VecDeque::new(),
             normal_priority: VecDeque::new(),
@@ -133,7 +133,7 @@ impl UrlQueue {
         }
     }
     
-    micro add_url(mut self, url: String, priority: Priority, depth: u32) -> bool {
+    add_url(mut self, url: String, priority: Priority, depth: u32) -> bool {
         if self.visited.contains(&url) || self.in_progress.contains(&url) {
             return false  # URL已存在 ∃
         }
@@ -151,15 +151,15 @@ impl UrlQueue {
         }
         
         match priority {
-            Priority::High => self.high_priority.push_back(task),    # 高优先级队列 Q₃
-            Priority::Normal => self.normal_priority.push_back(task), # 普通优先级队列 Q₂
-            Priority::Low => self.low_priority.push_back(task)       # 低优先级队列 Q₁
+            case Priority::High => self.high_priority.push_back(task),    # 高优先级队列 Q₃
+            case Priority::Normal => self.normal_priority.push_back(task), # 普通优先级队列 Q₂
+            case Priority::Low => self.low_priority.push_back(task)       # 低优先级队列 Q₁
         }
         
         true  # 添加成功 ✓
     }
     
-    micro next_task(mut self) -> Option<CrawlTask> {
+    next_task(mut self) -> Option<CrawlTask> {
         if let Some(task) = self.high_priority.pop_front() {
             self.in_progress.insert(task.url.clone())
             return Some(task)
@@ -178,16 +178,16 @@ impl UrlQueue {
         None
     }
     
-    micro mark_completed(mut self, url: &str) {
+    mark_completed(mut self, url: &str) {
         self.in_progress.remove(url)
-        self.visited.insert(url.to_string())
+        self.visited.insert(url)
     }
     
-    micro mark_failed(mut self, url: &str) {
+    mark_failed(mut self, url: &str) {
         self.in_progress.remove(url)
     }
     
-    micro is_empty(self) -> bool {
+    is_empty(self) -> bool {
         self.high_priority.is_empty() && 
         self.normal_priority.is_empty() && 
         self.low_priority.is_empty()
@@ -200,7 +200,7 @@ class CrawlerScheduler {
     rate_limiter: RateLimiter,
     domain_delays: HashMap<String, SystemTime>
     
-    micro new(requests_per_second: f64) -> CrawlerScheduler {
+    new(requests_per_second: f64) -> CrawlerScheduler {
         CrawlerScheduler {
             queue: Arc::new(Mutex::new(UrlQueue::new())),
             rate_limiter: RateLimiter::new(requests_per_second),
@@ -242,8 +242,8 @@ struct RateLimiter {
     last_request: Option<SystemTime>
 }
 
-impl RateLimiter {
-    micro new(requests_per_second: f64) -> RateLimiter {
+imply RateLimiter {
+    new(requests_per_second: f64) -> RateLimiter {
         RateLimiter {
             interval: Duration::from_secs_f64(1.0 / requests_per_second),
             last_request: None
@@ -267,25 +267,25 @@ impl RateLimiter {
 ### HTML 解析和数据提取
 
 ```valkyrie
-use std::html::{Document, Element, Selector}
-use std::regex::Regex
+using std::html::{Document, Element, Selector}
+using std::regex::Regex
 
 # HTML 解析器
 struct HtmlParser {
     base_url: String
 }
 
-impl HtmlParser {
-    micro new(base_url: String) -> HtmlParser {
+imply HtmlParser {
+    new(base_url: String) -> HtmlParser {
         HtmlParser { base_url }
     }
     
-    micro parse(self, html: &str) -> Result<Document, ParseError> {
+    parse(self, html: &str) -> Result<Document, ParseError> {
         Document::from_html(html)
-            .map_err(|e| ParseError::HtmlParseError(e.to_string()))
+            .map_err(|e| ParseError::HtmlParseError(e))
     }
     
-    micro extract_links(self, doc: &Document) -> Vec<String> {
+    extract_links(self, doc: &Document) -> Vec<String> {
         let 𝒮 = Selector::parse("a[href]").unwrap()  # 链接选择器
         let mut 𝕃 = Vec::new()  # 链接集合
         
@@ -300,12 +300,12 @@ impl HtmlParser {
         𝕃  # 返回链接集合
     }
     
-    micro extract_text(self, doc: &Document, selector: &str) -> Vec<String> {
+    extract_text(self, doc: &Document, selector: &str) -> Vec<String> {
         let css_selector = Selector::parse(selector).unwrap()
         let mut texts = Vec::new()
         
         for element in doc.select(&css_selector) {
-            let text = element.text().collect::<Vec<_>>().join(" ").trim().to_string()
+            let text = element.text().collect::<Vec<_>>().join(" ").trim()
             if !text.is_empty() {
                 texts.push(text)
             }
@@ -314,7 +314,7 @@ impl HtmlParser {
         texts
     }
     
-    micro extract_structured_data(self, doc: &Document) -> StructuredData {
+    extract_structured_data(self, doc: &Document) -> StructuredData {
         let mut data = StructuredData::new()
         
         # 提取标题
@@ -325,7 +325,7 @@ impl HtmlParser {
         # 提取元数据
         for meta in doc.select(&Selector::parse("meta").unwrap()) {
             if let (Some(name), Some(content)) = (meta.value().attr("name"), meta.value().attr("content")) {
-                data.meta.insert(name.to_string(), content.to_string())
+                data.meta.insert(name, content)
             }
         }
         
@@ -340,9 +340,9 @@ impl HtmlParser {
         data
     }
     
-    micro resolve_url(self, href: &str) -> Option<String> {
+    resolve_url(self, href: &str) -> Option<String> {
         if href.starts_with("http://") || href.starts_with("https://") {
-            Some(href.to_string())
+            Some(href)
         } else if href.starts_with("/") {
             Some(format!("{}{}", self.base_url, href))
         } else if href.starts_with("./") {
@@ -362,8 +362,8 @@ struct StructuredData {
     custom_fields: HashMap<String, String>
 }
 
-impl StructuredData {
-    micro new() -> StructuredData {
+imply StructuredData {
+    new() -> StructuredData {
         StructuredData {
             title: None,
             meta: HashMap::new(),
@@ -383,9 +383,9 @@ enum ParseError {
 ### 数据存储和管道
 
 ```valkyrie
-use std::database::{Database, Connection, Transaction}
-use std::fs::{File, OpenOptions}
-use std::io::{Write, BufWriter}
+using std::database::{Database, Connection, Transaction}
+using std::fs::{File, OpenOptions}
+using std::io::{Write, BufWriter}
 
 # 数据存储接口
 trait DataStore {
@@ -411,7 +411,7 @@ struct DatabaseStore {
     connection: Connection
 }
 
-impl DataStore for DatabaseStore {
+imply DataStore for DatabaseStore {
     async micro save_page(mut self, url: &str, data: &CrawledData) -> Result<(), StoreError> {
         let mut tx = self.connection.begin().await?
         
@@ -476,8 +476,8 @@ struct JsonFileStore {
     writer: BufWriter<File>
 }
 
-impl JsonFileStore {
-    micro new(file_path: String) -> Result<JsonFileStore, StoreError> {
+imply JsonFileStore {
+    new(file_path: String) -> Result<JsonFileStore, StoreError> {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -490,7 +490,7 @@ impl JsonFileStore {
     }
 }
 
-impl DataStore for JsonFileStore {
+imply DataStore for JsonFileStore {
     async micro save_page(mut self, url: &str, data: &CrawledData) -> Result<(), StoreError> {
         let json_data = serde_json::to_string(data)?
         writeln!(self.writer, "{}", json_data)?
@@ -535,8 +535,8 @@ enum StoreError {
 ### 完整的爬虫引擎
 
 ```valkyrie
-use std::sync::Arc
-use tokio::sync::Semaphore
+using std::sync::Arc
+using tokio::sync::Semaphore
 
 # 主爬虫引擎
 class WebCrawler<S: DataStore> {
@@ -563,7 +563,7 @@ struct ContentFilter {
 }
 
 impl<S: DataStore> WebCrawler<S> {
-    micro new(config: CrawlerConfig, store: S) -> WebCrawler<S> {
+    new(config: CrawlerConfig, store: S) -> WebCrawler<S> {
         let client = AsyncHttpClient::new(config.clone()).await
         let scheduler = CrawlerScheduler::new(config.requests_per_second)
         
@@ -657,11 +657,11 @@ impl<S: DataStore> WebCrawler<S> {
         # 检查内容类型
         let content_type = response.headers()
             .get("content-type")
-            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.ok())
             .unwrap_or("")
         
         if !content_type.contains("text/html") {
-            return Err(CrawlerError::UnsupportedContentType(content_type.to_string()))
+            return Err(CrawlerError::UnsupportedContentType(content_type))
         }
         
         # 解析 HTML
@@ -703,7 +703,7 @@ impl<S: DataStore> WebCrawler<S> {
         })
     }
     
-    micro filter_links(links: &[String], config: &CrawlerEngineConfig) -> Vec<String> {
+    filter_links(links: &[String], config: &CrawlerEngineConfig) -> Vec<String> {
         links.iter()
             .filter(|link| {
                 # 域名过滤
@@ -728,7 +728,7 @@ impl<S: DataStore> WebCrawler<S> {
             .collect()
     }
     
-    micro passes_content_filters(content: &str, filters: &[ContentFilter]) -> bool {
+    passes_content_filters(content: &str, filters: &[ContentFilter]) -> bool {
         for filter in filters {
             if let Some(min_length) = filter.min_length {
                 if content.len() < min_length {
@@ -760,8 +760,8 @@ struct CrawlStats {
     start_time: SystemTime
 }
 
-impl CrawlStats {
-    micro new() -> CrawlStats {
+imply CrawlStats {
+    new() -> CrawlStats {
         CrawlStats {
             pages_crawled: 0,
             links_discovered: 0,
@@ -783,12 +783,12 @@ async micro basic_crawler_example() -> Result<(), Box<dyn std::error::Error>> {
         max_concurrent: 10,
         request_delay: Duration::from_millis(100),
         timeout: Duration::from_secs(30),
-        user_agent: "Valkyrie-Crawler/1.0".to_string(),
+        user_agent: "Valkyrie-Crawler/1.0",
         max_retries: 3
     }
     
     # 创建数据存储
-    let store = JsonFileStore::new("crawled_data.jsonl".to_string())?
+    let store = JsonFileStore::new("crawled_data.jsonl")?
     
     # 创建爬虫实例
     let mut crawler = WebCrawler::new(config, store)
@@ -797,14 +797,14 @@ async micro basic_crawler_example() -> Result<(), Box<dyn std::error::Error>> {
     crawler.config = CrawlerEngineConfig {
         max_depth: 3,
         max_pages: Some(1000),
-        allowed_domains: Some(hashset!["example.com".to_string()]),
+        allowed_domains: Some(hashset!["example.com"]),
         url_filters: vec![
             Regex::new(r"\.(jpg|jpeg|png|gif|pdf)$")?,
             Regex::new(r"/admin/")?
         ],
         content_filters: vec![
             ContentFilter {
-                selector: "body".to_string(),
+                selector: "body",
                 min_length: Some(100),
                 required_keywords: vec![]
             }
@@ -813,8 +813,8 @@ async micro basic_crawler_example() -> Result<(), Box<dyn std::error::Error>> {
     
     # 开始爬取
     let seed_urls = vec![
-        "https://example.com".to_string(),
-        "https://example.com/blog".to_string()
+        "https://example.com",
+        "https://example.com/blog"
     ]
     
     let stats = crawler.crawl(seed_urls).await?
@@ -855,7 +855,7 @@ struct ProductSelectors {
     reviews: String
 }
 
-impl EcommerceCrawler {
+imply EcommerceCrawler {
     async micro crawl_products(mut self, category_urls: Vec<String>) -> Result<Vec<ProductData>, CrawlerError> {
         let mut products = Vec::new()
         
@@ -936,7 +936,7 @@ struct NewsSource {
     date_format: String
 }
 
-impl NewsCrawler {
+imply NewsCrawler {
     async micro crawl_latest_news(mut self) -> Result<Vec<NewsArticle>, CrawlerError> {
         let mut articles = Vec::new()
         
@@ -978,7 +978,7 @@ impl NewsCrawler {
 ### 分布式爬取
 
 ```valkyrie
-use std::redis::{RedisClient, RedisConnection}
+using std::redis::{RedisClient, RedisConnection}
 
 # 分布式任务队列
 class DistributedCrawler {
@@ -987,7 +987,7 @@ class DistributedCrawler {
     local_crawler: WebCrawler<DatabaseStore>
 }
 
-impl DistributedCrawler {
+imply DistributedCrawler {
     async micro run_worker(mut self) -> Result<(), CrawlerError> {
         loop {
             # 从 Redis 获取任务
@@ -1050,7 +1050,7 @@ struct CrawlSession {
     created_at: SystemTime
 }
 
-impl AntiDetectionCrawler {
+imply AntiDetectionCrawler {
     async micro crawl_with_evasion(mut self, url: &str) -> Result<Response, CrawlerError> {
         # 随机选择 User-Agent
         let user_agent = self.user_agents.choose(&mut rand::thread_rng()).unwrap()

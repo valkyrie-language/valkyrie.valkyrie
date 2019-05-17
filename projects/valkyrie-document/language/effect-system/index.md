@@ -265,11 +265,11 @@ class ManagedResource<T> {
     resource: T
     cleanup: () -> ()
     
-    micro new(resource: T, cleanup: () -> ()) -> Self {
+    new(resource: T, cleanup: () -> ()) -> Self {
         Self { resource, cleanup }
     }
     
-    micro use<R>(block: (T) -> R) -> R {
+    use<R>(block: (T) -> R) -> R {
         let result = block(self.resource)
         self.cleanup()
         result
@@ -334,7 +334,7 @@ class CircuitBreaker {
     state: CircuitState
     last_failure_time: DateTime
     
-    micro call<T>(operation: () -> T) -> T {
+    call<T>(operation: () -> T) -> T {
         match self.state {
             CircuitState.Closed => {
                 try {
@@ -384,17 +384,17 @@ class CircuitBreaker {
 class AggregateException {
     exceptions: Vector<Any>
     
-    micro add(exception: Any) {
+    add(exception: Any) {
         self.exceptions.push(exception)
     }
     
-    micro has_errors() -> bool {
+    has_errors() -> bool {
         !self.exceptions.is_empty()
     }
 }
 
 micro process_batch(items: Vector<Item>) {
-    let errors = AggregateException { exceptions: [] }
+    let errors = new AggregateException { exceptions: [] }
     
     for item in items {
         try {
@@ -500,9 +500,9 @@ micro bad_example() {
 ### 4. 测试异常处理
 
 ```valkyrie
-#[test]
+↯[test]
 micro test_validation_error() {
-    let invalid_user = User { email: "" }
+    let invalid_user = new User { email: "" }
     
     try {
         save_user(invalid_user)
@@ -515,7 +515,7 @@ micro test_validation_error() {
     }
 }
 
-#[test]
+↯[test]
 micro test_retry_exhausted() {
     let mut call_count = 0
     

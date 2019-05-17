@@ -10,38 +10,38 @@ Valkyrie 支持多继承，允许一个类同时继承多个父类。多继承�
 
 ```valkyrie
 class A {
-    micro method_a(self) {
+    method_a(self) {
         println("Method from A")
     }
     
-    micro common_method(self) {
+    common_method(self) {
         println("A's common method")
     }
 }
 
 class B {
-    micro method_b(self) {
+    method_b(self) {
         println("Method from B")
     }
     
-    micro common_method(self) {
+    common_method(self) {
         println("B's common method")
     }
 }
 
 class C {
-    micro method_c(self) {
+    method_c(self) {
         println("Method from C")
     }
     
-    micro common_method(self) {
+    common_method(self) {
         println("C's common method")
     }
 }
 
 # 多继承语法：class 子类(父类1, 父类2, ...)
 class MultiChild(A, B, C) {
-    micro own_method(self) {
+    own_method(self) {
         println("MultiChild's own method")
     }
 }
@@ -53,24 +53,24 @@ class MultiChild(A, B, C) {
 
 ```valkyrie
 class Display {
-    micro show(self) {
+    show(self) {
         println("Display show")
     }
 }
 
 class Printer {
-    micro show(self) {
+    show(self) {
         println("Printer show")
     }
     
-    micro print(self) {
+    print(self) {
         println("Printing...")
     }
 }
 
 # 重命名继承语法：class 子类(rename: 父类, 其他父类)
 class Document(rename: Display, Printer) {
-    micro display_document(self) {
+    display_document(self) {
         # 通过重命名访问 Display 的方法
         self.rename.show()  # 调用 Display::show
         self.print()        # 调用 Printer::print
@@ -83,46 +83,46 @@ class Document(rename: Display, Printer) {
 
 ```valkyrie
 class FileReader {
-    micro read(self) -> String {
+    read(self) -> String {
         "Reading from file"
     }
     
-    micro close(self) {
+    close(self) {
         println("Closing file")
     }
 }
 
 class NetworkReader {
-    micro read(self) -> String {
+    read(self) -> String {
         "Reading from network"
     }
     
-    micro close(self) {
+    close(self) {
         println("Closing connection")
     }
 }
 
 class Logger {
-    micro log(self, message: String) {
+    log(self, message: String) {
         println("Log: {}", message)
     }
 }
 
 # 多重重命名
 class HybridReader(file_reader: FileReader, net_reader: NetworkReader, Logger) {
-    micro read_from_file(self) -> String {
+    read_from_file(self) -> String {
         let content = self.file_reader.read()
         self.log(@format("Read from file: {}", content))
         content
     }
     
-    micro read_from_network(self) -> String {
+    read_from_network(self) -> String {
         let content = self.net_reader.read()
         self.log(@format("Read from network: {}", content))
         content
     }
     
-    micro cleanup(self) {
+    cleanup(self) {
         self.file_reader.close()
         self.net_reader.close()
     }
@@ -135,15 +135,15 @@ Valkyrie 使用 C3 线性化算法来确定方法解析顺序：
 
 ```valkyrie
 class A {
-    micro method(self) { println("A") }
+    method(self) { println("A") }
 }
 
 class B(A) {
-    micro method(self) { println("B") }
+    method(self) { println("B") }
 }
 
 class C(A) {
-    micro method(self) { println("C") }
+    method(self) { println("C") }
 }
 
 class D(B, C) {
@@ -152,7 +152,7 @@ class D(B, C) {
 
 # C3 线性化顺序：D -> B -> C -> A
 # 调用 d.method() 会调用 B::method
-let d = D {}
+let d = new D {}
 d.method()  # 输出："B"
 ```
 
@@ -160,26 +160,26 @@ d.method()  # 输出："B"
 
 ```valkyrie
 class Base {
-    micro base_method(self) { println("Base") }
+    base_method(self) { println("Base") }
 }
 
 class Left(Base) {
-    micro left_method(self) { println("Left") }
-    micro common_method(self) { println("Left common") }
+    left_method(self) { println("Left") }
+    common_method(self) { println("Left common") }
 }
 
 class Right(Base) {
-    micro right_method(self) { println("Right") }
-    micro common_method(self) { println("Right common") }
+    right_method(self) { println("Right") }
+    common_method(self) { println("Right common") }
 }
 
 class Middle(Left, Right) {
-    micro middle_method(self) { println("Middle") }
+    middle_method(self) { println("Middle") }
 }
 
 class Final(Middle, Right) {
     # C3 线性化：Final -> Middle -> Left -> Right -> Base
-    micro test_resolution(self) {
+    test_resolution(self) {
         self.common_method()  # 调用 Left::common_method
         self.left_method()    # 调用 Left::left_method
         self.right_method()   # 调用 Right::right_method
@@ -194,7 +194,7 @@ class Final(Middle, Right) {
 
 ```valkyrie
 class Child(A, B, C) {
-    micro test_access(self) {
+    test_access(self) {
         # 直接调用，使用 C3 线性化顺序
         self.common_method()  # 调用第一个匹配的方法
         
@@ -208,7 +208,7 @@ class Child(A, B, C) {
 
 ```valkyrie
 class AdvancedChild(primary: A, secondary: B, tertiary: C) {
-    micro demonstrate_access(self) {
+    demonstrate_access(self) {
         # 通过重命名访问特定父类
         self.primary.common_method()    # 调用 A::common_method
         self.secondary.common_method()  # 调用 B::common_method
@@ -227,7 +227,7 @@ Valkyrie 支持匿名类的继承：
 ```valkyrie
 # 匿名类继承
 micro process_shape(shape: class(Drawable, Movable) {
-    micro area(self) -> f64
+    area(self) -> f64
 }) {
     shape.draw()
     shape.move_to(10.0, 20.0)
@@ -240,12 +240,12 @@ let circle = class(Drawable, Movable) {
     x: f64,
     y: f64,
     
-    micro area(self) -> f64 {
+    area(self) -> f64 {
         3.14159 * self.radius * self.radius
     }
 }
 
-process_shape(circle { radius: 5.0, x: 0.0, y: 0.0 })
+process_shape(new circle { radius: 5.0, x: 0.0, y: 0.0 })
 ```
 
 ### 匿名类重命名继承
@@ -253,7 +253,7 @@ process_shape(circle { radius: 5.0, x: 0.0, y: 0.0 })
 ```valkyrie
 # 匿名类的重命名继承
 micro create_hybrid_processor() -> class(reader: FileReader, writer: FileWriter) {
-    micro process(self, filename: String) {
+    process(self, filename: String) {
         let content = self.reader.read_file(filename)
         let processed = content.to_uppercase()
         self.writer.write_file(filename + ".processed", processed)
@@ -271,16 +271,16 @@ let processor = create_hybrid_processor() {
 class Parent1 {
     value1: i32,
     
-    micro new(v1: i32) -> Self {
-        Self { value1: v1 }
+    new(v1: i32) -> Self {
+        new Self { value1: v1 }
     }
 }
 
 class Parent2 {
     value2: String,
     
-    micro new(v2: String) -> Self {
-        Self { value2: v2 }
+    new(v2: String) -> Self {
+        new Self { value2: v2 }
     }
 }
 
@@ -288,7 +288,7 @@ class MultiInherit(Parent1, Parent2) {
     own_value: f64,
     
     # 多继承的构造函数
-    micro new(v1: i32, v2: String, own: f64) -> Self {
+    new(v1: i32, v2: String, own: f64) -> Self {
         Self {
             # 父类字段初始化
             value1: v1,
@@ -309,15 +309,15 @@ abstract class Shape {
     abstract micro perimeter(self) -> f64
     
     # 具体方法
-    micro describe(self) {
+    describe(self) {
         println("Area: {}, Perimeter: {}", self.area(), self.perimeter())
     }
 }
 
 # 接口定义
 trait Drawable {
-    micro draw(self)
-    micro set_color(self, color: Color)
+    draw(self)
+    set_color(self, color: Color)
 }
 
 # 多继承：抽象类 + 接口
@@ -327,20 +327,20 @@ class Rectangle(Shape): Drawable {
     color: Color,
     
     # 实现抽象方法
-    micro area(self) -> f64 {
+    area(self) -> f64 {
         self.width * self.height
     }
     
-    micro perimeter(self) -> f64 {
+    perimeter(self) -> f64 {
         2.0 * (self.width + self.height)
     }
     
     # 实现接口方法
-    micro draw(self) {
+    draw(self) {
         println("Drawing rectangle {}x{}", self.width, self.height)
     }
     
-    micro set_color(self, color: Color) {
+    set_color(self, color: Color) {
         self.color = color
     }
 }
@@ -350,15 +350,15 @@ class Rectangle(Shape): Drawable {
 
 ```valkyrie
 class GrandParent {
-    micro method(self) { println("GrandParent") }
+    method(self) { println("GrandParent") }
 }
 
 class Parent1(GrandParent) {
-    micro method(self) { println("Parent1") }
+    method(self) { println("Parent1") }
 }
 
 class Parent2(GrandParent) {
-    micro method(self) { println("Parent2") }
+    method(self) { println("Parent2") }
 }
 
 # 钻石继承
@@ -366,7 +366,7 @@ class Child(Parent1, Parent2) {
     # C3 线性化自动解决钻石问题
     # 线性化顺序：Child -> Parent1 -> Parent2 -> GrandParent
     
-    micro test_diamond(self) {
+    test_diamond(self) {
         self.method()  # 调用 Parent1::method
     }
     
@@ -375,7 +375,7 @@ class Child(Parent1, Parent2) {
 
 # 使用重命名解决钻石问题
 class ResolvedChild(p1: Parent1, p2: Parent2) {
-    micro test_resolved(self) {
+    test_resolved(self) {
         self.p1.method()  # 明确调用 Parent1::method
         self.p2.method()  # 明确调用 Parent2::method
     }
@@ -393,7 +393,7 @@ class Document {
     writer: FileWriter,
     logger: Logger,
     
-    micro process(self) {
+    process(self) {
         let content = self.reader.read()
         let processed = self.transform(content)
         self.writer.write(processed)
@@ -410,11 +410,11 @@ class Document {
 ```valkyrie
 # 清晰的重命名
 class MediaPlayer(audio: AudioPlayer, video: VideoPlayer) {
-    micro play_audio(self, file: String) {
+    play_audio(self, file: String) {
         self.audio.play(file)
     }
     
-    micro play_video(self, file: String) {
+    play_video(self, file: String) {
         self.video.play(file)
     }
 }
@@ -424,7 +424,7 @@ class MediaPlayer(audio: AudioPlayer, video: VideoPlayer) {
 
 ```valkyrie
 # 清晰的继承文档
-@.doc("""
+↯doc("""
 MultiProcessor 继承关系：
 - DataProcessor: 提供数据处理能力
 - NetworkHandler: 提供网络通信能力

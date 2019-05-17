@@ -34,35 +34,35 @@ workspace-root/
 
 ```json5
 {
-    // Workspace 基本信息
+    # Workspace 基本信息
     "name": "valkyrie-workspace",
     "version": "1.0.0",
     "description": "Valkyrie language workspace",
     
-    // 私有工作区标识
+    # 私有工作区标识
     "private": true,
     
-    // 成员项目列表
+    # 成员项目列表
     "members": [
         "projects/*",
         "packages/valkyrie-*",
         "tools/build-tools"
     ],
     
-    // 排除的目录
+    # 排除的目录
     "exclude": [
         "legacy/*",
         "experiments/*",
         "temp/*"
     ],
     
-    // 默认成员（用于快速构建）
+    # 默认成员（用于快速构建）
     "default-members": [
         "projects/valkyrie-core",
         "projects/valkyrie-std"
     ],
     
-    // Workspace 级别的脚本
+    # Workspace 级别的脚本
     "scripts": {
         "build": "cargo build --release",
         "test": "cargo test --release",
@@ -72,7 +72,7 @@ workspace-root/
         "upgrade": "cargo upgrade --workspace"
     },
     
-    // 共享依赖配置
+    # 共享依赖配置
     "dependencies": {
         "shared": {
             "serde": "^1.0",
@@ -80,7 +80,7 @@ workspace-root/
         }
     },
     
-    // 构建配置
+    # 构建配置
     "build": {
         "profile": {
             "release": {
@@ -123,7 +123,7 @@ workspace-root/
 ### 内部依赖
 
 ```json5
-// project-a/legion.json
+# project-a/legion.json
 {
     "dependencies": {
         "project-b": { "path": "../project-b" },

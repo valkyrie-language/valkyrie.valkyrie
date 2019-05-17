@@ -104,9 +104,9 @@ LIR 层是 Nyar 平台的代码生成核心，为多种目标平台提供统一�
 ### **1. 统一的编译基础设施**
 
 ```rust
-// 不同语言的相同逻辑在 Nyar 平台中的统一表示
+# 不同语言的相同逻辑在 Nyar 平台中的统一表示
 
-// Valkyrie 语言
+# Valkyrie 语言
 micro fibonacci(n: i32) -> i32 {
     n.match {
         case 0 | 1: n,
@@ -114,7 +114,7 @@ micro fibonacci(n: i32) -> i32 {
     }
 }
 
-// 转换为统一的 HIR 表示
+# 转换为统一的 HIR 表示
 HIRFunction {
     name: "fibonacci",
     params: [("n", Int32)],
@@ -150,9 +150,9 @@ HIRFunction {
 ### **3. 多目标平台支持**
 
 ```rust
-// 同一份 LIR 代码生成多种目标
+# 同一份 LIR 代码生成多种目标
 
-// WebAssembly 输出
+# WebAssembly 输出
 (func $fibonacci (param $n i32) (result i32)
   local.get $n
   i32.const 2
@@ -171,7 +171,7 @@ HIRFunction {
     i32.add
   end)
 
-// JavaScript 输出
+# JavaScript 输出
 function fibonacci(n) {
     if (n < 2) {
         return n;
@@ -180,7 +180,7 @@ function fibonacci(n) {
     }
 }
 
-// x86-64 汇编输出
+# x86-64 汇编输出
 fibonacci:
     cmp edi, 2
     jl .L_base_case

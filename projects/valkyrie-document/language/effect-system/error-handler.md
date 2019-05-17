@@ -147,8 +147,8 @@ union AppError {
 }
 
 # 实现错误转换
-impl From<NetworkError> for AppError {
-    micro from(err: NetworkError) -> AppError {
+imply From<NetworkError> for AppError {
+    from(err: NetworkError) -> AppError {
         AppError::Network(err)
     }
 }
@@ -247,7 +247,7 @@ micro validate_user_input(input: UserInput) -> Result<ValidatedInput, Validation
         let email = validate_email(input.email)?
         let age = validate_age(input.age)?
         let name = validate_name(input.name)?
-        class: ValidatedInput { email, age, name }
+        new ValidatedInput { email, age, name }
     }
 }
 
@@ -279,8 +279,8 @@ class FileHandle {
     handle: File
 }
 
-impl Drop for FileHandle {
-    micro drop() {
+imply Drop for FileHandle {
+    drop() {
         self.handle.close()
     }
 }

@@ -238,7 +238,7 @@ namespace math.geometry {
         y: f64
     }
     
-    micro distance(p1: Point, p2: Point) -> f64 {
+    distance(p1: Point, p2: Point) -> f64 {
         let dx = p1.x - p2.x
         let dy = p1.y - p2.y
         (dx * dx + dy * dy).sqrt()
@@ -316,6 +316,14 @@ let message = "Hello, ${name}! You are ${age} years old."
 ["a", "b", "c"]
 
 # 对象字面量
+# 匿名类语法（推荐）
+class {
+    name = "Alice",
+    age = 30,
+    active = true
+}
+
+# 传统语法（兼容）
 {
     name: "Alice",
     age: 30,

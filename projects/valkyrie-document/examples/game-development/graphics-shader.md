@@ -407,7 +407,7 @@ micro create_render_pipeline(context: GraphicsContext) -> wgpu::RenderPipeline {
     # 编译 Valkyrie shader 到 WGSL
     let vertex_shader = compile_valkyrie_shader("
         @vertex
-        micro vertex_main(vertex: VertexInput, camera: CameraUniform) -> VertexOutput {
+        vertex_main(vertex: VertexInput, camera: CameraUniform) -> VertexOutput {
             VertexOutput {
                 clip_position: camera.view_proj * Vec4(vertex.position, 1.0),
                 color: vertex.color,
@@ -418,7 +418,7 @@ micro create_render_pipeline(context: GraphicsContext) -> wgpu::RenderPipeline {
     
     let fragment_shader = compile_valkyrie_shader("
         @fragment
-        micro fragment_main(input: FragmentInput) -> FragmentOutput {
+        fragment_main(input: FragmentInput) -> FragmentOutput {
             let tex_color = texture.sample(sampler, input.uv)
             FragmentOutput { color: tex_color }
         }
@@ -466,7 +466,7 @@ class TextureManager {
     device: wgpu::Device,
     queue: wgpu::Queue
     
-    micro new(device: wgpu::Device, queue: wgpu::Queue) -> TextureManager {
+    new(device: wgpu::Device, queue: wgpu::Queue) -> TextureManager {
         TextureManager {
             textures: HashMap::new(),
             device,
@@ -474,7 +474,7 @@ class TextureManager {
         }
     }
     
-    micro load_texture(mut self, name: String, path: String) -> Result<(), Error> {
+    load_texture(mut self, name: String, path: String) -> Result<(), Error> {
         let image_data = load_image_from_file(path)?
         
         let texture = self.device.create_texture(wgpu::TextureDescriptor {
@@ -512,7 +512,7 @@ class TextureManager {
         Ok(())
     }
     
-    micro get_texture(self, name: String) -> Option<wgpu::Texture> {
+    get_texture(self, name: String) -> Option<wgpu::Texture> {
         self.textures.get(name).cloned()
     }
 }
@@ -670,7 +670,7 @@ class GPUProfiler {
     query_buffer: wgpu::Buffer,
     timestamps: [f64]
     
-    micro new(device: wgpu::Device) -> GPUProfiler {
+    new(device: wgpu::Device) -> GPUProfiler {
         let query_set = device.create_query_set(wgpu::QuerySetDescriptor {
             label: Some("Timestamp Queries"),
             ty: wgpu::QueryType::Timestamp,
@@ -691,17 +691,17 @@ class GPUProfiler {
         }
     }
     
-    micro begin_pass(self, encoder: wgpu::CommandEncoder, label: String) {
+    begin_pass(self, encoder: wgpu::CommandEncoder, label: String) {
         encoder.write_timestamp(self.query_set, self.timestamps.len() as u32)
         self.timestamps.push(0.0) # 占位符
     }
     
-    micro end_pass(self, encoder: wgpu::CommandEncoder) {
+    end_pass(self, encoder: wgpu::CommandEncoder) {
         encoder.write_timestamp(self.query_set, self.timestamps.len() as u32)
         self.timestamps.push(0.0) # 占位符
     }
     
-    micro resolve_queries(self, encoder: wgpu::CommandEncoder) {
+    resolve_queries(self, encoder: wgpu::CommandEncoder) {
         encoder.resolve_query_set(
             self.query_set,
             0..self.timestamps.len() as u32,
@@ -744,7 +744,7 @@ class BatchRenderer {
     instance_data: [InstanceData],
     max_instances: usize
     
-    micro new(device: wgpu::Device, max_instances: usize) -> BatchRenderer {
+    new(device: wgpu::Device, max_instances: usize) -> BatchRenderer {
         let instance_buffer = device.create_buffer(wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
             size: (max_instances * size_of::<InstanceData>()) as u64,
@@ -759,7 +759,7 @@ class BatchRenderer {
         }
     }
     
-    micro add_instance(mut self, transform: Mat4, color: Vec4) {
+    add_instance(mut self, transform: Mat4, color: Vec4) {
         if self.instance_data.len() < self.max_instances {
             self.instance_data.push(InstanceData {
                 model_matrix: transform,
@@ -768,7 +768,7 @@ class BatchRenderer {
         }
     }
     
-    micro flush(mut self, queue: wgpu::Queue) {
+    flush(mut self, queue: wgpu::Queue) {
         if !self.instance_data.is_empty() {
             queue.write_buffer(
                 self.instance_buffer,
@@ -778,7 +778,7 @@ class BatchRenderer {
         }
     }
     
-    micro render(self, render_pass: wgpu::RenderPass) {
+    render(self, render_pass: wgpu::RenderPass) {
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..))
         render_pass.draw_indexed(0..index_count, 0, 0..self.instance_data.len() as u32)
         
@@ -795,13 +795,13 @@ class BatchRenderer {
 # 调试输出宏
 macro debug_color(color: Vec3) {
     # 在调试模式下输出颜色到特殊缓冲区
-    #[cfg(debug)]
+    ↯[cfg(debug)]
     debug_output.color = Vec4(color, 1.0)
 }
 
 macro debug_value(name: String, value: f32) {
     # 在调试模式下输出数值
-    #[cfg(debug)]
+    ↯[cfg(debug)]
     debug_output.values[name] = value
 }
 
@@ -843,7 +843,7 @@ class ShaderHotReload {
     pipelines: HashMap<String, wgpu::RenderPipeline>,
     device: wgpu::Device
     
-    micro new(device: wgpu::Device) -> ShaderHotReload {
+    new(device: wgpu::Device) -> ShaderHotReload {
         ShaderHotReload {
             shader_files: HashMap::new(),
             pipelines: HashMap::new(),
@@ -851,7 +851,7 @@ class ShaderHotReload {
         }
     }
     
-    micro watch_shader(mut self, name: String, path: String) {
+    watch_shader(mut self, name: String, path: String) {
         let watcher = FileWatcher::new(path, || {
             self.reload_shader(name.clone())
         })
@@ -859,7 +859,7 @@ class ShaderHotReload {
         self.shader_files.insert(name, watcher)
     }
     
-    micro reload_shader(mut self, name: String) {
+    reload_shader(mut self, name: String) {
         try {
             let shader_source = read_file(self.shader_files[name].path)?
             let compiled_shader = compile_valkyrie_shader(shader_source)?

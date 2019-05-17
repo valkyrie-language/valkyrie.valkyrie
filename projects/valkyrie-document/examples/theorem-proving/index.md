@@ -14,7 +14,7 @@ Universe Prop : Type₀
 # 恒等类型（路径类型）
 struct Path<A: Type, x: A, y: A> : Type {
     # 路径归纳原理
-    micro refl(x: A) -> Path<A, x, x>
+    refl(x: A) -> Path<A, x, x>
 }
 
 # 路径操作

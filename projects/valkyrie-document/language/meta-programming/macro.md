@@ -5,7 +5,7 @@
 Valkyrie 提供了强大的宏系统，支持编译时代码生成和元编程。宏系统分为两个主要部分：
 
 - **Macro (`@`)**: 编译时函数调用，不捕捉后续参数
-- **Annotation (`@.`)**: 编译时注解，会捕捉并作用于后续的 `class`、`micro` 等声明
+- **Annotation (`↯`)**: 编译时注解，会捕捉并作用于后续的 `class`、`micro` 等声明
 
 ## Macro vs Annotation
 
@@ -35,32 +35,32 @@ let query = @sql(
 )
 ```
 
-### Annotation (`@.`)
+### Annotation (`↯`)
 
-Annotation 使用 `@.` 前缀，会捕捉并作用于后续的声明：
+Annotation 使用 `↯` 前缀，会捕捉并作用于后续的声明：
 
 ```valkyrie
 # 测试注解
-@.test
+↯test
 micro test_addition() {
-    @.assert_eq(2 + 2, 4)
+    ↯assert_eq(2 + 2, 4)
 }
 
 # 序列化注解
-@.derive(Serialize, Deserialize)
+↯derive(Serialize, Deserialize)
 class User {
     name: String,
     email: String,
 }
 
 # 性能测试注解
-@.benchmark
+↯benchmark
 micro fibonacci_benchmark() {
     fibonacci(30)
 }
 
 # 条件编译注解
-@.cfg(feature = "debug")
+↯cfg(feature = "debug")
 micro debug_function() {
     println("Debug mode enabled")
 }
@@ -92,19 +92,19 @@ let config_content: String = @compile_time_read_file("config.toml")
     name: "crud_operations",
     params: [Entity: Type, Key: Type],
     body: {
-        micro create(entity: Entity) -> Result<Key, Error> {
+        create(entity: Entity) -> Result<Key, Error> {
             # 创建实体的通用逻辑
         }
         
-        micro read(key: Key) -> Result<Entity, Error> {
+        read(key: Key) -> Result<Entity, Error> {
             # 读取实体的通用逻辑
         }
         
-        micro update(key: Key, entity: Entity) -> Result<(), Error> {
+        update(key: Key, entity: Entity) -> Result<(), Error> {
             # 更新实体的通用逻辑
         }
         
-        micro delete(key: Key) -> Result<(), Error> {
+        delete(key: Key) -> Result<(), Error> {
             # 删除实体的通用逻辑
         }
     }
@@ -132,15 +132,15 @@ macro recursive_macro {
 ### 测试相关
 
 ```valkyrie
-@.test
+↯test
 micro test_user_creation() {
     let user = User::new("Alice", "alice@example.com")
-    @.assert_true(user.is_valid())
-    @.assert_eq(user.name, "Alice")
+    ↯assert_true(user.is_valid())
+    ↯assert_eq(user.name, "Alice")
 }
 
-@.test
-@.should_panic
+↯test
+↯should_panic
 micro test_invalid_email() {
     User::new("Bob", "invalid-email")
 }
@@ -149,13 +149,13 @@ micro test_invalid_email() {
 ### 派生注解
 
 ```valkyrie
-@.derive(Debug, Clone, PartialEq)
+↯derive(Debug, Clone, PartialEq)
 class Point {
     x: f64,
     y: f64,
 }
 
-@.derive(Serialize, Deserialize)
+↯derive(Serialize, Deserialize)
 class Config {
     database_url: String,
     port: u16,
@@ -165,12 +165,12 @@ class Config {
 ### 条件编译
 
 ```valkyrie
-@.cfg(target_os = "windows")
+↯cfg(target_os = "windows")
 micro windows_specific_function() {
     # Windows 特定实现
 }
 
-@.cfg(feature = "async")
+↯cfg(feature = "async")
 class AsyncHandler {
     # 异步处理器实现
 }
@@ -216,7 +216,7 @@ micro debug_print(args: TokenStream) -> TokenStream {
 
 1. **明确区分用途**：
    - 使用 `@` 进行编译时计算和代码生成
-   - 使用 `@.` 为声明添加元数据和行为
+   - 使用 `↯` 为声明添加元数据和行为
 
 2. **性能考虑**：
    - 编译时计算可以提高运行时性能
@@ -235,6 +235,6 @@ micro debug_print(args: TokenStream) -> TokenStream {
 Valkyrie 的宏系统提供了强大的元编程能力：
 
 - **Macro (`@`)**: 编译时函数，用于计算、生成和转换
-- **Annotation (`@.`)**: 声明注解，用于添加元数据和行为
+- **Annotation (`↯`)**: 声明注解，用于添加元数据和行为
 
 正确使用这两种机制可以大大提高代码的表达力和性能。

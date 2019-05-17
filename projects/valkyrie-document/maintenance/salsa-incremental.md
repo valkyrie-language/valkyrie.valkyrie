@@ -21,16 +21,16 @@ Salsa 将编译过程建模为一个有向无环图 (DAG)，其中每个节点�
 查询是 Salsa 中的基本计算单元。每个查询都是一个纯函数，给定相同的输入总是产生相同的输出。
 
 ```rust
-#[salsa::query_group(CompilerDatabase)]
-pub trait CompilerQueries {
-    /// 解析源文件为 AST
-    micro parse_file(&self, file_id: FileId) -> Arc<ast::Module>;
+↯[salsa::query_group(CompilerDatabase)]
+trait CompilerQueries {
+    ⍝ 解析源文件为 AST
+    parse_file(&self, file_id: FileId) -> Arc<ast::Module>;
     
-    /// 从 AST 构建 HIR
-    micro lower_to_hir(&self, file_id: FileId) -> Arc<hir::Program>;
+    ⍝ 从 AST 构建 HIR
+    lower_to_hir(&self, file_id: FileId) -> Arc<hir::Program>;
     
-    /// 类型检查
-    micro type_check(&self, program: Arc<hir::Program>) -> TypeCheckResult;
+    ⍝ 类型检查
+    type_check(&self, program: Arc<hir::Program>) -> TypeCheckResult;
 }
 ```
 
@@ -39,12 +39,12 @@ pub trait CompilerQueries {
 数据库是所有查询的执行环境，负责管理缓存、依赖追踪和增量更新。
 
 ```rust
-#[salsa::database(CompilerDatabase)]
-pub class NyarDatabase {
+↯[salsa::database(CompilerDatabase)]
+class NyarDatabase {
     storage: salsa::Storage<Self>,
 }
 
-impl salsa::Database for NyarDatabase {}
+imply salsa::Database for NyarDatabase {}
 ```
 
 ### Input (输入)
@@ -52,11 +52,11 @@ impl salsa::Database for NyarDatabase {}
 输入是计算图的根节点，代表外部数据源（如源文件内容）。
 
 ```rust
-#[salsa::input]
-pub class SourceFile {
-    #[return_ref]
-    pub content: String,
-    pub path: PathBuf,
+↯[salsa::input]
+class SourceFile {
+    ↯[return_ref]
+    content: String,
+    path: PathBuf,
 }
 ```
 
@@ -73,13 +73,13 @@ pub class SourceFile {
 ### 编译流水线集成
 
 ```rust
-// 完整的编译流水线作为查询链
+# 完整的编译流水线作为查询链
 micro compile_to_wasm(db: &dyn CompilerQueries, file_id: FileId) -> Result<Vector<u8>, CompileError> {
-    let ast = db.parse_file(file_id);           // 可缓存
-    let hir = db.lower_to_hir(file_id);         // 可缓存
-    let mir = db.lower_to_mir(hir);             // 可缓存
-    let lir = db.lower_to_lir(mir);             // 可缓存
-    let wasm = db.generate_wasm(lir);           // 可缓存
+    let ast = db.parse_file(file_id);           # 可缓存
+    let hir = db.lower_to_hir(file_id);         # 可缓存
+    let mir = db.lower_to_mir(hir);             # 可缓存
+    let lir = db.lower_to_lir(mir);             # 可缓存
+    let wasm = db.generate_wasm(lir);           # 可缓存
     Ok(wasm)
 }
 ```
@@ -89,18 +89,18 @@ micro compile_to_wasm(db: &dyn CompilerQueries, file_id: FileId) -> Result<Vecto
 Salsa 的增量特性使得实现高性能的语言服务器变得简单：
 
 ```rust
-// 当用户修改文件时
+# 当用户修改文件时
 micro on_file_changed(&mut self, file_id: FileId, new_content: String) {
-    // 更新输入
+    # 更新输入
     self.db.set_file_content(file_id, new_content);
     
-    // 所有依赖的查询会自动失效
-    // 下次访问时会重新计算
+    # 所有依赖的查询会自动失效
+    # 下次访问时会重新计算
 }
 
-// 提供诊断信息
+# 提供诊断信息
 micro get_diagnostics(&self, file_id: FileId) -> Vector<Diagnostic> {
-    // 只有必要的部分会重新计算
+    # 只有必要的部分会重新计算
     self.db.type_check_file(file_id).diagnostics
 }
 ```
@@ -112,10 +112,10 @@ micro get_diagnostics(&self, file_id: FileId) -> Vector<Diagnostic> {
 Salsa 支持并行执行独立的查询，充分利用多核处理器：
 
 ```rust
-#[salsa::query_group(ParallelQueries)]
-pub trait ParallelQueries {
-    #[salsa::invoke(parallel_type_check)]
-    micro type_check_module(&self, module_id: ModuleId) -> TypeCheckResult;
+↯[salsa::query_group(ParallelQueries)]
+trait ParallelQueries {
+    ↯[salsa::invoke(parallel_type_check)]
+    type_check_module(&self, module_id: ModuleId) -> TypeCheckResult;
 }
 ```
 
@@ -123,16 +123,16 @@ pub trait ParallelQueries {
 
 Salsa 提供了多种缓存策略来平衡内存使用和计算性能：
 
-- `#[salsa::memoized]`: 完全缓存结果
-- `#[salsa::volatile]`: 每次都重新计算
-- `#[salsa::transparent]`: 透明查询，不缓存
+- `↯[salsa::memoized]`: 完全缓存结果
+- `↯[salsa::volatile]`: 每次都重新计算
+- `↯[salsa::transparent]`: 透明查询，不缓存
 
 ## 调试和监控
 
 ### 查询依赖图可视化
 
 ```rust
-// 生成依赖图用于调试
+# 生成依赖图用于调试
 micro debug_dependencies(db: &NyarDatabase) {
     let debug_info = db.debug();
     println!("Query dependencies: {:#?}", debug_info.dependencies());
@@ -142,14 +142,14 @@ micro debug_dependencies(db: &NyarDatabase) {
 ### 性能分析
 
 ```rust
-// 启用性能分析
+# 启用性能分析
 let mut db = NyarDatabase::default();
 db.set_debug_query_table();
 
-// 执行编译
+# 执行编译
 let result = compile_to_wasm(&db, file_id);
 
-// 查看性能统计
+# 查看性能统计
 for (query, stats) in db.query_stats() {
     println!("{}: {} calls, {}ms total", query, stats.calls, stats.duration_ms);
 }
@@ -167,16 +167,16 @@ for (query, stats) in db.query_stats() {
 ### 错误处理集成
 
 ```rust
-#[salsa::query_group(ErrorQueries)]
-pub trait ErrorQueries {
-    micro collect_errors(&self, file_id: FileId) -> Vector<miette::Report>;
+↯[salsa::query_group(ErrorQueries)]
+trait ErrorQueries {
+    collect_errors(&self, file_id: FileId) -> Vector<miette::Report>;
 }
 
-// 错误也可以被缓存
+# 错误也可以被缓存
 micro collect_errors(db: &dyn ErrorQueries, file_id: FileId) -> Vector<miette::Report> {
     let mut errors = Vec::new();
     
-    // 收集各阶段的错误
+    # 收集各阶段的错误
     if let Err(parse_errors) = db.parse_file(file_id) {
         errors.extend(parse_errors);
     }

@@ -10,15 +10,15 @@ Valkyrie 的 trait 系统提供了强大的抽象机制，支持接口定义、�
 
 ```valkyrie
 trait Display {
-    micro fmt(self) -> String
+    fmt(self) -> String
 }
 
 trait Clone {
-    micro clone(self) -> Self
+    clone(self) -> Self
 }
 
 trait Debug {
-    micro debug_fmt(self) -> String {
+    debug_fmt(self) -> String {
         # 默认实现
         @format("{}@{:p}", self.type_name(), &self)
     }
@@ -31,15 +31,15 @@ trait Debug {
 trait Iterator {
     type Item
     
-    micro next(mut self) -> Option<Self::Item>
+    next(mut self) -> Option<Self::Item>
     
-    micro collect<C: FromIterator<Self::Item>>(self) -> C {
+    collect<C: FromIterator<Self::Item>>(self) -> C {
         C::from_iter(self)
     }
 }
 
 trait FromIterator<T> {
-    micro from_iter<I: Iterator<Item = T>>(iter: I) -> Self
+    from_iter<I: Iterator<Item = T>>(iter: I) -> Self
 }
 ```
 
@@ -47,15 +47,15 @@ trait FromIterator<T> {
 
 ```valkyrie
 trait PartialEq<Rhs = Self> {
-    micro eq(self, other: &Rhs) -> bool
+    eq(self, other: &Rhs) -> bool
     
-    micro ne(self, other: &Rhs) -> bool {
+    ne(self, other: &Rhs) -> bool {
         !self.eq(other)
     }
 }
 
 trait Ord: PartialEq + PartialOrd {
-    micro cmp(self, other: &Self) -> Ordering
+    cmp(self, other: &Self) -> Ordering
 }
 ```
 
@@ -69,15 +69,15 @@ class Point {
     y: f64,
 }
 
-impl Display for Point {
-    micro fmt(self) -> String {
+imply Display for Point {
+    fmt(self) -> String {
         @format("Point({}, {})", self.x, self.y)
     }
 }
 
-impl Clone for Point {
-    micro clone(self) -> Self {
-        Point { x: self.x, y: self.y }
+imply Clone for Point {
+    clone(self) -> Self {
+        new Point { x: self.x, y: self.y }
     }
 }
 ```
@@ -86,7 +86,7 @@ impl Clone for Point {
 
 ```valkyrie
 impl<T: Display> Display for Vector<T> {
-    micro fmt(self) -> String {
+    fmt(self) -> String {
         let items = self.iter()
             .map({ $item.fmt() })
             .collect::<Vector<String>>()
@@ -96,7 +96,7 @@ impl<T: Display> Display for Vector<T> {
 }
 
 impl<T: Clone> Clone for Vector<T> {
-    micro clone(self) -> Self {
+    clone(self) -> Self {
         self.iter().map({ $item.clone() }).collect()
     }
 }
@@ -106,7 +106,7 @@ impl<T: Clone> Clone for Vector<T> {
 
 ```valkyrie
 impl<T: PartialEq> PartialEq for Vector<T> {
-    micro eq(self, other: &Self) -> bool {
+    eq(self, other: &Self) -> bool {
         self.len() == other.len() && 
         self.iter().zip(other.iter()).all({ $a.eq($b) })
     }
@@ -120,8 +120,8 @@ Valkyrie 支持匿名 trait，可以在函数参数中直接定义：
 ```valkyrie
 # 匿名 trait 作为参数
 micro process_drawable(drawable: ftrait {
-    micro draw(self)
-    micro get_bounds(self) -> Rectangle
+    draw(self)
+    get_bounds(self) -> Rectangle
 }) {
     let bounds = drawable.get_bounds()
     println("Drawing object with bounds: {}", bounds)
@@ -132,17 +132,17 @@ micro process_drawable(drawable: ftrait {
 let circle = class {
     radius: f64,
     
-    micro draw(self) {
+    draw(self) {
         println("Drawing circle with radius {}", self.radius)
     }
     
-    micro get_bounds(self) -> Rectangle {
+    get_bounds(self) -> Rectangle {
         Rectangle::new(-self.radius, -self.radius, 
                       self.radius * 2, self.radius * 2)
     }
 }
 
-process_drawable(circle { radius: 5.0 })
+process_drawable(new circle { radius: 5.0 })
 ```
 
 ### 匿名 Trait 继承
@@ -150,7 +150,7 @@ process_drawable(circle { radius: 5.0 })
 ```valkyrie
 # 继承现有 trait 的匿名 trait
 micro handle_serializable(obj: ftrait(Display, Clone) {
-    micro serialize(self) -> String
+    serialize(self) -> String
 }) {
     println("Object: {}", obj.fmt())
     let cloned = obj.clone()
@@ -165,20 +165,20 @@ micro handle_serializable(obj: ftrait(Display, Clone) {
 
 ```valkyrie
 trait Animal {
-    micro make_sound(self)
-    micro name(self) -> String
+    make_sound(self)
+    name(self) -> String
 }
 
 class Dog {
     name: String,
 }
 
-impl Animal for Dog {
-    micro make_sound(self) {
+imply Animal for Dog {
+    make_sound(self) {
         println("Woof!")
     }
     
-    micro name(self) -> String {
+    name(self) -> String {
         self.name.clone()
     }
 }
@@ -187,20 +187,20 @@ class Cat {
     name: String,
 }
 
-impl Animal for Cat {
-    micro make_sound(self) {
+imply Animal for Cat {
+    make_sound(self) {
         println("Meow!")
     }
     
-    micro name(self) -> String {
+    name(self) -> String {
         self.name.clone()
     }
 }
 
 # 使用 trait 对象
 let animals: Vector<Box<dyn Animal>> = vec![
-    Box::new(Dog { name: "Buddy".to_string() }),
-    Box::new(Cat { name: "Whiskers".to_string() }),
+    Box::new(new Dog { name: "Buddy" }),
+    Box::new(new Cat { name: "Whiskers" }),
 ]
 
 for animal in animals {
@@ -214,22 +214,22 @@ for animal in animals {
 ```valkyrie
 # 对象安全的 trait
 trait Draw {
-    micro draw(self)  # 接收 self，对象安全
+    draw(self)  # 接收 self，对象安全
 }
 
 # 非对象安全的 trait
 trait Clone {
-    micro clone(self) -> Self  # 返回 Self，非对象安全
+    clone(self) -> Self  # 返回 Self，非对象安全
 }
 
 # 使用 where 子句限制
 trait Container {
     type Item
     
-    micro get(self, index: usize) -> Option<&Self::Item>
+    get(self, index: usize) -> Option<&Self::Item>
     
     # 只有当 Self::Item 实现了 Display 时才能调用
-    micro display_item(self, index: usize) 
+    display_item(self, index: usize) 
     where Self::Item: Display {
         if let Some(item) = self.get(index) {
             println("{}", item.fmt())
@@ -247,14 +247,14 @@ trait MathConstants {
     const PI: f64 = 3.14159265359
     const E: f64 = 2.71828182846
     
-    micro circle_area(radius: f64) -> f64 {
+    circle_area(radius: f64) -> f64 {
         Self::PI * radius * radius
     }
 }
 
 class Calculator {}
 
-impl MathConstants for Calculator {}
+imply MathConstants for Calculator {}
 
 let area = Calculator::circle_area(5.0)
 ```
@@ -295,22 +295,22 @@ micro print_info<T: Printable>(item: T) {
 Valkyrie 提供了自动派生常用 trait 的宏：
 
 ```valkyrie
-@.derive(Debug, Clone, PartialEq, Eq, Hash)
+↯derive(Debug, Clone, PartialEq, Eq, Hash)
 class User {
     id: u64,
     name: String,
     email: String,
 }
 
-@.derive(Display)
+↯derive(Display)
 class Point {
     x: f64,
     y: f64,
 }
 
 # 自定义派生行为
-@.derive(Debug, Clone)
-@.derive_display(format = "User({})", field = "name")
+↯derive(Debug, Clone)
+↯derive_display(format = "User({})", field = "name")
 class SimpleUser {
     name: String,
     internal_id: u64,  # 不会在 Display 中显示
@@ -324,11 +324,11 @@ class SimpleUser {
 ```valkyrie
 # 好的设计：单一职责
 trait Readable {
-    micro read(self, buffer: &mut [u8]) -> Result<usize, Error>
+    read(self, buffer: &mut [u8]) -> Result<usize, Error>
 }
 
 trait Writable {
-    micro write(self, data: &[u8]) -> Result<usize, Error>
+    write(self, data: &[u8]) -> Result<usize, Error>
 }
 
 # 组合使用
@@ -336,11 +336,11 @@ trait ReadWrite: Readable + Writable {}
 
 # 避免：过于复杂的 trait
 # trait FileOperations {
-#     micro read(...) -> ...
-#     micro write(...) -> ...
-#     micro seek(...) -> ...
-#     micro metadata(...) -> ...
-#     micro permissions(...) -> ...
+#     read(...) -> ...
+#     write(...) -> ...
+#     seek(...) -> ...
+#     metadata(...) -> ...
+#     permissions(...) -> ...
 # }
 ```
 
@@ -350,18 +350,18 @@ trait ReadWrite: Readable + Writable {}
 # 使用关联类型：每个类型只有一个实现
 trait Iterator {
     type Item
-    micro next(mut self) -> Option<Self::Item>
+    next(mut self) -> Option<Self::Item>
 }
 
 # 使用泛型参数：可以有多个实现
 trait From<T> {
-    micro from(value: T) -> Self
+    from(value: T) -> Self
 }
 
 # String 可以从多种类型转换
-impl From<&str> for String { ... }
-impl From<char> for String { ... }
-impl From<Vector<char>> for String { ... }
+imply From<&str> for String { ... }
+imply From<char> for String { ... }
+imply From<Vector<char>> for String { ... }
 ```
 
 ### 3. 错误处理
@@ -370,13 +370,13 @@ impl From<Vector<char>> for String { ... }
 trait TryFrom<T> {
     type Error
     
-    micro try_from(value: T) -> Result<Self, Self::Error>
+    try_from(value: T) -> Result<Self, Self::Error>
 }
 
 trait TryInto<T> {
     type Error
     
-    micro try_into(self) -> Result<T, Self::Error>
+    try_into(self) -> Result<T, Self::Error>
 }
 
 # 自动实现
@@ -384,7 +384,7 @@ impl<T, U> TryInto<U> for T
 where U: TryFrom<T> {
     type Error = U::Error
     
-    micro try_into(self) -> Result<U, Self::Error> {
+    try_into(self) -> Result<U, Self::Error> {
         U::try_from(self)
     }
 }

@@ -17,14 +17,14 @@ struct HeaplessVec<T, const N: usize> {
 }
 
 impl<T, const N: usize> HeaplessVec<T, N> {
-    micro new() -> Self {
+    new() -> Self {
         HeaplessVec {
             data: unsafe { MaybeUninit::uninit().assume_init() },
             len: 0
         }
     }
     
-    micro push(mut self, item: T) -> Result<(), T> {
+    push(mut self, item: T) -> Result<(), T> {
         if self.len < N {
             self.data[self.len] = MaybeUninit::new(item)
             self.len += 1
@@ -34,7 +34,7 @@ impl<T, const N: usize> HeaplessVec<T, N> {
         }
     }
     
-    micro pop(mut self) -> Option<T> {
+    pop(mut self) -> Option<T> {
         if self.len > 0 {
             self.len -= 1
             Some(unsafe { self.data[self.len].assume_init_read() })
@@ -43,7 +43,7 @@ impl<T, const N: usize> HeaplessVec<T, N> {
         }
     }
     
-    micro get(self, index: usize) -> Option<T> {
+    get(self, index: usize) -> Option<T> {
         if index < self.len {
             Some(unsafe { self.data[index].assume_init_ref() })
         } else {
@@ -76,14 +76,14 @@ class PriorityScheduler {
     tasks: HeaplessVec<RTOSTask, 32>,
     current_task: Option<usize>
     
-    micro new() -> PriorityScheduler {
+    new() -> PriorityScheduler {
         PriorityScheduler {
             tasks: HeaplessVec::new(),
             current_task: None
         }
     }
     
-    micro create_task(mut self, priority: u8, stack_size: usize, entry: fn()) -> Result<usize, ()> {
+    create_task(mut self, priority: u8, stack_size: usize, entry: fn()) -> Result<usize, ()> {
         let task = RTOSTask {
             priority,
             stack_size,
@@ -92,12 +92,12 @@ class PriorityScheduler {
         }
         
         match self.tasks.push(task) {
-            Ok(()) => Ok(self.tasks.len - 1),
-            Err(_) => Err(())
+            case Ok(()) => Ok(self.tasks.len - 1),
+            case Err(_) => Err(())
         }
     }
     
-    micro schedule(mut self) -> Option<usize> {
+    schedule(mut self) -> Option<usize> {
         let mut highest_priority = 0
         let mut selected_task = None
         
@@ -157,8 +157,8 @@ struct MemoryBlock {
     size: usize
 }
 
-impl WasmAllocator {
-    micro new(heap_start: *mut u8, heap_size: usize) -> WasmAllocator {
+imply WasmAllocator {
+    new(heap_start: *mut u8, heap_size: usize) -> WasmAllocator {
         let mut allocator = WasmAllocator {
             heap_start,
             heap_size,
@@ -174,7 +174,7 @@ impl WasmAllocator {
         allocator
     }
     
-    micro allocate(mut self, size: usize, align: usize) -> Option<*mut u8> {
+    allocate(mut self, size: usize, align: usize) -> Option<*mut u8> {
         for (i, block) in self.free_blocks.iter().enumerate() {
             let aligned_ptr = align_up(block.ptr as usize, align) as *mut u8
             let aligned_size = (block.ptr as usize + block.size) - (aligned_ptr as usize)
@@ -201,7 +201,7 @@ impl WasmAllocator {
         None
     }
     
-    micro deallocate(mut self, ptr: *mut u8, size: usize) {
+    deallocate(mut self, ptr: *mut u8, size: usize) {
         let block = MemoryBlock { ptr, size }
         
         # 简单的释放实现，实际应该合并相邻块
@@ -231,7 +231,7 @@ mod wasi {
         buf_len: usize
     }
     
-    micro print(msg: &str) {
+    print(msg: &str) {
         let iov = IoVec {
             buf: msg.as_ptr(),
             buf_len: msg.len()
@@ -243,7 +243,7 @@ mod wasi {
         }
     }
     
-    micro read_input(buffer: &mut [u8]) -> usize {
+    read_input(buffer: &mut [u8]) -> usize {
         let iov = IoVec {
             buf: buffer.as_mut_ptr(),
             buf_len: buffer.len()
@@ -257,7 +257,7 @@ mod wasi {
         nread
     }
     
-    micro get_time() -> i64 {
+    get_time() -> i64 {
         let mut time = 0
         unsafe {
             clock_time_get(0, 1, &mut time)
@@ -265,7 +265,7 @@ mod wasi {
         time
     }
     
-    micro get_random_bytes(buffer: &mut [u8]) {
+    get_random_bytes(buffer: &mut [u8]) {
         unsafe {
             random_get(buffer.as_mut_ptr(), buffer.len())
         }
@@ -280,11 +280,11 @@ mod wasi {
 ```valkyrie
 # GPIO 抽象层
 trait GpioPin {
-    micro set_high(mut self)
-    micro set_low(mut self)
-    micro is_high(self) -> bool
-    micro is_low(self) -> bool
-    micro toggle(mut self)
+    set_high(mut self)
+    set_low(mut self)
+    is_high(self) -> bool
+    is_low(self) -> bool
+    toggle(mut self)
 }
 
 # ARM Cortex-M GPIO 实现
@@ -293,30 +293,30 @@ struct CortexMGpio {
     pin: u8
 }
 
-impl GpioPin for CortexMGpio {
-    micro set_high(mut self) {
+imply GpioPin for CortexMGpio {
+    set_high(mut self) {
         unsafe {
             *self.port |= 1 << self.pin
         }
     }
     
-    micro set_low(mut self) {
+    set_low(mut self) {
         unsafe {
             *self.port &= !(1 << self.pin)
         }
     }
     
-    micro is_high(self) -> bool {
+    is_high(self) -> bool {
         unsafe {
             (*self.port & (1 << self.pin)) != 0
         }
     }
     
-    micro is_low(self) -> bool {
+    is_low(self) -> bool {
         !self.is_high()
     }
     
-    micro toggle(mut self) {
+    toggle(mut self) {
         if self.is_high() {
             self.set_low()
         } else {
@@ -331,19 +331,19 @@ struct Led<P: GpioPin> {
 }
 
 impl<P: GpioPin> Led<P> {
-    micro new(pin: P) -> Led<P> {
+    new(pin: P) -> Led<P> {
         Led { pin }
     }
     
-    micro on(mut self) {
+    on(mut self) {
         self.pin.set_high()
     }
     
-    micro off(mut self) {
+    off(mut self) {
         self.pin.set_low()
     }
     
-    micro blink(mut self, delay_ms: u32) {
+    blink(mut self, delay_ms: u32) {
         self.pin.toggle()
         delay(delay_ms)
     }
@@ -359,7 +359,7 @@ static VECTOR_TABLE: [unsafe extern "C" fn(); 256] = [
     reset_handler,
     nmi_handler,
     hard_fault_handler,
-    // ... 其他中断处理程序
+    # ... 其他中断处理程序
 ]
 
 # 中断处理程序
@@ -389,7 +389,7 @@ unsafe extern "C" fn gpio_interrupt() {
 }
 
 # 原子操作支持
-use core::sync::atomic::{AtomicU32, AtomicBool, Ordering}
+using core::sync::atomic::{AtomicU32, AtomicBool, Ordering}
 
 static SYSTEM_TICK: AtomicU32 = AtomicU32::new(0)
 static BUTTON_PRESSED: AtomicBool = AtomicBool::new(false)
@@ -404,12 +404,12 @@ struct SpiMaster {
     cs_pin: CortexMGpio
 }
 
-impl SpiMaster {
-    micro new(base_addr: *mut u32, cs_pin: CortexMGpio) -> SpiMaster {
+imply SpiMaster {
+    new(base_addr: *mut u32, cs_pin: CortexMGpio) -> SpiMaster {
         SpiMaster { base_addr, cs_pin }
     }
     
-    micro transfer(mut self, data: &[u8]) -> HeaplessVec<u8, 256> {
+    transfer(mut self, data: &[u8]) -> HeaplessVec<u8, 256> {
         let mut result = HeaplessVec::new()
         
         self.cs_pin.set_low()  # 选择从设备
@@ -426,19 +426,19 @@ impl SpiMaster {
         result
     }
     
-    micro write_data_register(self, data: u8) {
+    write_data_register(self, data: u8) {
         unsafe {
             *(self.base_addr.offset(0)) = data as u32
         }
     }
     
-    micro read_data_register(self) -> u8 {
+    read_data_register(self) -> u8 {
         unsafe {
             *(self.base_addr.offset(0)) as u8
         }
     }
     
-    micro is_transfer_complete(self) -> bool {
+    is_transfer_complete(self) -> bool {
         unsafe {
             (*(self.base_addr.offset(1)) & 0x01) != 0
         }
@@ -450,8 +450,8 @@ struct I2cMaster {
     base_addr: *mut u32
 }
 
-impl I2cMaster {
-    micro write_register(self, device_addr: u8, reg_addr: u8, data: u8) -> Result<(), I2cError> {
+imply I2cMaster {
+    write_register(self, device_addr: u8, reg_addr: u8, data: u8) -> Result<(), I2cError> {
         self.start_condition()
         self.send_address(device_addr, false)?  # 写模式
         self.send_data(reg_addr)?
@@ -460,7 +460,7 @@ impl I2cMaster {
         Ok(())
     }
     
-    micro read_register(self, device_addr: u8, reg_addr: u8) -> Result<u8, I2cError> {
+    read_register(self, device_addr: u8, reg_addr: u8) -> Result<u8, I2cError> {
         self.start_condition()
         self.send_address(device_addr, false)?  # 写模式
         self.send_data(reg_addr)?
@@ -492,8 +492,8 @@ struct AdcChannel {
     resolution: u8  # 位数
 }
 
-impl AdcChannel {
-    micro read_raw(self) -> u16 {
+imply AdcChannel {
+    read_raw(self) -> u16 {
         # 启动 ADC 转换
         self.start_conversion()
         
@@ -505,7 +505,7 @@ impl AdcChannel {
         self.read_result()
     }
     
-    micro read_voltage(self, vref: f32) -> f32 {
+    read_voltage(self, vref: f32) -> f32 {
         let raw = self.read_raw() as f32
         let max_value = (1 << self.resolution) as f32
         (raw / max_value) * vref
@@ -523,15 +523,15 @@ struct TemperatureCalibration {
     scale: f32
 }
 
-impl TemperatureSensor {
-    micro read_celsius(self) -> f32 {
+imply TemperatureSensor {
+    read_celsius(self) -> f32 {
         let voltage = self.adc.read_voltage(3.3)
         
         # 线性温度传感器转换
         (voltage - self.calibration.offset) * self.calibration.scale
     }
     
-    micro read_fahrenheit(self) -> f32 {
+    read_fahrenheit(self) -> f32 {
         let celsius = self.read_celsius()
         celsius * 9.0 / 5.0 + 32.0
     }
@@ -559,21 +559,21 @@ struct GyroData {
     z: i16
 }
 
-impl Mpu6050 {
+imply Mpu6050 {
     const ACCEL_XOUT_H: u8 = 0x3B
     const GYRO_XOUT_H: u8 = 0x43
     const PWR_MGMT_1: u8 = 0x6B
     
-    micro new(i2c: I2cMaster, address: u8) -> Mpu6050 {
+    new(i2c: I2cMaster, address: u8) -> Mpu6050 {
         Mpu6050 { i2c, address }
     }
     
-    micro init(self) -> Result<(), I2cError> {
+    init(self) -> Result<(), I2cError> {
         # 唤醒设备
         self.i2c.write_register(self.address, Self::PWR_MGMT_1, 0x00)
     }
     
-    micro read_accel(self) -> Result<AccelData, I2cError> {
+    read_accel(self) -> Result<AccelData, I2cError> {
         let mut data = [0u8; 6]
         
         for i in 0..6 {
@@ -587,7 +587,7 @@ impl Mpu6050 {
         })
     }
     
-    micro read_gyro(self) -> Result<GyroData, I2cError> {
+    read_gyro(self) -> Result<GyroData, I2cError> {
         let mut data = [0u8; 6]
         
         for i in 0..6 {
@@ -621,23 +621,23 @@ struct PowerManager {
     wake_sources: u32
 }
 
-impl PowerManager {
-    micro new() -> PowerManager {
+imply PowerManager {
+    new() -> PowerManager {
         PowerManager {
             current_mode: PowerMode::Active,
             wake_sources: 0
         }
     }
     
-    micro enter_sleep_mode(mut self, mode: PowerMode) {
+    enter_sleep_mode(mut self, mode: PowerMode) {
         match mode {
-            PowerMode::Sleep => {
+            case PowerMode::Sleep => {
                 # 关闭不必要的外设
                 self.disable_peripherals()
                 # 进入睡眠模式
                 self.cpu_sleep()
             },
-            PowerMode::DeepSleep => {
+            case PowerMode::DeepSleep => {
                 # 保存关键状态
                 self.save_context()
                 # 关闭更多外设
@@ -645,31 +645,31 @@ impl PowerManager {
                 # 进入深度睡眠
                 self.cpu_deep_sleep()
             },
-            PowerMode::Standby => {
+            case PowerMode::Standby => {
                 # 只保留最小功能
                 self.enter_standby()
             },
-            _ => {}
+            case _ => {}
         }
         
         self.current_mode = mode
     }
     
-    micro set_wake_source(mut self, source: WakeSource) {
+    set_wake_source(mut self, source: WakeSource) {
         self.wake_sources |= source as u32
         self.configure_wake_source(source)
     }
     
-    micro on_wake_up(mut self) {
+    on_wake_up(mut self) {
         match self.current_mode {
-            PowerMode::DeepSleep => {
+            case PowerMode::DeepSleep => {
                 self.restore_context()
                 self.enable_peripherals()
             },
-            PowerMode::Sleep => {
+            case PowerMode::Sleep => {
                 self.enable_peripherals()
             },
-            _ => {}
+            case _ => {}
         }
         
         self.current_mode = PowerMode::Active

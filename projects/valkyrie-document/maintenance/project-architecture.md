@@ -150,7 +150,7 @@ graph TD
 *   **使命**: 编排整个编译流水线，并为其提供增量、缓存和并行计算的能力。
 *   **核心概念**:
     *   **`trait XxxDatabase`**: 每个编译阶段（如 HIR）都定义一个包含其所有查询的 `trait` (e.g., `HirDatabase`)。
-    *   **`#[salsa::tracked]`**: 标记一个函数或结构体，Salsa 会自动为其实现缓存和依赖追踪。
+    *   **`↯[salsa::tracked]`**: 标记一个函数或结构体，Salsa 会自动为其实现缓存和依赖追踪。
     *   **输入 (Inputs)**: 特殊的查询，可以由外部（如语言服务器）修改。当输入改变时，Salsa 运行时会自动使所有依赖于它的缓存失效。
     *   **数据库 (`Database`)**: 一个实现了所有 `XxxDatabase` trait 的 `struct`，是所有编译状态的中央存储。
 
@@ -194,11 +194,11 @@ graph TD
     *   **无指针概念**: 在这个阶段，没有原始指针。例如，一个 Trait Object `&dyn Logger` 被表示为一个聚合类型，包含一个数据 `Place` 和一个抽象的**元数据令牌 (Metadata Token)**，这个令牌逻辑上指向对应的 `impl`，但它**不是**一个 VTable 指针。
     *   **抽象派发**: 动态方法调用被表示为一个特殊的指令，明确标记其动态派发的**意图**，但不涉及具体实现机制：
         ```mir
-        // Conceptual High-Level MIR Instruction
+        # Conceptual High-Level MIR Instruction
         _retval = Call {
-            target: <Logger as Trait>::log, // A symbolic representation
-            from_place: item,               // The trait object `place`
-            kind: DynamicDispatch,          // The INTENT
+            target: <Logger as Trait>::log, # A symbolic representation
+            from_place: item,               # The trait object `place`
+            kind: DynamicDispatch,          # The INTENT
         }
         ```
 *   **在此阶段的优化**:
@@ -217,11 +217,11 @@ graph TD
     2.  **胖指针具体化**: 之前抽象的 Trait Object `Place` 现在被降级为一个具体的、包含两个字段的结构：`{ data_ptr: *mut (), vtable_ptr: *const VTable }`。
     3.  **动态派发降级**: 之前那个抽象的 `DynamicDispatch` 调用，现在被**重写**为一个更具体的操作序列：
         ```mir
-        // Conceptual Low-Level (Lowered) MIR
-        _vtable_ptr = item.1; // Project to the vtable_ptr field
+        # Conceptual Low-Level (Lowered) MIR
+        _vtable_ptr = item.1; # Project to the vtable_ptr field
         _fn_ptr_addr = AddressOf(_vtable_ptr, offset_of_log_method);
         _fn_ptr = Load(_fn_ptr_addr);
-        _data_ptr = item.0; // Project to the data_ptr field
+        _data_ptr = item.0; # Project to the data_ptr field
         _retval = CallIndirect {
             target: _fn_ptr,
             args: (_data_ptr, ...),
@@ -281,7 +281,7 @@ graph TD
 
 ### 第 7 章：测试哲学
 
-*   **单元测试**: 每个 crate 内部的 `#[cfg(test)]` 模块，用于测试内部逻辑。
+*   **单元测试**: 每个 crate 内部的 `↯[cfg(test)]` 模块，用于测试内部逻辑。
 *   **快照测试 (`insta`)**: 这是验证复杂 IR 输出（如 AST, HIR, MIR, LIR）的**黄金标准**。它将 IR 的文本表示存储在文件中，任何非预期的更改都会导致测试失败，使得审查和接受 IR 的变化变得简单而可靠。
 *   **集成测试**: 在根目录的 `tests/` 目录下，编写端到端的测试用例，从 Valkyrie 源代码文件一直编译到最终产物，验证整个流程的正确性。
 

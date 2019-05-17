@@ -18,21 +18,21 @@ event event_name(parameter1: Type1, parameter2: Type2, ...)
 
 ```valkyrie
 class AsyncOperation {
-    // 定义一个单点事件，用于通知操作完成
+    # 定义一个单点事件，用于通知操作完成
     event on_completed(result: Result<String, Error>)
 
-    micro start(mut self) {
+    start(mut self) {
         println("异步操作开始...")
-        // 模拟异步操作完成并触发事件
-        // 假设这里有一个内部机制来调用 on_completed
-        // 例如：self.on_completed(Fine { value: "操作成功" })
+        # 模拟异步操作完成并触发事件
+        # 假设这里有一个内部机制来调用 on_completed
+        # 例如：self.on_completed(Fine { value: "操作成功" })
     }
 }
 
 class MyProcessor {
-    micro process(self) {
+    process(self) {
         let op = AsyncOperation::new()
-        // 订阅单点事件
+        # 订阅单点事件
         op.on_completed = { |result|
             match result {
                 case Fine { value }: println("操作完成: ${value}")
@@ -66,25 +66,25 @@ events event_name(parameter1: Type1, parameter2: Type2, ...)
 
 ```valkyrie
 class Button {
-    // 定义一个广播事件，用于通知点击
+    # 定义一个广播事件，用于通知点击
     events clicked(sender: &Button, args: &ClickEventArgs)
 
-    micro simulate_click(mut self) {
+    simulate_click(mut self) {
         println("按钮被点击了！")
-        // 触发所有订阅者
-        // 假设语言提供内置的触发机制，例如：
+        # 触发所有订阅者
+        # 假设语言提供内置的触发机制，例如：
         self.clicked.trigger(self, ClickEventArgs::new())
     }
 }
 
 class Logger {
-    micro log_click(self, sender: &Button, args: &ClickEventArgs) {
+    log_click(self, sender: &Button, args: &ClickEventArgs) {
         println("日志：按钮 '${sender.id}' 被点击。")
     }
 }
 
 class Analytics {
-    micro track_click(self, sender: &Button, args: &ClickEventArgs) {
+    track_click(self, sender: &Button, args: &ClickEventArgs) {
         println("分析：记录按钮 '${sender.id}' 的点击事件。")
     }
 }
@@ -94,7 +94,7 @@ micro main() {
     let logger = Logger::new()
     let analytics = Analytics::new()
 
-    // 订阅广播事件
+    # 订阅广播事件
     my_button.clicked.add({ |s, a| logger.log_click(s, a) })
     my_button.clicked.add({ |s, a| analytics.track_click(s, a) })
 

@@ -66,7 +66,7 @@ micro handle_event(event: NetworkEvent, state: &mut AppState) {
         NetworkEvent::Connect(addr) => {
             println!("Connection from {}.", addr);
         },
-        // Disconnect is intentionally omitted to show exhaustiveness check
+        # Disconnect is intentionally omitted to show exhaustiveness check
     }
 }
 ```
@@ -114,21 +114,21 @@ HIR 阶段是模式匹配的第一次，也是最重要的一次降低。它从�
 
     *伪代码展示脱糖后的 HIR 结构*:
     ```rust
-    // Conceptual HIR structure after desugaring
+    # Conceptual HIR structure after desugaring
     let __scrutinee = event;
     if __scrutinee is NetworkEvent::Packet {
         let id = __scrutinee.id;
         let payload = __scrutinee.payload;
         if payload.len() > 0 {
-            // Arm 1 body
+            # Arm 1 body
         } else {
-            // Arm 2 body
+            # Arm 2 body
         }
     } else if __scrutinee is NetworkEvent::Connect {
         let addr = __scrutinee.addr;
-        // Arm 3 body
+        # Arm 3 body
     }
-    // (HIR lowering would have already caught the non-exhaustive error)
+    # (HIR lowering would have already caught the non-exhaustive error)
     ```
 
 **HIR 的产出**:
@@ -213,11 +213,11 @@ LIR 接收的是一个纯粹的 CFG，它的任务是将其映射到目标机器
 ### 2.1 抽象之源：一个返回闭包的高阶函数
 
 ```nyar
-micro create_logger(prefix: String) -> impl Fn(String) {
+micro create_logger(prefix: String) -> imply Fn(String) {
     let mut counter = 0;
 
-    // The closure captures `prefix` by value (move)
-    // and `counter` by mutable reference.
+    # The closure captures `prefix` by value (move)
+    # and `counter` by mutable reference.
     move |message: String| {
         counter += 1;
         println!("[{}] #{}: {}", prefix, counter, message);
@@ -225,12 +225,12 @@ micro create_logger(prefix: String) -> impl Fn(String) {
 }
 
 micro main() {
-    let http_logger = create_logger("[HTTP]".to_string());
-    let db_logger = create_logger("[DB]".to_string());
+    let http_logger = create_logger("[HTTP]");
+    let db_logger = create_logger("[DB]");
 
-    http_logger("Request received".to_string()); // counter becomes 1
-    http_logger("Response sent".to_string());   // counter becomes 2
-    db_logger("Query executed".to_string());      // its own counter becomes 1
+    http_logger("Request received"); # counter becomes 1
+    http_logger("Response sent");   # counter becomes 2
+    db_logger("Query executed");      # its own counter becomes 1
 }
 ```
 **编译器面临的挑战**:
@@ -258,11 +258,11 @@ HIR 阶段执行了整个过程中最神奇的转换，称为**闭包转换 (Clo
     *   这是闭包转换的核心。编译器意识到闭包并非纯代码，它需要一个地方来存储捕获的环境。
     *   因此，它为这个闭包**在内部合成（synthesize）一个唯一的、匿名的结构体**。
         ```rust
-        // Conceptual, compiler-generated class for the closure
+        # Conceptual, compiler-generated class for the closure
         class __Closure_create_logger_line4 {
-            // Field for by-value capture
+            # Field for by-value capture
             prefix: String,
-            // Field for by-mutable-reference capture
+            # Field for by-mutable-reference capture
             counter: &mut i32, 
         }
         ```
@@ -272,12 +272,12 @@ HIR 阶段执行了整个过程中最神奇的转换，称为**闭包转换 (Clo
     *   闭包的可调用性是通过 Trait 实现的。编译器会为这个新合成的结构体自动实现 `Fn`, `FnMut`, 或 `FnOnce` trait。
     *   由于闭包修改了 `counter`，它需要 `&mut self`，因此编译器会实现 `FnMut`。
         ```rust
-        // Conceptual, compiler-generated impl
-        impl FnMut(String) for __Closure_create_logger_line4 {
-            // The `call` method is the actual code of the closure.
-            // It takes the environment as its first parameter (`&mut self`).
-            micro call_mut(&mut self, message: String) {
-                // Accessing captured variables is now class field access.
+        # Conceptual, compiler-generated impl
+        imply FnMut(String) for __Closure_create_logger_line4 {
+            # The `call` method is the actual code of the closure.
+            # It takes the environment as its first parameter (`&mut self`).
+            call_mut(&mut self, message: String) {
+                # Accessing captured variables is now class field access.
                 *self.counter += 1;
                 println!("[{}] #{}: {}", self.prefix, *self.counter, message);
             }
@@ -287,24 +287,24 @@ HIR 阶段执行了整个过程中最神奇的转换，称为**闭包转换 (Clo
     *   原始的 `ast::Expr::Lambda` 节点在 HIR 中被彻底替换。
     *   `create_logger` 函数中创建闭包的地方，被重写为一个**结构体实例化**的表达式。
         ```rust
-        // The original `move |...|` is rewritten in HIR to:
+        # The original `move |...|` is rewritten in HIR to:
         {
-            // The mutable variable `counter` is on the stack of `create_logger`
+            # The mutable variable `counter` is on the stack of `create_logger`
             let mut counter = 0; 
-            // The closure is now just an instance of our synthetic struct
+            # The closure is now just an instance of our synthetic struct
             __Closure_create_logger_line4 {
-                prefix: prefix, // `prefix` is moved into the struct
-                counter: &mut counter, // A mutable reference to the stack variable is taken
+                prefix: prefix, # `prefix` is moved into the struct
+                counter: &mut counter, # A mutable reference to the stack variable is taken
             }
         }
         ```
-    *   `create_logger` 的返回类型 `impl Fn(String)`，其具体类型被解析为这个合成的 `__Closure_...` 结构体。
+    *   `create_logger` 的返回类型 `imply Fn(String)`，其具体类型被解析为这个合成的 `__Closure_...` 结构体。
 
 **HIR 的产出**:
 *   **程序中不再有任何“闭包”的概念。**
 *   取而代之的是：
     *   一些编译器生成的、普通的结构体定义。
-    *   这些结构体的一些 `impl FnMut` 块。
+    *   这些结构体的一些 `imply FnMut` 块。
     *   原始闭包创建点变成了普通的结构体实例化。
 
 ### 1.4 `nyar-mir`: 具体化的函数调用
@@ -359,33 +359,33 @@ MIR 构建器接收的是一个已经没有闭包的 HIR。它只看到结构体
 ### 3.1 抽象之源：一个泛型 `Functor`
 
 ```nyar
-// F<~> 是 Nyar 中表示 HKT 的语法
-// 它表示 "F 是一个接受一个类型参数的类型构造器"
+# F<~> 是 Nyar 中表示 HKT 的语法
+# 它表示 "F 是一个接受一个类型参数的类型构造器"
 trait Functor<F<~>> {
-    micro map<A, B>(container: F<A>, f: fn(A) -> B) -> F<B>;
+    map<A, B>(container: F<A>, f: fn(A) -> B) -> F<B>;
 }
 
 impl<T> Functor<Option<~>> for Option<T> {
-    micro map<A, B>(container: Option<A>, f: fn(A) -> B) -> Option<B> {
-        // ... implementation
+    map<A, B>(container: Option<A>, f: fn(A) -> B) -> Option<B> {
+        # ... implementation
     }
 }
 
 impl<T> Functor<Vector<~>> for Vector<T> {
-    micro map<A, B>(container: Vector<A>, f: fn(A) -> B) -> Vector<B> {
-        // ... implementation
+    map<A, B>(container: Vector<A>, f: fn(A) -> B) -> Vector<B> {
+        # ... implementation
     }
 }
 
 micro process_data(data: Option<i32>) {
-    // 编译器需要将这个泛型调用，转换为对 Option::map 的具体调用
-    let result = Functor::map(data, |x| x.to_string());
+    # 编译器需要将这个泛型调用，转换为对 Option::map 的具体调用
+    let result = Functor::map(data, |x| x);
 }
 ```
 
 **编译器面临的挑战**:
 1.  如何理解和类型检查 `F<~>` 这种“类型的类型”？
-2.  如何确保 `impl Functor<Option<~>>` 是合法的，而 `impl Functor<i32>` 是非法的？
+2.  如何确保 `imply Functor<Option<~>>` 是合法的，而 `imply Functor<i32>` 是非法的？
 3.  如何在 `process_data` 中，将对 `Functor::map` 的泛型调用，精确地解析到 `Option` 的具体实现上？
 4.  最重要的是，如何确保这一切在最终的机器码中没有任何痕迹或开销？
 
@@ -407,7 +407,7 @@ HKT 的降低过程几乎完全发生在 HIR 阶段，通过一个比“类型�
 2.  **Kind 检查**:
     *   当 HIR 分析 `trait Functor<F<~>>` 时，它推断出泛型参数 `F` 的种类必须是 `Type -> Type`。
     *   当分析 `impl<T> Functor<Option<~>> for Option<T>` 时，它会检查 `Option` 的种类。因为 `Option` 接受一个类型参数（如 `T`）来构成一个完整的类型（`Option<T>`），所以它的种类是 `Type -> Type`。Kind 匹配成功，`impl` 合法。
-    *   如果有人尝试写 `impl Functor<i32>`，编译器会检查 `i32` 的种类，发现是 `Type`，与期望的 `Type -> Type` 不匹配，立即报错。
+    *   如果有人尝试写 `imply Functor<i32>`，编译器会检查 `i32` 的种类，发现是 `Type`，与期望的 `Type -> Type` 不匹配，立即报错。
 
 3.  **HKT 的“降低”是语义上的**:
     *   在 HIR 阶段，HKT 并没有被“降低”为任何更简单的结构。相反，它的高级语义被**完全理解和静态验证**。
@@ -431,7 +431,7 @@ HKT 的抽象生命在这里终结。Staging 引擎（一个编译时解释器�
         *   `F` = `Option<~>`
         *   `A` = `i32`
         *   `B` = `String` (来自闭包的返回类型)
-4.  **`impl` 查找**: 它在全局 `impl` 表中查找 `impl Functor<Option<~>>`，并成功找到。
+4.  **`impl` 查找**: 它在全局 `impl` 表中查找 `imply Functor<Option<~>>`，并成功找到。
 5.  **核心降低：按需代码生成 (On-Demand Code Generation)**
     *   这是消除 HKT 的决定性步骤。Staging 引擎获取 `Option::map` 的**泛型 HIR/MIR 模板**。
     *   它将模板中所有的泛型参数（`A`, `B`）替换为具体的类型（`i32`, `String`）。
@@ -473,35 +473,35 @@ Effect 系统（或代数效应）是比异常处理更强大的控制流抽象�
 ### 4.1 抽象之源：一个可中断的迭代器
 
 ```nyar
-// 定义一个 effect, 它包含一个 Yield 操作
+# 定义一个 effect, 它包含一个 Yield 操作
 effect Io {
-    Yield(String) -> (), // Yield a String, expect nothing back
+    Yield(String) -> (), # Yield a String, expect nothing back
 }
 
-// 一个 handler, 决定如何处理 Io effect
+# 一个 handler, 决定如何处理 Io effect
 micro run_with_logging(f: fn() -> ()) {
     handler {
-        f() -> (), // When f finishes normally
+        f() -> (), # When f finishes normally
         effect Io::Yield(value) => {
             println!("Yielded: {}", value);
-            resume (()); // Resume the paused function
+            resume (()); # Resume the paused function
         }
     }
 }
 
-// 一个使用 effect 的函数 (一个生成器)
+# 一个使用 effect 的函数 (一个生成器)
 micro name_generator() {
-    perform Io::Yield("Alice".to_string());
-    perform Io::Yield("Bob".to_string());
-    perform Io::Yield("Charlie".to_string());
+    perform Io::Yield("Alice");
+    perform Io::Yield("Bob");
+    perform Io::Yield("Charlie");
 }
 
 micro main() {
     run_with_logging(name_generator);
-    // Output:
-    // Yielded: Alice
-    // Yielded: Bob
-    // Yielded: Charlie
+    # Output:
+    # Yielded: Alice
+    # Yielded: Bob
+    # Yielded: Charlie
 }
 ```
 
@@ -528,13 +528,13 @@ micro main() {
 1.  **生成器结构体 (Generator Struct)**:
     *   编译器为 `name_generator` 函数合成一个结构体。这个结构体将成为这个函数被暂停时的状态容器。
         ```rust
-        // Conceptual, compiler-generated class for the generator
+        # Conceptual, compiler-generated class for the generator
         class __Generator_name_generator {
-            // State field to track the execution point
+            # State field to track the execution point
             state: u32,
 
-            // Fields to store all local variables that must survive across a suspension point (`perform`)
-            // (In this case, there are no locals that need to be saved)
+            # Fields to store all local variables that must survive across a suspension point (`perform`)
+            # (In this case, there are no locals that need to be saved)
         }
         ```
 2.  **函数体分裂 (Function Body Splitting)**:
@@ -544,27 +544,27 @@ micro main() {
 
     *伪代码展示重写后的 `resume` 方法*:
     ```rust
-    // The original name_generator is transformed into this:
-    impl Generator for __Generator_name_generator {
-        micro resume(&mut self) -> GeneratorState {
+    # The original name_generator is transformed into this:
+    imply Generator for __Generator_name_generator {
+        resume(&mut self) -> GeneratorState {
             match self.state {
                 0 => {
-                    // Original code before the first perform
-                    self.state = 1; // Set state for next resume
-                    return GeneratorState::Yielded(Io::Yield("Alice".to_string()));
+                    # Original code before the first perform
+                    self.state = 1; # Set state for next resume
+                    return GeneratorState::Yielded(Io::Yield("Alice"));
                 },
                 1 => {
-                    // Original code after the first perform and before the second
+                    # Original code after the first perform and before the second
                     self.state = 2;
-                    return GeneratorState::Yielded(Io::Yield("Bob".to_string()));
+                    return GeneratorState::Yielded(Io::Yield("Bob"));
                 },
                 2 => {
-                    // ... and so on
+                    # ... and so on
                     self.state = 3;
-                    return GeneratorState::Yielded(Io::Yield("Charlie".to_string()));
+                    return GeneratorState::Yielded(Io::Yield("Charlie"));
                 },
                 3 => {
-                    // End of function
+                    # End of function
                     return GeneratorState::Complete(());
                 }
             }
@@ -582,21 +582,21 @@ micro main() {
     *   `run_with_logging` 函数被编译成一个**循环**，它驱动状态机的执行。
     *伪代码展示 `run_with_logging` 的 MIR 逻辑*:
     ```mir
-    // Create an instance of the state machine
+    # Create an instance of the state machine
     let mut gen = __Generator_name_generator::new();
 
     loop {
-        // Run the state machine one step
+        # Run the state machine one step
         let result = gen.resume();
 
         match result {
             GeneratorState::Yielded(Io::Yield(value)) => {
-                // Execute the handler arm
+                # Execute the handler arm
                 println!("Yielded: {}", value);
-                // The `resume` call inside the handler just continues the loop
+                # The `resume` call inside the handler just continues the loop
             },
             GeneratorState::Complete(()) => {
-                // Execute the return arm of the handler
+                # Execute the return arm of the handler
                 break;
             }
         }
@@ -641,38 +641,38 @@ Traits 是 Nyar 实现代码复用和抽象的核心机制。它们提供了接�
 trait Log { micro log(&self, msg: &str); }
 trait Serialize { micro as_json(&self) -> String; }
 
-// A class implementing multiple traits (a form of multiple inheritance)
+# A class implementing multiple traits (a form of multiple inheritance)
 class User { name: String }
-impl Log for User { /* ... */ }
-impl Serialize for User { /* ... */ }
+imply Log for User { /* ... */ }
+imply Serialize for User { /* ... */ }
 
 class Device { id: u32 }
-impl Log for Device { /* ... */ }
+imply Log for Device { /* ... */ }
 
-// Path 1: Static Dispatch via Generics
-// Zero-cost, resolved at compile time.
+# Path 1: Static Dispatch via Generics
+# Zero-cost, resolved at compile time.
 micro log_and_serialize<T: Log + Serialize>(item: &T) {
     item.log("Serializing item");
     let json = item.as_json();
-    // ...
+    # ...
 }
 
-// Path 2: Dynamic Dispatch via Trait Objects
-// Flexible, resolved at runtime.
+# Path 2: Dynamic Dispatch via Trait Objects
+# Flexible, resolved at runtime.
 micro broadcast_log(items: Vector<&dyn Log>) {
     for item in items {
-        item.log("Broadcast message"); // This call is dynamic
+        item.log("Broadcast message"); # This call is dynamic
     }
 }
 
 micro main() {
-    let user = User { name: "Alice".to_string() };
+    let user = User { name: "Alice" };
     let device = Device { id: 123 };
 
-    log_and_serialize(&user); // Monomorphized static call
+    log_and_serialize(&user); # Monomorphized static call
 
     let loggables: Vector<&dyn Log> = vec![&user, &device];
-    broadcast_log(loggables); // Dynamic calls via VTable
+    broadcast_log(loggables); # Dynamic calls via VTable
 }
 ```
 
@@ -686,7 +686,7 @@ micro main() {
 
 *   **AST**: `trait`, `impl`, `T: A + B`, `&dyn Trait` 都是不同的语法节点。
 *   **HIR**: 进行核心的 Trait 解析。
-    *   **构建 Impl Graph**: 编译器构建一个全局的数据结构，映射 `(Type, Trait) -> Impl`。例如，它会记录 `(User, Log)` 对应一个 `impl`，`(User, Serialize)` 对应另一个。
+    *   **构建 imply Graph**: 编译器构建一个全局的数据结构，映射 `(Type, Trait) -> Impl`。例如，它会记录 `(User, Log)` 对应一个 `impl`，`(User, Serialize)` 对应另一个。
     *   **方法解析**: 在 HIR 中，`item.log()` 被解析为一个对 `Log::log` 的符号调用。编译器此时已经知道这个调用是与 `Log` trait 关联的。
     *   **约束验证**: 对于 `log_and_serialize`，编译器会检查传入 `&user` 时，`User` 类型是否同时实现了 `Log` 和 `Serialize`。
 
@@ -723,12 +723,12 @@ micro main() {
         *   MIR Lowering pass **不构建** VTable 的实际内容，它只**解析**其布局，并生成一个全局的**VTable 布局清单**。
     3.  **动态调用点降级**: `item.log(...)` 在低级 MIR 中被重写为：
         ```mir
-        // Low-level MIR for a dynamic call
-        _data_ptr = item.0; // Extract data pointer from fat pointer
-        _vtable_ptr = item.1; // Extract vtable pointer from fat pointer
-        _fn_ptr_addr = _vtable_ptr + const_offset_of_log; // Calculate address of the log method slot
-        _fn_ptr = Load(_fn_ptr_addr); // Load the actual function pointer
-        CallIndirect { target: _fn_ptr, args: (_data_ptr, "...") }; // Perform indirect call
+        # Low-level MIR for a dynamic call
+        _data_ptr = item.0; # Extract data pointer from fat pointer
+        _vtable_ptr = item.1; # Extract vtable pointer from fat pointer
+        _fn_ptr_addr = _vtable_ptr + const_offset_of_log; # Calculate address of the log method slot
+        _fn_ptr = Load(_fn_ptr_addr); # Load the actual function pointer
+        CallIndirect { target: _fn_ptr, args: (_data_ptr, "...") }; # Perform indirect call
         ```
 
 **`nyar-lir` & CodeGen**:

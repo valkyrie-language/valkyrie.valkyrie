@@ -106,15 +106,15 @@ class LinearRegression {
     bias: f32,
 }
 
-impl LinearRegression {
-    micro new(n_features: usize) -> Self {
+imply LinearRegression {
+    new(n_features: usize) -> Self {
         Self {
             weights: ArrayND::zeros([n_features]),
             bias: 0.0,
         }
     }
     
-    micro fit(&mut self, 𝐗: &ArrayND, 𝐲: &ArrayND, α: f32, epochs: usize) {
+    fit(&mut self, 𝐗: &ArrayND, 𝐲: &ArrayND, α: f32, epochs: usize) {
         let n = 𝐗.shape()[0] as f32  # 样本数量
         
         for _ in 0..epochs {
@@ -132,7 +132,7 @@ impl LinearRegression {
         }
     }
     
-    micro predict(&self, 𝐗: &ArrayND) -> ArrayND {
+    predict(&self, 𝐗: &ArrayND) -> ArrayND {
         𝐗 · &self.weights + self.bias
     }
 }
@@ -148,8 +148,8 @@ class SVM {
     C: f32,  # 正则化参数
 }
 
-impl SVM {
-    micro new(n_features: usize, C: f32) -> Self {
+imply SVM {
+    new(n_features: usize, C: f32) -> Self {
         Self {
             weights: ArrayND::zeros([n_features]),
             bias: 0.0,
@@ -157,7 +157,7 @@ impl SVM {
         }
     }
     
-    micro fit(&mut self, 𝐗: &ArrayND, 𝐲: &ArrayND, α: f32, epochs: usize) {
+    fit(&mut self, 𝐗: &ArrayND, 𝐲: &ArrayND, α: f32, epochs: usize) {
         for _ in 0..epochs {
             for i in 0..𝐗.shape()[0] {
                 let 𝐱ᵢ = 𝐗.row(i)
@@ -177,7 +177,7 @@ impl SVM {
         }
     }
     
-    micro predict(&self, 𝐗: &ArrayND) -> ArrayND {
+    predict(&self, 𝐗: &ArrayND) -> ArrayND {
         sign(𝐗 · &self.weights + self.bias)
     }
 }
@@ -195,8 +195,8 @@ class ParallelKMeans {
     devices: Vector<Device>,
 }
 
-impl ParallelKMeans {
-    micro fit(&mut self, data: &ArrayND, max_iters: usize) {
+imply ParallelKMeans {
+    fit(&mut self, data: &ArrayND, max_iters: usize) {
         let n_devices = self.devices.len()
         let chunk_size = data.shape()[0] / n_devices
         
@@ -220,7 +220,7 @@ impl ParallelKMeans {
         }
     }
     
-    micro update_centroids(&mut self, data: &ArrayND, assignments: &[ArrayND]) {
+    update_centroids(&mut self, data: &ArrayND, assignments: &[ArrayND]) {
         for k in 0..self.k {
             let mask = assignments.iter()
                 .map(|assign| assign.eq(k))
@@ -245,8 +245,8 @@ class ParallelRandomForest {
     n_trees: usize,
 }
 
-impl ParallelRandomForest {
-    micro fit(&mut self, X: &ArrayND, y: &ArrayND) {
+imply ParallelRandomForest {
+    fit(&mut self, X: &ArrayND, y: &ArrayND) {
         # 并行训练决策树
         self.trees = (0..self.n_trees)
             .into_par_iter()
@@ -262,7 +262,7 @@ impl ParallelRandomForest {
             .collect()
     }
     
-    micro predict(&self, X: &ArrayND) -> ArrayND {
+    predict(&self, X: &ArrayND) -> ArrayND {
         # 并行预测
         let predictions: Vector<ArrayND> = self.trees
             .par_iter()
@@ -286,8 +286,8 @@ class ChunkedProcessor {
     memory_limit: usize,
 }
 
-impl ChunkedProcessor {
-    micro process_large_dataset(&self, data: &ArrayND, algorithm: &dyn Algorithm) -> ArrayND {
+imply ChunkedProcessor {
+    process_large_dataset(&self, data: &ArrayND, algorithm: &dyn Algorithm) -> ArrayND {
         let total_size = data.shape()[0]
         let mut results = Vec::new()
         
@@ -309,7 +309,7 @@ impl ChunkedProcessor {
         ArrayND::concat(&results, 0)
     }
     
-    micro get_memory_usage(&self) -> usize {
+    get_memory_usage(&self) -> usize {
         # 获取当前内存使用量
         std::mem::size_of_val(self) + self.estimate_array_memory()
     }

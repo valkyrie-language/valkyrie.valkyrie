@@ -57,14 +57,14 @@ union Expression {
 
 ```valkyrie
 # 基本模式匹配
-let result: Result<i32, String> = Fine { value: 42 }
+let result: Result<i32, String> = new Fine { value: 42 }
 match result {
     case Fine { value }: print("成功: ${value}")
     case Fail { error }: print("失败: ${error}")
 }
 
 # 嵌套模式匹配
-let nested: Result<Option<i32>, String> = Fine { value: Some { value: 42 } }
+let nested: Result<Option<i32>, String> = new Fine { value: new Some { value: 42 } }
 match nested {
     case Fine { value: Some { value } }: print("值: ${value}")
     case Fine { value: None }: print("无值")
@@ -98,7 +98,7 @@ union Result<T, E> {
     Fail { error: E },
     
     # 检查是否成功
-    micro is_ok(self) -> bool {
+    is_ok(self) -> bool {
         if let Fine { .. } = self {
             true
         } else {
@@ -107,7 +107,7 @@ union Result<T, E> {
     }
     
     # 检查是否失败
-    micro is_err(self) -> bool {
+    is_err(self) -> bool {
         if let Fail { .. } = self {
             true
         } else {
@@ -116,7 +116,7 @@ union Result<T, E> {
     }
     
     # 获取值（可能 panic）
-    micro unwrap(self) -> T {
+    unwrap(self) -> T {
         if let Fine { value } = self {
             value
         } else {
@@ -125,7 +125,7 @@ union Result<T, E> {
     }
     
     # 安全获取值
-    micro unwrap_or(self, default: T) -> T {
+    unwrap_or(self, default: T) -> T {
         if let Fine { value } = self {
             value
         } else {
@@ -134,20 +134,20 @@ union Result<T, E> {
     }
     
     # 映射成功值
-    micro map<U>(self, f: micro(T) -> U) -> Result<U, E> {
+    map<U>(self, f: micro(T) -> U) -> Result<U, E> {
         if let Fine { value } = self {
-            Fine { value: f(value) }
+            new Fine { value: f(value) }
         } else if let Fail { error } = self {
-            Fail { error }
+            new Fail { error }
         }
     }
     
     # 映射错误值
-    micro map_err<F>(self, f: micro(E) -> F) -> Result<T, F> {
+    map_err<F>(self, f: micro(E) -> F) -> Result<T, F> {
         if let Fine { value } = self {
-            Fine { value }
+            new Fine { value }
         } else if let Fail { error } = self {
-            Fail { error: f(error) }
+            new Fail { error: f(error) }
         }
     }
 }
@@ -161,7 +161,7 @@ union Option<T> {
     None,
     
     # 检查是否有值
-    micro is_some(self) -> bool {
+    is_some(self) -> bool {
         if let Some { .. } = self {
             true
         } else {
@@ -170,7 +170,7 @@ union Option<T> {
     }
     
     # 检查是否为空
-    micro is_none(self) -> bool {
+    is_none(self) -> bool {
         if let None = self {
             true
         } else {
@@ -179,19 +179,19 @@ union Option<T> {
     }
     
     # 映射值
-    micro map<U>(self, f: micro(T) -> U) -> Option<U> {
+    map<U>(self, f: micro(T) -> U) -> Option<U> {
         if let Some { value } = self {
-            Some { value: f(value) }
+            new Some { value: f(value) }
         } else {
             None
         }
     }
     
     # 过滤值
-    micro filter(self, predicate: micro(T) -> bool) -> Option<T> {
+    filter(self, predicate: micro(T) -> bool) -> Option<T> {
         if let Some { value } = self {
             if predicate(value) {
-                Some { value }
+                new Some { value }
             } else {
                 None
             }
@@ -286,11 +286,11 @@ union ValidationResult<T> {
     Invalid { errors: [String] },
     
     # 便利方法
-    micro is_valid(self) -> bool {
+    is_valid(self) -> bool {
         matches!(self, Valid { .. })
     }
     
-    micro get_errors(self) -> [String] {
+    get_errors(self) -> [String] {
         if let Invalid { errors } = self {
             errors
         } else {
@@ -306,9 +306,9 @@ union ValidationResult<T> {
 # 使用 Result 进行错误处理
 micro divide(a: f64, b: f64) -> Result<f64, String> {
     if b == 0.0 {
-        Fail { error: "除零错误" }
+        new Fail { error: "除零错误" }
     } else {
-        Fine { value: a / b }
+        new Fine { value: a / b }
     }
 }
 

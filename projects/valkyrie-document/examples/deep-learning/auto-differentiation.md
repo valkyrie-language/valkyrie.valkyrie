@@ -7,7 +7,7 @@ Valkyrie 提供了强大的自动微分系统，支持前向模式和反向模�
 ### 可微分变量
 
 ```valkyrie
-use autodiff::*
+using autodiff::*
 
 # 创建可微分变量
 let x = Variable::new(2.0)
@@ -55,25 +55,25 @@ class ForwardDual {
     derivative: f64
 }
 
-impl ForwardDual {
-    micro new(value: f64, derivative: f64) -> Self {
+imply ForwardDual {
+    new(value: f64, derivative: f64) -> Self {
         Self { value, derivative }
     }
     
-    micro variable(value: f64) -> Self {
+    variable(value: f64) -> Self {
         Self::new(value, 1.0)  # 种子向量
     }
     
-    micro constant(value: f64) -> Self {
+    constant(value: f64) -> Self {
         Self::new(value, 0.0)
     }
 }
 
 # 运算符重载
-impl Add for ForwardDual {
+imply Add for ForwardDual {
     type Output = Self
     
-    micro add(self, other: Self) -> Self {
+    add(self, other: Self) -> Self {
         Self {
             value: self.value + other.value,
             derivative: self.derivative + other.derivative
@@ -81,10 +81,10 @@ impl Add for ForwardDual {
     }
 }
 
-impl Mul for ForwardDual {
+imply Mul for ForwardDual {
     type Output = Self
     
-    micro mul(self, other: Self) -> Self {
+    mul(self, other: Self) -> Self {
         Self {
             value: self.value * other.value,
             derivative: self.derivative * other.value + self.value * other.derivative
@@ -116,21 +116,21 @@ union Operation {
     Exp { input: usize output: usize }
 }
 
-impl ReverseTape {
-    micro new() -> Self {
+imply ReverseTape {
+    new() -> Self {
         Self {
             operations: Vec::new(),
             variables: Vec::new(),
         }
     }
     
-    micro variable(&mut self, value: f64) -> VariableId {
+    variable(&mut self, value: f64) -> VariableId {
         let id = self.variables.len()
         self.variables.push(Variable::new(value))
         VariableId(id)
     }
     
-    micro add(&mut self, a: VariableId, b: VariableId) -> VariableId {
+    add(&mut self, a: VariableId, b: VariableId) -> VariableId {
         let output = self.variable(self.variables[a.0].value + self.variables[b.0].value)
         self.operations.push(Operation::Add {
             inputs: [a.0, b.0],
@@ -139,7 +139,7 @@ impl ReverseTape {
         output
     }
     
-    micro backward(&mut self, output: VariableId) {
+    backward(&mut self, output: VariableId) {
         # 初始化梯度
         let mut gradients = vec![0.0; self.variables.len()]
         gradients[output.0] = 1.0
@@ -227,34 +227,34 @@ class LinearLayer {
     bias: VectorVariable
 }
 
-impl LinearLayer {
-    micro new(input_size: usize, output_size: usize) -> Self {
+imply LinearLayer {
+    new(input_size: usize, output_size: usize) -> Self {
         Self {
             weight: MatrixVariable::random([output_size, input_size]),
             bias: VectorVariable::zeros(output_size),
         }
     }
     
-    micro forward(&self, input: VectorVariable) -> VectorVariable {
+    forward(&self, input: VectorVariable) -> VectorVariable {
         self.weight.matmul(input) + self.bias
     }
 }
 
 # 激活函数
 trait Activation {
-    micro forward(&self, x: VectorVariable) -> VectorVariable
+    forward(&self, x: VectorVariable) -> VectorVariable
 }
 
 class ReLU;
-impl Activation for ReLU {
-    micro forward(&self, x: VectorVariable) -> VectorVariable {
+imply Activation for ReLU {
+    forward(&self, x: VectorVariable) -> VectorVariable {
         x.max(VectorVariable::zeros(x.len()))
     }
 }
 
 class Sigmoid;
-impl Activation for Sigmoid {
-    micro forward(&self, x: VectorVariable) -> VectorVariable {
+imply Activation for Sigmoid {
+    forward(&self, x: VectorVariable) -> VectorVariable {
         1.0 / (1.0 + (-x).exp())
     }
 }
@@ -265,8 +265,8 @@ class MLP {
     activations: Vec<Box<dyn Activation>>
 }
 
-impl MLP {
-    micro forward(&self, mut x: VectorVariable) -> VectorVariable {
+imply MLP {
+    forward(&self, mut x: VectorVariable) -> VectorVariable {
         for (layer, activation) in zip(self.layers, self.activations) {
             x = layer.forward(x)
             x = activation.forward(x)
@@ -287,8 +287,8 @@ class Conv2D {
     padding: [usize; 2]
 }
 
-impl Conv2D {
-    micro forward(&self, input: TensorVariable) -> TensorVariable {
+imply Conv2D {
+    forward(&self, input: TensorVariable) -> TensorVariable {
         # input: [batch, in_channels, height, width]
         let output = input.conv2d(self.kernel, self.stride, self.padding)
         output + self.bias.unsqueeze([0, 2, 3])  # 广播偏置
@@ -301,8 +301,8 @@ class MaxPool2D {
     stride: [usize; 2]
 }
 
-impl MaxPool2D {
-    micro forward(&self, input: TensorVariable) -> TensorVariable {
+imply MaxPool2D {
+    forward(&self, input: TensorVariable) -> TensorVariable {
         input.max_pool2d(self.kernel_size, self.stride)
     }
 }
@@ -338,8 +338,8 @@ class SGD {
     velocity: HashMap<VariableId, Tensor>
 }
 
-impl SGD {
-    micro step(&mut self, parameters: &[Variable]) {
+imply SGD {
+    step(&mut self, parameters: &[Variable]) {
         for param in parameters {
             if let Some(grad) = param.grad() {
                 # 动量更新
@@ -369,8 +369,8 @@ class Adam {
     v: HashMap<VariableId, Tensor>  # 二阶矩估计
 }
 
-impl Adam {
-    micro step(&mut self, parameters: &[Variable]) {
+imply Adam {
+    step(&mut self, parameters: &[Variable]) {
         self.t += 1
         
         for param in parameters {
@@ -497,8 +497,8 @@ class GraphOptimizer {
     fusion_rules: Vec<FusionRule>
 }
 
-impl GraphOptimizer {
-    micro optimize(&self, graph: &mut ComputationGraph) {
+imply GraphOptimizer {
+    optimize(&self, graph: &mut ComputationGraph) {
         # 算子融合
         self.fuse_operations(graph)
         
@@ -509,7 +509,7 @@ impl GraphOptimizer {
         self.parallelize(graph)
     }
     
-    micro fuse_operations(&self, graph: &mut ComputationGraph) {
+    fuse_operations(&self, graph: &mut ComputationGraph) {
         # 融合连续的线性操作
         # 例如：MatMul + Add -> FusedLinear
         for rule in &self.fusion_rules {
@@ -527,8 +527,8 @@ class GradientCheckpointing {
     checkpoint_layers: Vec<usize>
 }
 
-impl GradientCheckpointing {
-    micro forward_with_checkpointing(&self, model: &MLP, input: TensorVariable) -> TensorVariable {
+imply GradientCheckpointing {
+    forward_with_checkpointing(&self, model: &MLP, input: TensorVariable) -> TensorVariable {
         let mut activations = vec![input]
         let mut checkpoints = HashMap::new()
         
@@ -603,8 +603,8 @@ class GradientAccumulator {
     target_steps: usize
 }
 
-impl GradientAccumulator {
-    micro accumulate_and_step(&mut self, loss: Variable, optimizer: &mut dyn Optimizer, parameters: &[Variable]) {
+imply GradientAccumulator {
+    accumulate_and_step(&mut self, loss: Variable, optimizer: &mut dyn Optimizer, parameters: &[Variable]) {
         # 缩放损失
         let scaled_loss = loss / self.target_steps as f64
         scaled_loss.backward()

@@ -36,13 +36,13 @@ fn use_c_functions() {
 
 ```valkyrie
 # C 兼容的结构体
-#[repr(C)]
+↯[repr(C)]
 struct Point {
     x: f64,
     y: f64,
 }
 
-#[repr(C)]
+↯[repr(C)]
 struct Rectangle {
     top_left: Point,
     bottom_right: Point,
@@ -57,16 +57,16 @@ extern "C" {
 
 # 使用结构体与 C 交互
 fn geometry_calculations() {
-    let p1 = Point { x: 0.0, y: 0.0 }
-    let p2 = Point { x: 3.0, y: 4.0 }
+    let p1 = new Point { x: 0.0, y: 0.0 }
+    let p2 = new Point { x: 3.0, y: 4.0 }
     
     unsafe {
         let distance = calculate_distance(&p1, &p2)
         println!("Distance: {}", distance)
         
         let rect = Rectangle {
-            top_left: Point { x: 0.0, y: 10.0 },
-            bottom_right: Point { x: 5.0, y: 0.0 }
+            top_left: new Point { x: 0.0, y: 10.0 },
+            bottom_right: new Point { x: 5.0, y: 0.0 }
         }
         let area = rectangle_area(&rect)
         println!("Area: {}", area)
@@ -93,7 +93,7 @@ struct Vector3D {
     ptr: *mut c_void,
 }
 
-impl Vector3D {
+imply Vector3D {
     fn new(x: f64, y: f64, z: f64) -> Self {
         unsafe {
             Self {
@@ -123,7 +123,7 @@ impl Vector3D {
     }
 }
 
-impl Drop for Vector3D {
+imply Drop for Vector3D {
     fn drop(&mut self) {
         unsafe {
             vector3d_delete(self.ptr)
@@ -138,7 +138,7 @@ impl Drop for Vector3D {
 
 ```valkyrie
 # 链接 Rust 静态库
-#[link(name = "myrust_lib", kind = "static")]
+↯[link(name = "myrust_lib", kind = "static")]
 extern "Rust" {
     fn rust_fibonacci(n: u32) -> u64
     fn rust_sort_array(arr: *mut i32, len: usize)
@@ -163,12 +163,12 @@ fn use_rust_library() {
 
 ```valkyrie
 # 导出 Valkyrie 函数给 C/C++
-#[no_mangle]
+↯[no_mangle]
 extern "C" fn valkyrie_add(a: i32, b: i32) -> i32 {
     a + b
 }
 
-#[no_mangle]
+↯[no_mangle]
 extern "C" fn valkyrie_process_array(arr: *mut f64, len: usize) {
     if arr.is_null() { return }
     
@@ -180,13 +180,13 @@ extern "C" fn valkyrie_process_array(arr: *mut f64, len: usize) {
     }
 }
 
-#[no_mangle]
+↯[no_mangle]
 extern "C" fn valkyrie_create_string(s: *const i8) -> *mut i8 {
     if s.is_null() { return std::ptr::null_mut() }
     
     unsafe {
         let c_str = CStr::from_ptr(s)
-        let rust_str = c_str.to_str().unwrap_or("")
+        let rust_str = c_str.unwrap_or("")
         let processed = format!("Processed: {}", rust_str)
         
         let c_string = CString::new(processed).unwrap()
@@ -194,7 +194,7 @@ extern "C" fn valkyrie_create_string(s: *const i8) -> *mut i8 {
     }
 }
 
-#[no_mangle]
+↯[no_mangle]
 extern "C" fn valkyrie_free_string(s: *mut i8) {
     if !s.is_null() {
         unsafe {
@@ -226,7 +226,7 @@ struct PythonInterpreter {
     initialized: bool,
 }
 
-impl PythonInterpreter {
+imply PythonInterpreter {
     fn new() -> Self {
         unsafe {
             Py_Initialize()
@@ -235,25 +235,25 @@ impl PythonInterpreter {
     }
     
     fn run_string(&self, code: &str) -> Result<(), String> {
-        let c_code = CString::new(code).map_err(|e| e.to_string())?;
+        let c_code = CString::new(code).map_err(|e| e)?;
         unsafe {
             let result = PyRun_SimpleString(c_code.as_ptr())
             if result == 0 {
                 Ok(())
             } else {
-                Err("Python execution failed".to_string())
+                Err("Python execution failed")
             }
         }
     }
     
     fn call_function(&self, module_name: &str, function_name: &str, args: &[f64]) -> Result<f64, String> {
-        let c_module = CString::new(module_name).map_err(|e| e.to_string())?;
-        let c_function = CString::new(function_name).map_err(|e| e.to_string())?;
+        let c_module = CString::new(module_name).map_err(|e| e)?;
+        let c_function = CString::new(function_name).map_err(|e| e)?;
         
         unsafe {
             let module = PyImport_ImportModule(c_module.as_ptr());
             if module.is_null() {
-                return Err("Failed to import module".to_string())
+                return Err("Failed to import module")
             }
             
             # 构建参数格式字符串
@@ -261,13 +261,13 @@ impl PythonInterpreter {
             let c_format = CString::new(format).unwrap();
             
             let result = match args.len() {
-                1 => PyObject_CallMethod(module, c_function.as_ptr(), c_format.as_ptr(), args[0]),
-                2 => PyObject_CallMethod(module, c_function.as_ptr(), c_format.as_ptr(), args[0], args[1]),
-                _ => return Err("Too many arguments".to_string()),
+                case 1 => PyObject_CallMethod(module, c_function.as_ptr(), c_format.as_ptr(), args[0]),
+                case 2 => PyObject_CallMethod(module, c_function.as_ptr(), c_format.as_ptr(), args[0], args[1]),
+                case _ => return Err("Too many arguments"),
             }
             
             if result.is_null() {
-                Err("Function call failed".to_string())
+                Err("Function call failed")
             } else {
                 let value = PyFloat_AsDouble(result)
                 Py_DecRef(result)
@@ -277,7 +277,7 @@ impl PythonInterpreter {
     }
 }
 
-impl Drop for PythonInterpreter {
+imply Drop for PythonInterpreter {
     fn drop(&mut self) {
         if self.initialized {
             unsafe {
@@ -305,18 +305,18 @@ fn use_python() {
 
 ```valkyrie
 # 创建 Python 扩展模块
-use pyo3::prelude::*;
+using pyo3::prelude::*;
 
-#[pyfunction]
+↯[pyfunction]
 fn fibonacci(n: u32) -> u64 {
     match n {
-        0 => 0,
-        1 => 1,
-        _ => fibonacci(n - 1) + fibonacci(n - 2)
+        case 0 => 0,
+        case 1 => 1,
+        case _ => fibonacci(n - 1) + fibonacci(n - 2)
     }
 }
 
-#[pyfunction]
+↯[pyfunction]
 fn matrix_multiply(a: Vec<Vec<f64>>, b: Vec<Vec<f64>>) -> PyResult<Vec<Vec<f64>>> {
     let rows_a = a.len()
     let cols_a = a[0].len()
@@ -341,17 +341,17 @@ fn matrix_multiply(a: Vec<Vec<f64>>, b: Vec<Vec<f64>>) -> PyResult<Vec<Vec<f64>>
     Ok(result)
 }
 
-#[pyclass]
+↯[pyclass]
 struct Calculator {
-    #[pyo3(get, set)]
+    ↯[pyo3(get, set)]
     value: f64,
 }
 
-#[pymethods]
-impl Calculator {
-    #[new]
+↯[pymethods]
+imply Calculator {
+    ↯[new]
     fn new(initial_value: f64) -> Self {
-        Calculator { value: initial_value }
+        new Calculator { value: initial_value }
     }
     
     fn add(&mut self, other: f64) -> f64 {
@@ -369,7 +369,7 @@ impl Calculator {
     }
 }
 
-#[pymodule]
+↯[pymodule]
 fn valkyrie_math(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fibonacci, m)?)?;
     m.add_function(wrap_pyfunction!(matrix_multiply, m)?)?;
@@ -384,15 +384,15 @@ fn valkyrie_math(_py: Python, m: &PyModule) -> PyResult<()> {
 
 ```valkyrie
 # 编译到 WebAssembly
-use wasm_bindgen::prelude::*;
+using wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
+↯[wasm_bindgen]
 extern "C" {
     # 导入 JavaScript 函数
-    #[wasm_bindgen(js_namespace = console)]
+    ↯[wasm_bindgen(js_namespace = console)]
     fn log(s: &str)
     
-    #[wasm_bindgen(js_namespace = Math)]
+    ↯[wasm_bindgen(js_namespace = Math)]
     fn random() -> f64
     
     fn alert(s: &str)
@@ -400,20 +400,20 @@ extern "C" {
 
 # 定义宏简化日志
 macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+    ($($t:tt)*) => (log(&format_args!($($t)*)))
 }
 
-#[wasm_bindgen]
-pub struct GameEngine {
+↯[wasm_bindgen]
+struct GameEngine {
     width: u32,
     height: u32,
     entities: Vec<Entity>,
 }
 
-#[wasm_bindgen]
-impl GameEngine {
-    #[wasm_bindgen(constructor)]
-    pub fn new(width: u32, height: u32) -> GameEngine {
+↯[wasm_bindgen]
+imply GameEngine {
+    ↯[wasm_bindgen(constructor)]
+    fn new(width: u32, height: u32) -> GameEngine {
         console_log!("Creating game engine {}x{}", width, height)
         GameEngine {
             width,
@@ -422,15 +422,15 @@ impl GameEngine {
         }
     }
     
-    #[wasm_bindgen]
-    pub fn add_entity(&mut self, x: f64, y: f64) -> usize {
-        let entity = Entity { x, y, vx: 0.0, vy: 0.0 }
+    ↯[wasm_bindgen]
+    fn add_entity(&mut self, x: f64, y: f64) -> usize {
+        let entity = new Entity { x, y, vx: 0.0, vy: 0.0 }
         self.entities.push(entity)
         self.entities.len() - 1
     }
     
-    #[wasm_bindgen]
-    pub fn update(&mut self, dt: f64) {
+    ↯[wasm_bindgen]
+    fn update(&mut self, dt: f64) {
         for entity in &mut self.entities {
             entity.x += entity.vx * dt
             entity.y += entity.vy * dt
@@ -445,8 +445,8 @@ impl GameEngine {
         }
     }
     
-    #[wasm_bindgen]
-    pub fn get_entity_positions(&self) -> Vec<f64> {
+    ↯[wasm_bindgen]
+    fn get_entity_positions(&self) -> Vec<f64> {
         let mut positions = Vec::new()
         for entity in &self.entities {
             positions.push(entity.x)
@@ -464,8 +464,8 @@ struct Entity {
 }
 
 # 导出数学函数
-#[wasm_bindgen]
-pub fn fast_inverse_sqrt(x: f32) -> f32 {
+↯[wasm_bindgen]
+fn fast_inverse_sqrt(x: f32) -> f32 {
     # Quake III 快速平方根倒数算法
     let i = x.to_bits()
     let i = 0x5f3759df - (i >> 1)
@@ -473,8 +473,8 @@ pub fn fast_inverse_sqrt(x: f32) -> f32 {
     y * (1.5 - 0.5 * x * y * y)
 }
 
-#[wasm_bindgen]
-pub fn mandelbrot(cx: f64, cy: f64, max_iter: u32) -> u32 {
+↯[wasm_bindgen]
+fn mandelbrot(cx: f64, cy: f64, max_iter: u32) -> u32 {
     let mut x = 0.0
     let mut y = 0.0
     let mut iter = 0
@@ -494,18 +494,18 @@ pub fn mandelbrot(cx: f64, cy: f64, max_iter: u32) -> u32 {
 
 ```valkyrie
 # Node.js N-API 绑定
-use napi::bindgen_prelude::*;
+using napi::bindgen_prelude::*;
 
-#[napi]
+↯[napi]
 fn fibonacci(n: u32) -> u64 {
     match n {
-        0 => 0,
-        1 => 1,
-        _ => fibonacci(n - 1) + fibonacci(n - 2)
+        case 0 => 0,
+        case 1 => 1,
+        case _ => fibonacci(n - 1) + fibonacci(n - 2)
     }
 }
 
-#[napi]
+↯[napi]
 fn process_image(data: Buffer, width: u32, height: u32) -> Result<Buffer> {
     let mut pixels = data.to_vec()
     
@@ -520,20 +520,20 @@ fn process_image(data: Buffer, width: u32, height: u32) -> Result<Buffer> {
     Ok(Buffer::from(pixels))
 }
 
-#[napi]
+↯[napi]
 struct FileProcessor {
     buffer_size: u32,
 }
 
-#[napi]
-impl FileProcessor {
-    #[napi(constructor)]
-    pub fn new(buffer_size: u32) -> Self {
-        FileProcessor { buffer_size }
+↯[napi]
+imply FileProcessor {
+    ↯[napi(constructor)]
+    fn new(buffer_size: u32) -> Self {
+        new FileProcessor { buffer_size }
     }
     
-    #[napi]
-    pub fn process_file(&self, path: String) -> Result<String> {
+    ↯[napi]
+    fn process_file(&self, path: String) -> Result<String> {
         # 文件处理逻辑
         let content = std::fs::read_to_string(&path)
             .map_err(|e| Error::new(Status::GenericFailure, format!("Failed to read file: {}", e)))?;
@@ -545,8 +545,8 @@ impl FileProcessor {
         Ok(format!("File: {}, Lines: {}, Characters: {}", path, lines, chars))
     }
     
-    #[napi]
-    pub async fn process_file_async(&self, path: String) -> Result<String> {
+    ↯[napi]
+    fn process_file_async(&self, path: String) -> Result<String> {
         # 异步文件处理
         let content = tokio::fs::read_to_string(&path).await
             .map_err(|e| Error::new(Status::GenericFailure, format!("Failed to read file: {}", e)))?;
@@ -565,18 +565,18 @@ impl FileProcessor {
 ### 运行时动态加载
 
 ```valkyrie
-use libloading::{Library, Symbol};
+using libloading::{Library, Symbol};
 
 # 动态库管理器
 struct DynamicLibrary {
     lib: Library,
 }
 
-impl DynamicLibrary {
+imply DynamicLibrary {
     fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         unsafe {
             let lib = Library::new(path)?;
-            Ok(DynamicLibrary { lib })
+            Ok(new DynamicLibrary { lib })
         }
     }
     
@@ -627,7 +627,7 @@ struct PluginManager {
     libraries: Vec<Library>,
 }
 
-impl PluginManager {
+imply PluginManager {
     fn new() -> Self {
         PluginManager {
             plugins: HashMap::new(),
@@ -646,7 +646,7 @@ impl PluginManager {
             let plugin_ptr = create_plugin()
             let plugin = Box::from_raw(plugin_ptr)
             
-            let name = plugin.name().to_string()
+            let name = plugin.name()
             self.plugins.insert(name, plugin)
             self.libraries.push(lib)
             
@@ -656,14 +656,14 @@ impl PluginManager {
     
     fn execute_plugin(&self, name: &str, input: &str) -> Result<String, String> {
         match self.plugins.get(name) {
-            Some(plugin) => plugin.execute(input),
-            None => Err(format!("Plugin '{}' not found", name))
+            case Some(plugin) => plugin.execute(input),
+            case None => Err(format!("Plugin '{}' not found", name))
         }
     }
     
     fn list_plugins(&self) -> Vec<(String, String)> {
         self.plugins.iter()
-            .map(|(name, plugin)| (name.clone(), plugin.version().to_string()))
+            .map(|(name, plugin)| (name.clone(), plugin.version()))
             .collect()
     }
 }
@@ -671,13 +671,13 @@ impl PluginManager {
 # 插件导出宏
 macro_rules! export_plugin {
     ($plugin_type:ty) => {
-        #[no_mangle]
+        ↯[no_mangle]
         pub extern "C" fn create_plugin() -> *mut dyn Plugin {
             let plugin = Box::new(<$plugin_type>::new());
             Box::into_raw(plugin)
         }
         
-        #[no_mangle]
+        ↯[no_mangle]
         pub extern "C" fn destroy_plugin(plugin: *mut dyn Plugin) {
             if !plugin.is_null() {
                 unsafe {
@@ -699,7 +699,7 @@ struct SafeCString {
     ptr: *mut i8,
 }
 
-impl SafeCString {
+imply SafeCString {
     fn new(s: &str) -> Result<Self, std::ffi::NulError> {
         let c_string = CString::new(s)?;
         Ok(SafeCString {
@@ -714,12 +714,12 @@ impl SafeCString {
     fn to_string(&self) -> Result<String, std::str::Utf8Error> {
         unsafe {
             let c_str = CStr::from_ptr(self.ptr)
-            Ok(c_str.to_str()?.to_string())
+            Ok(c_str?)
         }
     }
 }
 
-impl Drop for SafeCString {
+imply Drop for SafeCString {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
             unsafe {
@@ -736,7 +736,7 @@ struct ManagedBuffer {
     capacity: usize,
 }
 
-impl ManagedBuffer {
+imply ManagedBuffer {
     fn new(capacity: usize) -> Self {
         unsafe {
             let ptr = malloc(capacity)
@@ -765,14 +765,14 @@ impl ManagedBuffer {
     
     fn resize(&mut self, new_size: usize) -> Result<(), String> {
         if new_size > self.capacity {
-            return Err("Size exceeds capacity".to_string())
+            return Err("Size exceeds capacity")
         }
         self.size = new_size
         Ok(())
     }
 }
 
-impl Drop for ManagedBuffer {
+imply Drop for ManagedBuffer {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
             unsafe {
@@ -787,7 +787,7 @@ impl Drop for ManagedBuffer {
 
 ```valkyrie
 # FFI 错误类型
-#[derive(Debug)]
+↯[derive(Debug)]
 enum FFIError {
     NullPointer,
     InvalidUtf8(std::str::Utf8Error),
@@ -797,20 +797,20 @@ enum FFIError {
     MemoryAllocationFailed,
 }
 
-impl std::fmt::Display for FFIError {
+imply std::fmt::Display for FFIError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            FFIError::NullPointer => write!(f, "Null pointer encountered"),
-            FFIError::InvalidUtf8(e) => write!(f, "Invalid UTF-8: {}", e),
-            FFIError::LibraryLoadError(msg) => write!(f, "Library load error: {}", msg),
-            FFIError::SymbolNotFound(name) => write!(f, "Symbol not found: {}", name),
-            FFIError::FunctionCallFailed(code) => write!(f, "Function call failed with code: {}", code),
-            FFIError::MemoryAllocationFailed => write!(f, "Memory allocation failed"),
+            case FFIError::NullPointer => write!(f, "Null pointer encountered"),
+            case FFIError::InvalidUtf8(e) => write!(f, "Invalid UTF-8: {}", e),
+            case FFIError::LibraryLoadError(msg) => write!(f, "Library load error: {}", msg),
+            case FFIError::SymbolNotFound(name) => write!(f, "Symbol not found: {}", name),
+            case FFIError::FunctionCallFailed(code) => write!(f, "Function call failed with code: {}", code),
+            case FFIError::MemoryAllocationFailed => write!(f, "Memory allocation failed"),
         }
     }
 }
 
-impl std::error::Error for FFIError {}
+imply std::error::Error for FFIError {}
 
 # 安全的 FFI 调用包装器
 fn safe_ffi_call<F, R>(f: F) -> Result<R, FFIError>
@@ -833,7 +833,7 @@ struct FileHandle(*mut c_void);
 struct DatabaseConnection(*mut c_void);
 
 # 避免混淆不同类型的指针
-impl FileHandle {
+imply FileHandle {
     fn new(path: &str) -> Result<Self, FFIError> {
         let c_path = CString::new(path).map_err(|_| FFIError::InvalidUtf8)?;
         unsafe {

@@ -6,7 +6,7 @@
 
 ```valkyrie
 mezzo FunctionName(param: Type) -> ReturnType {
-    $ 类型函数体
+    # 类型函数体
 }
 ```
 
@@ -16,7 +16,7 @@ mezzo FunctionName(param: Type) -> ReturnType {
 
 ```valkyrie
 mezzo IsEven(z: Type) -> bool {
-    $ 检查类型 z 是否表示偶数
+    # 检查类型 z 是否表示偶数
     match z {
         i32 if z % 2 == 0 => true,
         _ => false
@@ -28,7 +28,7 @@ mezzo IsEven(z: Type) -> bool {
 
 ```valkyrie
 mezzo MapType<T>(input: T) -> T {
-    $ 对输入类型进行映射变换
+    # 对输入类型进行映射变换
     match input {
         i32 => i64,
         f32 => f64,
@@ -41,7 +41,7 @@ mezzo MapType<T>(input: T) -> T {
 
 ```valkyrie
 mezzo ConditionalType<T, U>(condition: bool) -> Type {
-    $ 根据条件选择类型
+    # 根据条件选择类型
     if condition {
         T
     } else {

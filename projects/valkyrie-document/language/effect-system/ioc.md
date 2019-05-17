@@ -131,13 +131,13 @@ class IoCContainer {
 ```valkyrie
 # 定义服务接口
 trait UserRepository {
-    micro find_by_id(self, id: String) -> Option<User>
-    micro save(self, user: User) -> Unit
-    micro delete(self, id: String) -> Unit
+    find_by_id(self, id: String) -> Option<User>
+    save(self, user: User) -> Unit
+    delete(self, id: String) -> Unit
 }
 
 trait EmailService {
-    micro send_email(self, to: String, subject: String, body: String) -> Unit
+    send_email(self, to: String, subject: String, body: String) -> Unit
 }
 
 # 实现服务
@@ -145,24 +145,24 @@ class DatabaseUserRepository {
     private connection: DatabaseConnection
     
     # 构造函数注入
-    new(@.inject connection: DatabaseConnection) {
+    new(↯inject connection: DatabaseConnection) {
         self.connection = connection
     }
     
-    impl UserRepository {
-        micro find_by_id(self, id) -> Option<User> {
+    imply UserRepository {
+        find_by_id(self, id) -> Option<User> {
             self.connection.query("SELECT * FROM users WHERE id = ?", [id])
                 .map({ User::from_row($row) })
         }
         
-        micro save(self, user) {
+        save(self, user) {
             self.connection.execute(
                 "INSERT INTO users (id, name, email) VALUES (?, ?, ?)",
                 [user.id, user.name, user.email]
             )
         }
         
-        micro delete(self, id) {
+        delete(self, id) {
             self.connection.execute("DELETE FROM users WHERE id = ?", [id])
         }
     }
@@ -171,12 +171,12 @@ class DatabaseUserRepository {
 class SmtpEmailService {
     private config: EmailConfig
     
-    new(@.inject config: EmailConfig) {
+    new(↯inject config: EmailConfig) {
         self.config = config
     }
     
-    impl EmailService {
-        micro send_email(self, to, subject, body) {
+    imply EmailService {
+        send_email(self, to, subject, body) {
             # SMTP 发送逻辑
             let smtp_client = SmtpClient::new(self.config)
             smtp_client.send(to, subject, body)
@@ -195,15 +195,15 @@ class UserService {
     
     # 构造函数注入
     new(
-        @.inject user_repository: UserRepository,
-        @.inject email_service: EmailService
+        ↯inject user_repository: UserRepository,
+        ↯inject email_service: EmailService
     ) {
         self.user_repository = user_repository
         self.email_service = email_service
     }
     
-    @.transactional
-    micro create_user(self, name: String, email: String) -> User {
+    ↯transactional
+    create_user(self, name: String, email: String) -> User {
         let user = User {
             id: generate_id(),
             name,
@@ -223,12 +223,12 @@ class UserService {
         user
     }
     
-    micro get_user(self, id: String) -> Option<User> {
+    get_user(self, id: String) -> Option<User> {
         self.user_repository.find_by_id(id)
     }
     
-    @.authorized("admin")
-    micro delete_user(self, id: String) -> Unit {
+    ↯authorized("admin")
+    delete_user(self, id: String) -> Unit {
         if let Some(user) = self.user_repository.find_by_id(id) {
             self.user_repository.delete(id)
             
@@ -248,7 +248,7 @@ class UserService {
 ```valkyrie
 # 应用程序配置
 class ApplicationConfig {
-    micro configure_services(self, container: IoCContainer) {
+    configure_services(self, container: IoCContainer) {
         # 注册配置
         container.register(EmailConfig, EmailConfig {
             smtp_host: "smtp.example.com",
@@ -287,12 +287,12 @@ class Application {
     private container: IoCContainer
     
     new() {
-        self.container = IoCContainer {}
-        let config = ApplicationConfig {}
+        self.container = new IoCContainer {}
+        let config = new ApplicationConfig {}
         config.configure_services(self.container)
     }
     
-    micro run(self) {
+    run(self) {
         with self.container {
             let user_service = perform DependencyInjection.resolve(UserService)
             
@@ -323,12 +323,12 @@ class ScopeManager {
     private mut scoped_services: {String: {Type: Any}} = {}
     private mut current_scope: Option<String> = None
     
-    micro begin_scope(mut self, scope_id: String) {
+    begin_scope(mut self, scope_id: String) {
         self.current_scope = Some(scope_id)
         self.scoped_services[scope_id] = {}
     }
     
-    micro end_scope(mut self, scope_id: String) {
+    end_scope(mut self, scope_id: String) {
         if let Some(services) = self.scoped_services.remove(scope_id) {
             # 清理作用域内的服务
             for (_, service) in services {
@@ -341,7 +341,7 @@ class ScopeManager {
         }
     }
     
-    micro get_scoped_service<T>(self, service_type: Type<T>) -> Option<T> {
+    get_scoped_service<T>(self, service_type: Type<T>) -> Option<T> {
         if let Some(scope_id) = self.current_scope {
             if let Some(services) = self.scoped_services.get(scope_id) {
                 services.get(service_type).map({ $service as T })
@@ -353,7 +353,7 @@ class ScopeManager {
         }
     }
     
-    micro set_scoped_service<T>(mut self, service_type: Type<T>, instance: T) {
+    set_scoped_service<T>(mut self, service_type: Type<T>, instance: T) {
         if let Some(scope_id) = self.current_scope {
             self.scoped_services.get_mut(scope_id).unwrap()[service_type] = instance
         }
@@ -366,7 +366,7 @@ class ScopeManager {
 ```valkyrie
 # 条件注册
 class ConditionalRegistration {
-    micro register_if<T>(
+    register_if<T>(
         self,
         container: IoCContainer,
         service_type: Type<T>,
@@ -378,7 +378,7 @@ class ConditionalRegistration {
         }
     }
     
-    micro register_profile<T>(
+    register_profile<T>(
         self,
         container: IoCContainer,
         service_type: Type<T>,
@@ -392,17 +392,17 @@ class ConditionalRegistration {
 }
 
 # 使用示例
-let conditional = ConditionalRegistration {}
-let container = IoCContainer {}
+let conditional = new ConditionalRegistration {}
+let container = new IoCContainer {}
 
 # 根据环境注册不同实现
 conditional.register_profile(
     container,
     EmailService,
     {
-        "development": { MockEmailService {} },
-        "production": { SmtpEmailService::new(email_config) },
-        "testing": { InMemoryEmailService {} }
+        "development": { new MockEmailService {} },
+        "production": { new SmtpEmailService {} },
+        "testing": { new InMemoryEmailService {} }
     },
     get_active_profile()
 )
@@ -419,7 +419,7 @@ class ServiceDecorator<T> {
         self.inner = inner
     }
     
-    micro get_inner(self) -> T {
+    get_inner(self) -> T {
         self.inner
     }
 }
@@ -429,12 +429,12 @@ class CachedUserRepository {
     private inner: UserRepository
     private mut cache: {String: User} = {}
     
-    new(@.inject inner: UserRepository) {
+    new(↯inject inner: UserRepository) {
         self.inner = inner
     }
     
-    impl UserRepository {
-        micro find_by_id(self, id) -> Option<User> {
+    imply UserRepository {
+        find_by_id(self, id) -> Option<User> {
             if let Some(cached) = self.cache.get(id) {
                 return Some(cached)
             }
@@ -446,12 +446,12 @@ class CachedUserRepository {
             user
         }
         
-        micro save(self, user) {
+        save(self, user) {
             self.inner.save(user)
             self.cache[user.id] = user
         }
         
-        micro delete(self, id) {
+        delete(self, id) {
             self.inner.delete(id)
             self.cache.remove(id)
         }
@@ -488,8 +488,8 @@ class WebApplication {
     private scope_manager: ScopeManager
     
     new() {
-        self.container = IoCContainer {}
-        self.scope_manager = ScopeManager {}
+        self.container = new IoCContainer {}
+        self.scope_manager = new ScopeManager {}
         self.configure_services()
     }
     
@@ -520,7 +520,7 @@ class WebApplication {
         })
     }
     
-    micro handle_request(self, request: HttpRequest) -> HttpResponse {
+    handle_request(self, request: HttpRequest) -> HttpResponse {
         let request_id = generate_request_id()
         
         self.scope_manager.begin_scope(request_id)

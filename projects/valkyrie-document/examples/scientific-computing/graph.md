@@ -7,7 +7,7 @@ Valkyrie 提供了完整的图数据结构和算法库，支持各种图计算�
 ### 无向图
 
 ```valkyrie
-use graph::*
+using graph::*
 
 # 创建无向图
 let mut graph = UndirectedGraph::new()
@@ -299,7 +299,7 @@ let temporal_paths = dynamic_graph.temporal_paths(start, end, start_time, end_ti
 ## 图的可视化
 
 ```valkyrie
-use graph::visualization::*
+using graph::visualization::*
 
 # 布局算法
 let spring_layout = graph.spring_layout(iterations: 1000)
@@ -323,7 +323,7 @@ visualization.render("output.svg")
 ## 并行图算法
 
 ```valkyrie
-use graph::parallel::*
+using graph::parallel::*
 
 # 并行BFS
 let parallel_bfs = graph.parallel_bfs(start_node, num_threads: 8)
@@ -430,7 +430,7 @@ micro process_large_graph(graph_stream: GraphStream) {
     for chunk in graph_stream.chunks(1000) {
         let subgraph = Graph::from_edges(chunk)
         let result = subgraph.compute_metrics()
-        // 处理结果，释放内存
+        # 处理结果，释放内存
     }
 }
 ```

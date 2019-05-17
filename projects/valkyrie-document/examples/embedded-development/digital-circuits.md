@@ -20,7 +20,7 @@ type Vec<T, const N: usize> = [T; N]
 # 硬件束 (Bundle)
 trait Bundle {
     type Elements
-    micro elements(self) -> Self::Elements
+    elements(self) -> Self::Elements
 }
 
 # 内存类型
@@ -44,8 +44,8 @@ struct Reg<T> {
 trait Module {
     type IO: Bundle
     
-    micro io(self) -> Self::IO
-    micro elaborate(self)
+    io(self) -> Self::IO
+    elaborate(self)
 }
 
 # 简单的加法器模块
@@ -59,18 +59,18 @@ struct AdderIO {
     sum: UInt<33>
 }
 
-impl Bundle for AdderIO {
+imply Bundle for AdderIO {
     type Elements = (UInt<32>, UInt<32>, UInt<33>)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.a, self.b, self.sum)
     }
 }
 
-impl Module for Adder {
+imply Module for Adder {
     type IO = AdderIO
     
-    micro io(self) -> AdderIO {
+    io(self) -> AdderIO {
         AdderIO {
             a: input(UInt::<32>),
             b: input(UInt::<32>),
@@ -78,7 +78,7 @@ impl Module for Adder {
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         io.sum := io.a + io.b
     }
@@ -118,18 +118,18 @@ struct CounterIO {
     overflow: Bool
 }
 
-impl Bundle for CounterIO {
+imply Bundle for CounterIO {
     type Elements = (Bool, Bool, UInt<32>, Bool)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.enable, self.reset, self.count, self.overflow)
     }
 }
 
-impl Module for Counter {
+imply Module for Counter {
     type IO = CounterIO
     
-    micro io(self) -> CounterIO {
+    io(self) -> CounterIO {
         CounterIO {
             enable: input(Bool),
             reset: input(Bool),
@@ -138,7 +138,7 @@ impl Module for Counter {
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         let clock = Clock::global()
         
@@ -255,18 +255,18 @@ struct AluIO {
     overflow: Bool
 }
 
-impl Bundle for AluIO {
+imply Bundle for AluIO {
     type Elements = (UInt<32>, UInt<32>, UInt<4>, UInt<32>, Bool, Bool)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.a, self.b, self.op, self.result, self.zero, self.overflow)
     }
 }
 
-impl Module for Alu {
+imply Module for Alu {
     type IO = AluIO
     
-    micro io(self) -> AluIO {
+    io(self) -> AluIO {
         AluIO {
             a: input(UInt::<32>),
             b: input(UInt::<32>),
@@ -277,7 +277,7 @@ impl Module for Alu {
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         
         let add_result = io.a + io.b
@@ -350,7 +350,7 @@ struct SinglePortRamIO<const WIDTH: usize, const ADDR_WIDTH: usize> {
 impl<const WIDTH: usize, const ADDR_WIDTH: usize> Bundle for SinglePortRamIO<WIDTH, ADDR_WIDTH> {
     type Elements = (UInt<ADDR_WIDTH>, UInt<WIDTH>, UInt<WIDTH>, Bool, Bool)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.addr, self.data_in, self.data_out, self.write_enable, self.chip_enable)
     }
 }
@@ -358,7 +358,7 @@ impl<const WIDTH: usize, const ADDR_WIDTH: usize> Bundle for SinglePortRamIO<WID
 impl<const WIDTH: usize, const DEPTH: usize> Module for SinglePortRam<WIDTH, DEPTH> {
     type IO = SinglePortRamIO<WIDTH, {log2_ceil(DEPTH)}>
     
-    micro io(self) -> Self::IO {
+    io(self) -> Self::IO {
         SinglePortRamIO {
             addr: input(UInt::<{log2_ceil(DEPTH)}>),
             data_in: input(UInt::<WIDTH>),
@@ -368,7 +368,7 @@ impl<const WIDTH: usize, const DEPTH: usize> Module for SinglePortRam<WIDTH, DEP
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         let clock = Clock::global()
         
@@ -419,7 +419,7 @@ impl<const WIDTH: usize, const ADDR_WIDTH: usize> Bundle for DualPortRamIO<WIDTH
         UInt<ADDR_WIDTH>, UInt<WIDTH>, UInt<WIDTH>, Bool, Bool
     )
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (
             self.addr_a, self.data_in_a, self.data_out_a, self.write_enable_a, self.chip_enable_a,
             self.addr_b, self.data_in_b, self.data_out_b, self.write_enable_b, self.chip_enable_b
@@ -430,7 +430,7 @@ impl<const WIDTH: usize, const ADDR_WIDTH: usize> Bundle for DualPortRamIO<WIDTH
 impl<const WIDTH: usize, const DEPTH: usize> Module for DualPortRam<WIDTH, DEPTH> {
     type IO = DualPortRamIO<WIDTH, {log2_ceil(DEPTH)}>
     
-    micro io(self) -> Self::IO {
+    io(self) -> Self::IO {
         DualPortRamIO {
             addr_a: input(UInt::<{log2_ceil(DEPTH)}>),
             data_in_a: input(UInt::<WIDTH>),
@@ -446,7 +446,7 @@ impl<const WIDTH: usize, const DEPTH: usize> Module for DualPortRam<WIDTH, DEPTH
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         let clock = Clock::global()
         
@@ -508,10 +508,10 @@ struct DecodedInstruction {
     inst_type: UInt<3>
 }
 
-impl Bundle for DecodedInstruction {
+imply Bundle for DecodedInstruction {
     type Elements = (UInt<7>, UInt<5>, UInt<5>, UInt<5>, UInt<3>, UInt<7>, UInt<32>, UInt<3>)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.opcode, self.rd, self.rs1, self.rs2, self.funct3, self.funct7, self.imm, self.inst_type)
     }
 }
@@ -521,25 +521,25 @@ struct InstructionDecoderIO {
     decoded: DecodedInstruction
 }
 
-impl Bundle for InstructionDecoderIO {
+imply Bundle for InstructionDecoderIO {
     type Elements = (UInt<32>, DecodedInstruction)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.instruction, self.decoded)
     }
 }
 
-impl Module for InstructionDecoder {
+imply Module for InstructionDecoder {
     type IO = InstructionDecoderIO
     
-    micro io(self) -> InstructionDecoderIO {
+    io(self) -> InstructionDecoderIO {
         InstructionDecoderIO {
             instruction: input(UInt::<32>),
             decoded: output(DecodedInstruction::default())
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         let inst = io.instruction
         
@@ -615,18 +615,18 @@ struct RegisterFileIO {
     rd_enable: Bool
 }
 
-impl Bundle for RegisterFileIO {
+imply Bundle for RegisterFileIO {
     type Elements = (UInt<5>, UInt<32>, UInt<5>, UInt<32>, UInt<5>, UInt<32>, Bool)
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.rs1_addr, self.rs1_data, self.rs2_addr, self.rs2_data, self.rd_addr, self.rd_data, self.rd_enable)
     }
 }
 
-impl Module for RegisterFile {
+imply Module for RegisterFile {
     type IO = RegisterFileIO
     
-    micro io(self) -> RegisterFileIO {
+    io(self) -> RegisterFileIO {
         RegisterFileIO {
             rs1_addr: input(UInt::<5>),
             rs1_data: output(UInt::<32>),
@@ -638,7 +638,7 @@ impl Module for RegisterFile {
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         let clock = Clock::global()
         
@@ -748,7 +748,7 @@ struct Axi4Interface {
     read_data: Axi4ReadData
 }
 
-impl Bundle for Axi4Interface {
+imply Bundle for Axi4Interface {
     type Elements = (
         Axi4WriteAddress,
         Axi4WriteData,
@@ -757,7 +757,7 @@ impl Bundle for Axi4Interface {
         Axi4ReadData
     )
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (
             self.write_address,
             self.write_data,
@@ -785,7 +785,7 @@ struct CrossbarIO<const N_MASTERS: usize, const M_SLAVES: usize> {
 impl<const N_MASTERS: usize, const M_SLAVES: usize> Bundle for CrossbarIO<N_MASTERS, M_SLAVES> {
     type Elements = ([Axi4Interface; N_MASTERS], [Axi4Interface; M_SLAVES])
     
-    micro elements(self) -> Self::Elements {
+    elements(self) -> Self::Elements {
         (self.master_ports, self.slave_ports)
     }
 }
@@ -793,14 +793,14 @@ impl<const N_MASTERS: usize, const M_SLAVES: usize> Bundle for CrossbarIO<N_MAST
 impl<const N_MASTERS: usize, const M_SLAVES: usize> Module for Crossbar<N_MASTERS, M_SLAVES> {
     type IO = CrossbarIO<N_MASTERS, M_SLAVES>
     
-    micro io(self) -> Self::IO {
+    io(self) -> Self::IO {
         CrossbarIO {
             master_ports: [Axi4Interface::input(); N_MASTERS],
             slave_ports: [Axi4Interface::output(); M_SLAVES]
         }
     }
     
-    micro elaborate(self) {
+    elaborate(self) {
         let io = self.io()
         
         # 地址解码器
@@ -853,9 +853,9 @@ impl<const N_MASTERS: usize, const M_SLAVES: usize> Module for Crossbar<N_MASTER
 trait Testbench {
     type DUT: Module  # 被测设计
     
-    micro setup(self) -> Self::DUT
-    micro run_test(self, dut: Self::DUT)
-    micro cleanup(self)
+    setup(self) -> Self::DUT
+    run_test(self, dut: Self::DUT)
+    cleanup(self)
 }
 
 # 时钟生成器
@@ -864,15 +864,15 @@ struct ClockGenerator {
     duty_cycle: f32
 }
 
-impl ClockGenerator {
-    micro new(frequency_mhz: f32) -> ClockGenerator {
+imply ClockGenerator {
+    new(frequency_mhz: f32) -> ClockGenerator {
         ClockGenerator {
             period: (1000.0 / frequency_mhz) as u64,
             duty_cycle: 0.5
         }
     }
     
-    micro generate_clock(self) -> Clock {
+    generate_clock(self) -> Clock {
         let clock = Clock::new()
         
         # 时钟生成逻辑
@@ -904,14 +904,14 @@ struct AluTestVector {
     expected_overflow: bool
 }
 
-impl Testbench for AluTestbench {
+imply Testbench for AluTestbench {
     type DUT = Alu
     
-    micro setup(self) -> Alu {
+    setup(self) -> Alu {
         Alu { width: 32 }
     }
     
-    micro run_test(self, dut: Alu) {
+    run_test(self, dut: Alu) {
         let clock = self.clock_gen.generate_clock()
         let io = dut.io()
         
@@ -938,7 +938,7 @@ impl Testbench for AluTestbench {
         println!("ALU test passed with {} test vectors", self.test_vectors.len())
     }
     
-    micro cleanup(self) {
+    cleanup(self) {
         # 清理资源
     }
 }
@@ -949,9 +949,9 @@ impl Testbench for AluTestbench {
 ```valkyrie
 # 形式化验证属性
 trait FormalProperty {
-    micro assume(self, condition: Bool)
-    micro assert(self, property: Bool)
-    micro cover(self, condition: Bool)
+    assume(self, condition: Bool)
+    assert(self, property: Bool)
+    cover(self, condition: Bool)
 }
 
 # ALU 形式化验证
@@ -959,25 +959,25 @@ struct AluFormalVerification {
     dut: Alu
 }
 
-impl FormalProperty for AluFormalVerification {
-    micro assume(self, condition: Bool) {
+imply FormalProperty for AluFormalVerification {
+    assume(self, condition: Bool) {
         # 假设条件
         formal_assume(condition)
     }
     
-    micro assert(self, property: Bool) {
+    assert(self, property: Bool) {
         # 断言属性
         formal_assert(property)
     }
     
-    micro cover(self, condition: Bool) {
+    cover(self, condition: Bool) {
         # 覆盖条件
         formal_cover(condition)
     }
 }
 
-impl AluFormalVerification {
-    micro verify_add_properties(self) {
+imply AluFormalVerification {
+    verify_add_properties(self) {
         let io = self.dut.io()
         
         # 假设：操作码为加法
@@ -1001,7 +1001,7 @@ impl AluFormalVerification {
         self.assert(io.overflow === Bool::from(true))
     }
     
-    micro verify_all_operations(self) {
+    verify_all_operations(self) {
         let io = self.dut.io()
         
         # 覆盖所有操作码
@@ -1076,15 +1076,15 @@ struct OptimizedProcessor {
     config: SynthesisConfig
 }
 
-impl Module for OptimizedProcessor {
+imply Module for OptimizedProcessor {
     type IO = ProcessorIO
     
-    micro io(self) -> ProcessorIO {
+    io(self) -> ProcessorIO {
         ProcessorIO::new()
     }
     
     @synthesis(pipeline_stages = 5)
-    micro elaborate(self) {
+    elaborate(self) {
         # 流水线处理器实现
         let fetch_stage = FetchStage::new()
         let decode_stage = DecodeStage::new()

@@ -29,14 +29,14 @@ Valkyrie 是在 Nyar 平台上实现的具体编程语言，展示了：
 #### 基本类型
 
 ```valkyrie
-$ 原始类型
+# 原始类型
 let integer: i32 = 42
 let float: f64 = 3.14159
 let boolean: bool = true
 let character: char = 'A'
 let text: String = "Hello, World!"
 
-$ 复合类型
+# 复合类型
 let numbers: [i32; 5] = [1, 2, 3, 4, 5]
 let point: (f64, f64) = (3.0, 4.0)
 let maybe_value: Option<i32> = Some(42)
@@ -45,18 +45,18 @@ let maybe_value: Option<i32> = Some(42)
 #### 泛型和类型参数
 
 ```valkyrie
-$ 泛型函数
+# 泛型函数
 micro identity<T>(value: T) -> T {
     value
 }
 
-$ 泛型类型
+# 泛型类型
 type Container<T> = {
     value: T,
     metadata: String,
 }
 
-$ 约束泛型
+# 约束泛型
 micro compare<T>(a: T, b: T) -> bool
 where T: PartialEq
 {
@@ -67,19 +67,19 @@ where T: PartialEq
 #### 高阶类型 (HKT)
 
 ```valkyrie
-$ 类型构造器
+# 类型构造器
 type Functor<F> = {
     map: micro<A, B>(F<A>, micro(A) -> B) -> F<B>
 }
 
-$ 单子模式
+# 单子模式
 type Monad<M> = {
     pure: micro<A>(A) -> M<A>,
     bind: micro<A, B>(M<A>, micro(A) -> M<B>) -> M<B>
 }
 
-$ Option 单子实现
-impl Monad<Option> {
+# Option 单子实现
+imply Monad<Option> {
     pure(value) { Some { value } }
     
     bind(opt, f) {
@@ -95,16 +95,16 @@ impl Monad<Option> {
 #### 类型函数 (mezzo)
 
 ```valkyrie
-$ 编译时类型计算
+# 编译时类型计算
 mezzo Add<A, B>(a: A, b: B) -> Type {
-    $ 类型级加法
+    # 类型级加法
     match (a, b) {
         (Zero, n) => n,
         (Succ<m>, n) => Succ<Add<m, n>>
     }
 }
 
-$ 条件类型选择
+# 条件类型选择
 mezzo If<Condition, Then, Else>(cond: Condition) -> Type {
     if cond {
         Then
@@ -113,7 +113,7 @@ mezzo If<Condition, Then, Else>(cond: Condition) -> Type {
     }
 }
 
-$ 类型验证
+# 类型验证
 mezzo IsNumeric<T>(t: T) -> bool {
     match t {
         i8 | i16 | i32 | i64 | i128 => true,
@@ -129,7 +129,7 @@ mezzo IsNumeric<T>(t: T) -> bool {
 #### 基本模式匹配
 
 ```valkyrie
-$ 值匹配
+# 值匹配
 match value {
     with [basic_match];
     case 0: "zero"
@@ -138,7 +138,7 @@ match value {
     else: "other"
 }
 
-$ 范围匹配
+# 范围匹配
 match score {
     with [grade_calculation];
     case 90..=100: "A"
@@ -148,7 +148,7 @@ match score {
     else: "F"
 }
 
-$ 多值匹配
+# 多值匹配
 match day {
     with [weekend_check];
     case "Saturday" | "Sunday": "Weekend"
@@ -160,7 +160,7 @@ match day {
 #### 解构匹配
 
 ```valkyrie
-$ 元组解构
+# 元组解构
 match point {
     with [coordinate_analysis];
     case (0, 0): "Origin"
@@ -170,7 +170,7 @@ match point {
     case (x, y): f"Point at ({x}, {y})"
 }
 
-$ 数组解构
+# 数组解构
 match array {
     with [array_pattern];
     case []: "Empty"
@@ -178,7 +178,7 @@ match array {
     case [first, ..rest]: f"First: {first}, Rest: {rest.len()} items"
 }
 
-$ 对象解构
+# 对象解构
 match person {
     with [person_info];
     case { name: "Alice", age }: f"Alice is {age} years old"
@@ -190,14 +190,14 @@ match person {
 #### 联合类型匹配
 
 ```valkyrie
-$ Result 类型匹配
+# Result 类型匹配
 match result {
     with [result_handling];
     case Fine { value }: f"Success: {value}"
 case Fail { error }: f"Error: {error}"
 }
 
-$ 复杂联合类型
+# 复杂联合类型
 union Expression {
     Literal(i32),
 Variable(String),
@@ -227,44 +227,44 @@ case Binary { left, operator: "*", right }: {
 #### 高阶函数
 
 ```valkyrie
-$ 函数作为参数
+# 函数作为参数
 micro apply_twice<T>(f: micro(T) -> T, value: T) -> T {
     f(f(value))
 }
 
-$ 函数组合
+# 函数组合
 micro compose<A, B, C>(f: micro(B) -> C, g: micro(A) -> B) -> micro(A) -> C {
     { $x -> f(g($x)) }
 }
 
-$ 柯里化
+# 柯里化
 micro add(x: i32) -> micro(i32) -> i32 {
     { $y -> x + $y }
 }
 
 let add_five = add(5)
-let result = add_five(10)  $ 结果为 15
+let result = add_five(10)  # 结果为 15
 ```
 
 #### 闭包和 Lambda 表达式
 
 ```valkyrie
-$ 基本闭包
+# 基本闭包
 let square = { $x * $x }
 let add = { $x + $y }
 
-$ 捕获外部变量
+# 捕获外部变量
 let multiplier = 3
 let multiply_by_three = { $x * multiplier }
 
-$ 复杂闭包
+# 复杂闭包
 let process_data = {
     let cleaned = $data.filter { $item.is_valid() }
     let transformed = cleaned.map { $item.transform() }
     transformed.reduce { $acc + $item }
 }
 
-$ 尾随闭包语法
+# 尾随闭包语法
 numbers.map { $x * $x }
     .filter { $x > 10 }
     .reduce { $acc + $x }
@@ -273,7 +273,7 @@ numbers.map { $x * $x }
 #### 递归和尾递归优化
 
 ```valkyrie
-$ 普通递归
+# 普通递归
 micro factorial(n: i32) -> i32 {
     if n <= 1 {
         1
@@ -282,7 +282,7 @@ micro factorial(n: i32) -> i32 {
     }
 }
 
-$ 尾递归优化
+# 尾递归优化
 micro factorial_tail(n: i32, acc: i32 = 1) -> i32 {
     if n <= 1 {
         acc
@@ -291,7 +291,7 @@ micro factorial_tail(n: i32, acc: i32 = 1) -> i32 {
     }
 }
 
-$ 相互递归
+# 相互递归
 micro is_even(n: i32) -> bool {
     if n == 0 {
         true
@@ -314,7 +314,7 @@ micro is_odd(n: i32) -> bool {
 #### 类定义和继承
 
 ```valkyrie
-$ 基本类定义
+# 基本类定义
 class Animal {
     name: String
     age: i32
@@ -332,7 +332,7 @@ class Animal {
     }
 }
 
-$ 继承
+# 继承
 class Dog extends Animal {
     breed: String
     
@@ -357,7 +357,7 @@ class Dog extends Animal {
 #### 特征 (Traits) 和实现
 
 ```valkyrie
-$ 特征定义
+# 特征定义
 trait Drawable {
     draw(self)
     get_area(self) -> f64
@@ -367,7 +367,7 @@ trait Comparable<T> {
     compare(self, other: T) -> i32
 }
 
-$ 特征实现
+# 特征实现
 class Circle {
     radius: f64
     
@@ -376,7 +376,7 @@ class Circle {
     }
 }
 
-impl Drawable for Circle {
+imply Drawable for Circle {
     draw(self) {
         print("Drawing circle with radius ${self.radius}")
     }
@@ -386,7 +386,7 @@ impl Drawable for Circle {
     }
 }
 
-impl Comparable<Circle> for Circle {
+imply Comparable<Circle> for Circle {
     compare(self, other: Circle) -> i32 {
         if self.radius < other.radius {
             -1
@@ -404,22 +404,22 @@ impl Comparable<Circle> for Circle {
 #### 命名空间组织
 
 ```valkyrie
-$ 基本命名空间
+# 基本命名空间
 namespace math {
     let PI = 3.14159
     
-    micro sin(x: f64) -> f64 {
-        $ 正弦函数实现
-        x  $ 简化实现
+    sin(x: f64) -> f64 {
+        # 正弦函数实现
+        x  # 简化实现
     }
     
-    micro cos(x: f64) -> f64 {
-        $ 余弦函数实现
-        1.0 - x * x / 2.0  $ 简化实现
+    cos(x: f64) -> f64 {
+        # 余弦函数实现
+        1.0 - x * x / 2.0  # 简化实现
     }
 }
 
-$ 嵌套命名空间
+# 嵌套命名空间
 namespace graphics {
     namespace shapes {
         class Rectangle {
@@ -444,8 +444,8 @@ namespace graphics {
         }
         
         let RED: RGB = class { r: 255, g: 0, b: 0 }
-let GREEN: RGB = class { r: 0, g: 255, b: 0 }
-let BLUE: RGB = class { r: 0, g: 0, b: 255 }
+        let GREEN: RGB = class { r: 0, g: 255, b: 0 }
+        let BLUE: RGB = class { r: 0, g: 0, b: 255 }
     }
 }
 ```
@@ -453,23 +453,23 @@ let BLUE: RGB = class { r: 0, g: 0, b: 255 }
 #### 导入和使用
 
 ```valkyrie
-$ 完整导入
+# 完整导入
 using math.*
 
 micro calculate_circle_area(radius: f64) -> f64 {
     math.PI * radius * radius
 }
 
-$ 选择性导入
+# 选择性导入
 using math.{PI, sin, cos}
 using graphics.shapes.Rectangle
 using graphics.colors.{RED, GREEN, BLUE}
 
-$ 重命名导入
+# 重命名导入
 using graphics.shapes.Rectangle as Rect
 using graphics.colors.RGB as Color
 
-$ 使用导入的内容
+# 使用导入的内容
 micro create_colored_rectangle() -> (Rect, Color) {
     let rect = Rect::new(10.0, 20.0)
     let color = RED
@@ -482,16 +482,16 @@ micro create_colored_rectangle() -> (Rect, Color) {
 #### 条件控制
 
 ```valkyrie
-$ 基本条件
+# 基本条件
 if condition {
-    $ 执行代码
+    # 执行代码
 } else if other_condition {
-    $ 其他条件
+    # 其他条件
 } else {
-    $ 默认情况
+    # 默认情况
 }
 
-$ 条件表达式
+# 条件表达式
 let result = if x > 0 {
     "positive"
 } else if x < 0 {
@@ -500,7 +500,7 @@ let result = if x > 0 {
     "zero"
 }
 
-$ 守卫条件
+# 守卫条件
 if let Some { value } = optional_value {
     print(f"Got value: {value}")
 }
@@ -509,9 +509,9 @@ if let Some { value } = optional_value {
 #### 循环控制
 
 ```valkyrie
-$ while 循环
+# while 循环
 while condition {
-    $ 循环体
+    # 循环体
     if should_break {
         break
     }
@@ -520,7 +520,7 @@ while condition {
     }
 }
 
-$ for 循环
+# for 循环
 for i in 0..10 {
     print(i)
 }
@@ -533,7 +533,7 @@ for (index, value) in collection.enumerate() {
     print(f"Index {index}: {value}")
 }
 
-$ 无限循环
+# 无限循环
 loop {
     let input = get_input()
     if input == "quit" {
@@ -542,7 +542,7 @@ loop {
     process(input)
 }
 
-$ 带标签的循环
+# 带标签的循环
 'outer: loop {
     'inner: for i in 0..10 {
         if should_break_outer {
@@ -560,7 +560,7 @@ $ 带标签的循环
 #### 异常系统
 
 ```valkyrie
-$ 抛出异常
+# 抛出异常
 micro validate_age(age: i32) {
     if age < 0 {
         raise "Age cannot be negative"
@@ -570,7 +570,7 @@ micro validate_age(age: i32) {
     }
 }
 
-$ 捕获异常
+# 捕获异常
 try {
     validate_age(-5)
     risky_operation()
@@ -589,7 +589,7 @@ try {
 #### Result 类型
 
 ```valkyrie
-$ 使用 Result 类型
+# 使用 Result 类型
 micro divide(a: f64, b: f64) -> Result<f64, String> {
     if b == 0.0 {
         Err { error: "Division by zero" }
@@ -598,7 +598,7 @@ micro divide(a: f64, b: f64) -> Result<f64, String> {
     }
 }
 
-$ 链式错误处理
+# 链式错误处理
 let result = divide(10.0, 2.0)
     .map { $value * 2.0 }
     .and_then { $value -> 
@@ -621,17 +621,17 @@ case Fail { error }: print(f"Error: {error}")
 #### 宏系统
 
 ```valkyrie
-$ 简单宏定义
+# 简单宏定义
 macro debug_print($expr) {
-    @.cfg(debug_assertions)
+    ↯cfg(debug_assertions)
     println("DEBUG: {} = {}", stringify!($expr), $expr)
 }
 
-$ 使用宏
+# 使用宏
 debug_print!(x + y)
-$ 展开为: println("DEBUG: x + y = {}", x + y)
+# 展开为: println("DEBUG: x + y = {}", x + y)
 
-$ 复杂宏
+# 复杂宏
 macro create_class($name, $($field:$type),*) {
     class $name {
         $($field: $type,)*
@@ -644,15 +644,15 @@ macro create_class($name, $($field:$type),*) {
     }
 }
 
-$ 使用复杂宏
+# 使用复杂宏
 create_class!(Person, name: String, age: i32)
 ```
 
 #### 编译时计算
 
 ```valkyrie
-$ 编译时常量
-@.const_eval
+# 编译时常量
+↯const_eval
 micro fibonacci_const(n: i32) -> i32 {
     if n <= 1 {
         n
@@ -661,10 +661,10 @@ micro fibonacci_const(n: i32) -> i32 {
     }
 }
 
-let fib_10 = fibonacci_const(10)  $ 编译时计算
+let fib_10 = fibonacci_const(10)  # 编译时计算
 
-$ 编译时类型生成
-@.derive(Debug, Clone, PartialEq)
+# 编译时类型生成
+↯derive(Debug, Clone, PartialEq)
 class Point {
     x: f64
     y: f64
@@ -676,27 +676,27 @@ class Point {
 ### 1. 内存管理
 
 ```valkyrie
-$ 垃圾回收
-let data = allocate_large_data()  $ 自动管理内存
-$ 当 data 离开作用域时自动回收
+# 垃圾回收
+let data = allocate_large_data()  # 自动管理内存
+# 当 data 离开作用域时自动回收
 
-$ 引用计数
+# 引用计数
 let shared_data = Rc::new(expensive_data())
 let reference1 = shared_data.clone()
 let reference2 = shared_data.clone()
-$ 当所有引用都离开作用域时自动释放
+# 当所有引用都离开作用域时自动释放
 ```
 
 ### 2. 并发和异步
 
 ```valkyrie
-$ 异步函数
+# 异步函数
 async micro fetch_data(url: String) -> Result<String, Error> {
     let response = http_client.get(url).await?
     Fine { value: response.text().await? }
 }
 
-$ 并发执行
+# 并发执行
 async micro process_urls(urls: [String]) -> [Result<String, Error>] {
     let futures = urls.map { $url -> fetch_data($url) }
     futures.join_all().await
@@ -706,28 +706,28 @@ async micro process_urls(urls: [String]) -> [Result<String, Error>] {
 ### 3. 性能优化
 
 ```valkyrie
-$ 内联优化
-@.inline
+# 内联优化
+↯inline
 micro fast_add(a: i32, b: i32) -> i32 {
     a + b
 }
 
-$ 特化优化
-@.specialize
+# 特化优化
+↯specialize
 micro generic_sort<T>(data: [T]) -> [T]
 where T: Ord
 {
-    $ 为每个具体类型生成优化版本
+    # 为每个具体类型生成优化版本
     data.sort()
 }
 
-$ 零成本抽象
+# 零成本抽象
 let result = numbers
     .iter()
     .map { $x * $x }
     .filter { $x > 100 }
     .collect()
-$ 编译后等价于手写循环
+# 编译后等价于手写循环
 ```
 
 ## 总结

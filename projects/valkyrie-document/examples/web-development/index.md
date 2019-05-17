@@ -24,8 +24,8 @@ class ServerConfig {
     enable_compression: bool,
 }
 
-impl WebServer {
-    micro new(config: ServerConfig) -> Self {
+imply WebServer {
+    new(config: ServerConfig) -> Self {
         WebServer {
             router: Router::new(),
             middleware_stack: Vec::new(),
@@ -34,31 +34,31 @@ impl WebServer {
         }
     }
     
-    micro route(&mut self, method: HttpMethod, path: &str, handler: impl Handler + 'static) {
+    route(&mut self, method: HttpMethod, path: &str, handler: imply Handler + 'static) {
         self.router.add_route(method, path, Box::new(handler))
     }
     
-    micro get(&mut self, path: &str, handler: impl Handler + 'static) {
+    get(&mut self, path: &str, handler: imply Handler + 'static) {
         self.route(HttpMethod::GET, path, handler)
     }
     
-    micro post(&mut self, path: &str, handler: impl Handler + 'static) {
+    post(&mut self, path: &str, handler: imply Handler + 'static) {
         self.route(HttpMethod::POST, path, handler)
     }
     
-    micro put(&mut self, path: &str, handler: impl Handler + 'static) {
+    put(&mut self, path: &str, handler: imply Handler + 'static) {
         self.route(HttpMethod::PUT, path, handler)
     }
     
-    micro delete(&mut self, path: &str, handler: impl Handler + 'static) {
+    delete(&mut self, path: &str, handler: imply Handler + 'static) {
         self.route(HttpMethod::DELETE, path, handler)
     }
     
-    micro use_middleware(&mut self, middleware: impl Middleware + 'static) {
+    use_middleware(&mut self, middleware: imply Middleware + 'static) {
         self.middleware_stack.push(Box::new(middleware))
     }
     
-    micro serve_static(&mut self, path: &str, dir: &str) {
+    serve_static(&mut self, path: &str, dir: &str) {
         let static_handler = StaticFileHandler::new(dir)
         self.get(&format!("{}/*", path), static_handler)
     }
@@ -151,15 +151,15 @@ enum PathPattern {
     Wildcard(String),
 }
 
-impl Router {
-    micro new() -> Self {
+imply Router {
+    new() -> Self {
         Router {
             routes: Vec::new(),
             groups: Vec::new(),
         }
     }
     
-    micro add_route(&mut self, method: HttpMethod, path: &str, handler: Box<dyn Handler>) {
+    add_route(&mut self, method: HttpMethod, path: &str, handler: Box<dyn Handler>) {
         let pattern = PathPattern::parse(path)
         let route = Route {
             method,
@@ -170,11 +170,11 @@ impl Router {
         self.routes.push(route)
     }
     
-    micro group(&mut self, prefix: &str) -> RouteGroupBuilder {
+    group(&mut self, prefix: &str) -> RouteGroupBuilder {
         RouteGroupBuilder::new(prefix, self)
     }
     
-    micro find_handler(&self, request: &HttpRequest) -> Option<&dyn Handler> {
+    find_handler(&self, request: &HttpRequest) -> Option<&dyn Handler> {
         # 首先检查路由组
         for group in &self.groups {
             if request.path.starts_with(&group.prefix) {
@@ -198,14 +198,14 @@ impl Router {
     }
 }
 
-impl PathPattern {
-    micro parse(path: &str) -> Self {
+imply PathPattern {
+    parse(path: &str) -> Self {
         if path.contains(':') {
             let mut params = Vec::new()
             let pattern = path.split('/').map(|segment| {
                 if segment.starts_with(':') {
-                    params.push(segment[1..].to_string())
-                    "([^/]+)".to_string()
+                    params.push(segment[1..])
+                    "([^/]+)"
                 } else {
                     regex::escape(segment)
                 }
@@ -213,13 +213,13 @@ impl PathPattern {
             
             PathPattern::Dynamic(pattern, params)
         } else if path.ends_with("*") {
-            PathPattern::Wildcard(path[..path.len()-1].to_string())
+            PathPattern::Wildcard(path[..path.len()-1])
         } else {
-            PathPattern::Static(path.to_string())
+            PathPattern::Static(path)
         }
     }
     
-    micro matches(&self, path: &str) -> bool {
+    matches(&self, path: &str) -> bool {
         match self {
             PathPattern::Static(pattern) => pattern == path,
             PathPattern::Dynamic(pattern, _) => {
@@ -230,7 +230,7 @@ impl PathPattern {
         }
     }
     
-    micro extract_params(&self, path: &str) -> HashMap<String, String> {
+    extract_params(&self, path: &str) -> HashMap<String, String> {
         let mut params = HashMap::new()
         
         if let PathPattern::Dynamic(pattern, param_names) = self {
@@ -238,7 +238,7 @@ impl PathPattern {
             if let Some(captures) = regex.captures(path) {
                 for (i, name) in param_names.iter().enumerate() {
                     if let Some(value) = captures.get(i + 1) {
-                        params.insert(name.clone(), value.as_str().to_string())
+                        params.insert(name.clone(), value.as_str())
                     }
                 }
             }
@@ -262,7 +262,7 @@ class HttpRequest {
     params: HashMap<String, String>  # 路由参数
 }
 
-#[derive(Clone, PartialEq)]
+↯[derive(Clone, PartialEq)]
 union HttpMethod {
     GET,
     POST,
@@ -273,8 +273,8 @@ union HttpMethod {
     OPTIONS,
 }
 
-impl HttpRequest {
-    micro parse(buffer: &[u8]) -> Result<Self, ParseError> {
+imply HttpRequest {
+    parse(buffer: &[u8]) -> Result<Self, ParseError> {
         let request_str = String::from_utf8_lossy(buffer)
         let lines: Vector<&str> = request_str.lines().collect()
         
@@ -290,7 +290,7 @@ impl HttpRequest {
         
         let method = HttpMethod::from_str(request_line_parts[0])?
         let url_parts: Vector<&str> = request_line_parts[1].splitn(2, '?').collect()
-        let path = url_parts[0].to_string()
+        let path = url_parts[0]
         
         # 解析查询参数
         let query_params = if url_parts.len() > 1 {
@@ -311,7 +311,7 @@ impl HttpRequest {
             
             if let Some(colon_pos) = line.find(':') {
                 let key = line[..colon_pos].trim().to_lowercase()
-                let value = line[colon_pos + 1..].trim().to_string()
+                let value = line[colon_pos + 1..].trim()
                 headers.insert(key, value)
             }
         }
@@ -333,23 +333,23 @@ impl HttpRequest {
         })
     }
     
-    micro get_header(&self, name: &str) -> Option<&String> {
+    get_header(&self, name: &str) -> Option<&String> {
         self.headers.get(&name.to_lowercase())
     }
     
-    micro get_param(&self, name: &str) -> Option<&String> {
+    get_param(&self, name: &str) -> Option<&String> {
         self.params.get(name)
     }
     
-    micro get_query(&self, name: &str) -> Option<&String> {
+    get_query(&self, name: &str) -> Option<&String> {
         self.query_params.get(name)
     }
     
-    micro json<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+    json<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_slice(&self.body)
     }
     
-    micro form_data(&self) -> HashMap<String, String> {
+    form_data(&self) -> HashMap<String, String> {
         if let Some(content_type) = self.get_header("content-type") {
             if content_type.contains("application/x-www-form-urlencoded") {
                 let body_str = String::from_utf8_lossy(&self.body)
@@ -368,8 +368,8 @@ class HttpResponse {
     body: Vector<u8>
 }
 
-impl HttpResponse {
-    micro new(status_code: u16) -> Self {
+imply HttpResponse {
+    new(status_code: u16) -> Self {
         let status_text = match status_code {
             200 => "OK",
             201 => "Created",
@@ -379,7 +379,7 @@ impl HttpResponse {
             404 => "Not Found",
             500 => "Internal Server Error",
             _ => "Unknown",
-        }.to_string()
+        }
         
         HttpResponse {
             status_code,
@@ -389,55 +389,55 @@ impl HttpResponse {
         }
     }
     
-    micro ok() -> Self {
+    ok() -> Self {
         Self::new(200)
     }
     
-    micro created() -> Self {
+    created() -> Self {
         Self::new(201)
     }
     
-    micro bad_request() -> Self {
+    bad_request() -> Self {
         Self::new(400)
     }
     
-    micro not_found() -> Self {
+    not_found() -> Self {
         Self::new(404)
     }
     
-    micro internal_error() -> Self {
+    internal_error() -> Self {
         Self::new(500)
     }
     
-    micro with_header(mut self, name: &str, value: &str) -> Self {
-        self.headers.insert(name.to_string(), value.to_string())
+    with_header(mut self, name: &str, value: &str) -> Self {
+        self.headers.insert(name, value)
         self
     }
     
-    micro with_json<T: Serialize>(mut self, data: &T) -> Result<Self, serde_json::Error> {
+    with_json<T: Serialize>(mut self, data: &T) -> Result<Self, serde_json::Error> {
         let json_str = serde_json::to_string(data)?
         self.body = json_str.into_bytes()
-        self.headers.insert("Content-Type".to_string(), "application/json".to_string())
+        self.headers.insert("Content-Type", "application/json")
         Ok(self)
     }
     
-    micro with_html(mut self, html: &str) -> Self {
+    with_html(mut self, html: &str) -> Self {
         self.body = html.as_bytes().to_vec()
-        self.headers.insert("Content-Type".to_string(), "text/html; charset=utf-8".to_string())
+        self.headers.insert("Content-Type", "text/html; charset=utf-8")
         self
     }
     
-    micro with_text(mut self, text: &str) -> Self {
+    with_text(mut self, text: &str) -> Self {
         self.body = text.as_bytes().to_vec()
-        self.headers.insert("Content-Type".to_string(), "text/plain; charset=utf-8".to_string())
+        self.headers.insert("Content-Type", "text/plain; charset=utf-8")
         self
     }
     
-    micro redirect(location: &str) -> Self {
+    redirect(location: &str) -> Self {
         Self::new(302).with_header("Location", location)
     }
     
-    micro to_bytes(&self) -> Vector<u8> {
+    to_bytes(&self) -> Vector<u8> {
         let mut response = format!(
             "HTTP/1.1 {} {}\r\n",
             self.status_code,
@@ -476,8 +476,8 @@ class RequestContext {
     data: HashMap<String, Box<dyn Any + Send + Sync>>
 }
 
-impl RequestContext {
-    micro new(request: HttpRequest) -> Self {
+imply RequestContext {
+    new(request: HttpRequest) -> Self {
         RequestContext {
             request,
             response: None,
@@ -485,11 +485,11 @@ impl RequestContext {
         }
     }
     
-    micro set_data<T: Any + Send + Sync>(&mut self, key: &str, value: T) {
-        self.data.insert(key.to_string(), Box::new(value))
+    set_data<T: Any + Send + Sync>(&mut self, key: &str, value: T) {
+        self.data.insert(key, Box::new(value))
     }
     
-    micro get_data<T: Any + Send + Sync>(&self, key: &str) -> Option<&T> {
+    get_data<T: Any + Send + Sync>(&self, key: &str) -> Option<&T> {
         self.data.get(key)?.downcast_ref::<T>()
     }
 }
@@ -499,15 +499,15 @@ class LoggingMiddleware {
     format: String
 }
 
-impl LoggingMiddleware {
-    micro new() -> Self {
+imply LoggingMiddleware {
+    new() -> Self {
         LoggingMiddleware {
-            format: "{method} {path} - {status} ({duration}ms)".to_string(),
+            format: "{method} {path} - {status} ({duration}ms)",
         }
     }
 }
 
-impl Middleware for LoggingMiddleware {
+imply Middleware for LoggingMiddleware {
     async micro process(&self, context: &mut RequestContext) -> Result<(), MiddlewareError> {
         let start_time = std::time::Instant::now()
         
@@ -533,28 +533,28 @@ class CorsMiddleware {
     max_age: u32
 }
 
-impl CorsMiddleware {
-    micro new() -> Self {
+imply CorsMiddleware {
+    new() -> Self {
         CorsMiddleware {
-            allowed_origins: vec!["*".to_string()],
+            allowed_origins: vec!["*"],
             allowed_methods: vec![HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT, HttpMethod::DELETE],
-            allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
+            allowed_headers: vec!["Content-Type", "Authorization"],
             max_age: 86400,
         }
     }
     
-    micro allow_origin(mut self, origin: &str) -> Self {
-        self.allowed_origins = vec![origin.to_string()]
+    allow_origin(mut self, origin: &str) -> Self {
+        self.allowed_origins = vec![origin]
         self
     }
     
-    micro allow_methods(mut self, methods: Vector<HttpMethod>) -> Self {
+    allow_methods(mut self, methods: Vector<HttpMethod>) -> Self {
         self.allowed_methods = methods
         self
     }
 }
 
-impl Middleware for CorsMiddleware {
+imply Middleware for CorsMiddleware {
     async micro process(&self, context: &mut RequestContext) -> Result<(), MiddlewareError> {
         # 处理预检请求
         if context.request.method == HttpMethod::OPTIONS {
@@ -563,7 +563,7 @@ impl Middleware for CorsMiddleware {
                 .with_header("Access-Control-Allow-Methods", 
                     &self.allowed_methods.iter().map(|m| m.as_str()).collect::<Vector<_>>().join(", "))
                 .with_header("Access-Control-Allow-Headers", &self.allowed_headers.join(", "))
-                .with_header("Access-Control-Max-Age", &self.max_age.to_string())
+                .with_header("Access-Control-Max-Age", &self.max_age)
             
             context.response = Some(response)
             return Ok(())
@@ -571,7 +571,7 @@ impl Middleware for CorsMiddleware {
         
         # 为其他请求添加 CORS 头
         if let Some(ref mut response) = context.response {
-            response.headers.insert("Access-Control-Allow-Origin".to_string(), 
+            response.headers.insert("Access-Control-Allow-Origin", 
                 self.allowed_origins.join(", "))
         }
         
@@ -585,20 +585,20 @@ class AuthMiddleware {
     protected_paths: Vector<String>,
 }
 
-impl AuthMiddleware {
-    micro new(secret_key: &str) -> Self {
+imply AuthMiddleware {
+    new(secret_key: &str) -> Self {
         AuthMiddleware {
-            secret_key: secret_key.to_string(),
+            secret_key: secret_key,
             protected_paths: Vec::new(),
         }
     }
     
-    micro protect_path(mut self, path: &str) -> Self {
-        self.protected_paths.push(path.to_string())
+    protect_path(mut self, path: &str) -> Self {
+        self.protected_paths.push(path)
         self
     }
     
-    micro verify_token(&self, token: &str) -> Result<Claims, AuthError> {
+    verify_token(&self, token: &str) -> Result<Claims, AuthError> {
         # JWT 令牌验证逻辑
         jwt::decode::<Claims>(
             token,
@@ -609,7 +609,7 @@ impl AuthMiddleware {
     }
 }
 
-impl Middleware for AuthMiddleware {
+imply Middleware for AuthMiddleware {
     async micro process(&self, context: &mut RequestContext) -> Result<(), MiddlewareError> {
         # 检查路径是否需要保护
         let needs_auth = self.protected_paths.iter()
@@ -677,33 +677,33 @@ enum TemplateBlock {
     Include(String),
 }
 
-impl TemplateEngine {
-    micro new(template_dir: &str) -> Self {
+imply TemplateEngine {
+    new(template_dir: &str) -> Self {
         TemplateEngine {
             templates: HashMap::new(),
-            template_dir: template_dir.to_string(),
+            template_dir: template_dir,
             cache_enabled: true,
         }
     }
     
-    micro load_template(&mut self, name: &str) -> Result<(), TemplateError> {
+    load_template(&mut self, name: &str) -> Result<(), TemplateError> {
         let path = format!("{}/{}.html", self.template_dir, name)
         let content = std::fs::read_to_string(&path)
-            .map_err(|_| TemplateError::TemplateNotFound(name.to_string()))?;
+            .map_err(|_| TemplateError::TemplateNotFound(name))?;
         
         let compiled = self.compile_template(&content)?;
         
         let template = Template {
-            name: name.to_string(),
+            name: name,
             content,
             compiled,
         }
         
-        self.templates.insert(name.to_string(), template)
+        self.templates.insert(name, template)
         Ok(())
     }
     
-    micro render(&mut self, name: &str, context: &TemplateContext) -> Result<String, TemplateError> {
+    render(&mut self, name: &str, context: &TemplateContext) -> Result<String, TemplateError> {
         if !self.templates.contains_key(name) {
             self.load_template(name)?
         }
@@ -712,7 +712,7 @@ impl TemplateEngine {
         self.render_blocks(&template.compiled.blocks, context)
     }
     
-    micro compile_template(&self, content: &str) -> Result<CompiledTemplate, TemplateError> {
+    compile_template(&self, content: &str) -> Result<CompiledTemplate, TemplateError> {
         let mut blocks = Vec::new()
         let mut chars = content.chars().peekable()
         let mut current_text = String::new()
@@ -759,14 +759,14 @@ impl TemplateEngine {
         Ok(CompiledTemplate { blocks })
     }
     
-    micro parse_expression(&self, expr: &str) -> Result<TemplateBlock, TemplateError> {
+    parse_expression(&self, expr: &str) -> Result<TemplateBlock, TemplateError> {
         if expr.starts_with("for ") {
             # 解析循环: for item in items
             let parts: Vector<&str> = expr.split_whitespace().collect()
             if parts.len() >= 4 && parts[2] == "in" {
                 return Ok(TemplateBlock::Loop {
-                    variable: parts[1].to_string(),
-                    items: parts[3].to_string(),
+                    variable: parts[1],
+                    items: parts[3],
                     body: Vec::new(),  # 需要进一步解析
                 })
             }
@@ -774,23 +774,23 @@ impl TemplateEngine {
             # 解析条件: if condition
             let condition = expr[3..].trim()
             return Ok(TemplateBlock::Condition {
-                expression: condition.to_string(),
+                expression: condition,
                 then_body: Vec::new(),
                 else_body: None,
             })
         } else if expr.starts_with("include ") {
             # 解析包含: include "template_name"
             let template_name = expr[8..].trim().trim_matches('"')
-            return Ok(TemplateBlock::Include(template_name.to_string()))
+            return Ok(TemplateBlock::Include(template_name))
         } else {
             # 变量替换
-            return Ok(TemplateBlock::Variable(expr.to_string()))
+            return Ok(TemplateBlock::Variable(expr))
         }
         
-        Err(TemplateError::InvalidExpression(expr.to_string()))
+        Err(TemplateError::InvalidExpression(expr))
     }
     
-    micro render_blocks(&self, blocks: &[TemplateBlock], context: &TemplateContext) -> Result<String, TemplateError> {
+    render_blocks(&self, blocks: &[TemplateBlock], context: &TemplateContext) -> Result<String, TemplateError> {
         let mut result = String::new()
         
         for block in blocks {
@@ -800,7 +800,7 @@ impl TemplateEngine {
                 },
                 TemplateBlock::Variable(var_name) => {
                     if let Some(value) = context.get(var_name) {
-                        result.push_str(&value.to_string())
+                        result.push_str(&value)
                     }
                 },
                 TemplateBlock::Loop { variable, items, body } => {
@@ -832,12 +832,12 @@ impl TemplateEngine {
 }
 
 # 模板上下文
-#[derive(Clone)]
+↯[derive(Clone)]
 class TemplateContext {
     variables: HashMap<String, TemplateValue>,
 }
 
-#[derive(Clone)]
+↯[derive(Clone)]
 enum TemplateValue {
     String(String),
     Number(f64),
@@ -846,28 +846,28 @@ enum TemplateValue {
     Object(HashMap<String, TemplateValue>),
 }
 
-impl TemplateContext {
-    micro new() -> Self {
+imply TemplateContext {
+    new() -> Self {
         TemplateContext {
             variables: HashMap::new(),
         }
     }
     
-    micro set(&mut self, key: &str, value: TemplateValue) {
-        self.variables.insert(key.to_string(), value)
+    set(&mut self, key: &str, value: TemplateValue) {
+        self.variables.insert(key, value)
     }
     
-    micro get(&self, key: &str) -> Option<&TemplateValue> {
+    get(&self, key: &str) -> Option<&TemplateValue> {
         self.variables.get(key)
     }
     
-    micro from_json(json: serde_json::Value) -> Self {
+    from_json(json: serde_json::Value) -> Self {
         let mut context = TemplateContext::new()
         context.set("data", Self::json_to_template_value(json))
         context
     }
     
-    micro json_to_template_value(json: serde_json::Value) -> TemplateValue {
+    json_to_template_value(json: serde_json::Value) -> TemplateValue {
         match json {
             serde_json::Value::String(s) => TemplateValue::String(s),
             serde_json::Value::Number(n) => TemplateValue::Number(n.as_f64().unwrap_or(0.0)),
@@ -936,41 +936,41 @@ enum WasmValueType {
     F64,
 }
 
-impl WasmRuntime {
-    micro new() -> Self {
+imply WasmRuntime {
+    new() -> Self {
         WasmRuntime {
             modules: HashMap::new(),
             instance_pool: Vec::new(),
         }
     }
     
-    micro load_module(&mut self, name: &str, wasm_bytes: Vector<u8>) -> Result<(), WasmError> {
+    load_module(&mut self, name: &str, wasm_bytes: Vector<u8>) -> Result<(), WasmError> {
         let engine = wasmtime::Engine::default()
         let module = wasmtime::Module::new(&engine, &wasm_bytes)
-            .map_err(|e| WasmError::CompilationFailed(e.to_string()))?;
+            .map_err(|e| WasmError::CompilationFailed(e))?;
         
         # 分析模块导出和导入
         let exports = self.analyze_exports(&module)?
         let imports = self.analyze_imports(&module)?
         
         let wasm_module = WasmModule {
-            name: name.to_string(),
+            name: name,
             bytecode: wasm_bytes,
             exports,
             imports,
         }
         
-        self.modules.insert(name.to_string(), wasm_module)
+        self.modules.insert(name, wasm_module)
         Ok(())
     }
     
-    micro create_instance(&mut self, module_name: &str) -> Result<usize, WasmError> {
+    create_instance(&mut self, module_name: &str) -> Result<usize, WasmError> {
         let module = self.modules.get(module_name)
-            .ok_or_else(|| WasmError::ModuleNotFound(module_name.to_string()))?;
+            .ok_or_else(|| WasmError::ModuleNotFound(module_name))?;
         
         let engine = wasmtime::Engine::default()
         let wasm_module = wasmtime::Module::new(&engine, &module.bytecode)
-            .map_err(|e| WasmError::CompilationFailed(e.to_string()))?;
+            .map_err(|e| WasmError::CompilationFailed(e))?;
         
         let mut store = wasmtime::Store::new(&engine, ())
         
@@ -982,10 +982,10 @@ impl WasmRuntime {
         }
         
         let instance = wasmtime::Instance::new(&mut store, &wasm_module, &imports)
-            .map_err(|e| WasmError::InstantiationFailed(e.to_string()))?;
+            .map_err(|e| WasmError::InstantiationFailed(e))?;
         
         let wasm_instance = WasmInstance {
-            module_name: module_name.to_string(),
+            module_name: module_name,
             instance,
             store,
         }
@@ -994,7 +994,7 @@ impl WasmRuntime {
         Ok(self.instance_pool.len() - 1)
     }
     
-    micro call_function(
+    call_function(
         &mut self,
         instance_id: usize,
         function_name: &str,
@@ -1005,7 +1005,7 @@ impl WasmRuntime {
         
         let func = instance.instance
             .get_typed_func::<(i32, i32), i32>(&mut instance.store, function_name)
-            .map_err(|e| WasmError::FunctionNotFound(e.to_string()))?;
+            .map_err(|e| WasmError::FunctionNotFound(e))?;
         
         # 转换参数
         let wasm_args: Vector<wasmtime::Val> = args.into_iter().map(|arg| {
@@ -1020,7 +1020,7 @@ impl WasmRuntime {
         # 调用函数
         let mut results = vec![wasmtime::Val::I32(0); 1]  # 假设返回一个 i32
         func.call(&mut instance.store, &wasm_args, &mut results)
-            .map_err(|e| WasmError::ExecutionFailed(e.to_string()))?;
+            .map_err(|e| WasmError::ExecutionFailed(e))?;
         
         # 转换结果
         let wasm_results: Vector<WasmValue> = results.into_iter().map(|val| {
@@ -1037,7 +1037,7 @@ impl WasmRuntime {
     }
 }
 
-#[derive(Clone)]
+↯[derive(Clone)]
 enum WasmValue {
     I32(i32),
     I64(i64),
@@ -1070,7 +1070,7 @@ trait MessageHandler: Send + Sync {
     async micro handle(&self, connection_id: ConnectionId, message: WebSocketMessage) -> Result<(), WebSocketError>
 }
 
-#[derive(Clone)]
+↯[derive(Clone)]
 enum WebSocketMessage {
     Text(String),
     Binary(Vector<u8>),
@@ -1084,8 +1084,8 @@ class CloseFrame {
     reason: String,
 }
 
-impl WebSocketServer {
-    micro new() -> Self {
+imply WebSocketServer {
+    new() -> Self {
         WebSocketServer {
             connections: HashMap::new(),
             message_handlers: HashMap::new(),
@@ -1093,8 +1093,8 @@ impl WebSocketServer {
         }
     }
     
-    micro on_message<H: MessageHandler + 'static>(&mut self, message_type: &str, handler: H) {
-        self.message_handlers.insert(message_type.to_string(), Box::new(handler))
+    on_message<H: MessageHandler + 'static>(&mut self, message_type: &str, handler: H) {
+        self.message_handlers.insert(message_type, Box::new(handler))
     }
     
     async micro handle_connection(&mut self, socket: WebSocket) -> Result<(), WebSocketError> {
@@ -1131,7 +1131,7 @@ impl WebSocketServer {
                         tungstenite::Message::Close(frame) => {
                             let close_frame = frame.map(|f| CloseFrame {
                                 code: f.code.into(),
-                                reason: f.reason.to_string(),
+                                reason: f.reason,
                             })
                             WebSocketMessage::Close(close_frame)
                         },
@@ -1209,7 +1209,7 @@ impl WebSocketServer {
         }
         
         connection.socket.send(tungstenite_msg).await
-            .map_err(|e| WebSocketError::SendFailed(e.to_string()))
+            .map_err(|e| WebSocketError::SendFailed(e))
     }
     
     async micro broadcast_to_room(&mut self, room: &str, message: WebSocketMessage) -> Result<(), WebSocketError> {
@@ -1226,15 +1226,15 @@ impl WebSocketServer {
         Ok(())
     }
     
-    micro join_room(&mut self, connection_id: ConnectionId, room: &str) -> Result<(), WebSocketError> {
+    join_room(&mut self, connection_id: ConnectionId, room: &str) -> Result<(), WebSocketError> {
         let connection = self.connections.get_mut(&connection_id)
             .ok_or(WebSocketError::ConnectionNotFound)?;
         
-        connection.rooms.insert(room.to_string())
+        connection.rooms.insert(room)
         Ok(())
     }
     
-    micro leave_room(&mut self, connection_id: ConnectionId, room: &str) -> Result<(), WebSocketError> {
+    leave_room(&mut self, connection_id: ConnectionId, room: &str) -> Result<(), WebSocketError> {
         let connection = self.connections.get_mut(&connection_id)
             .ok_or(WebSocketError::ConnectionNotFound)?;
         
@@ -1252,11 +1252,11 @@ impl WebSocketServer {
 # 博客应用主函数
 async micro main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ServerConfig {
-        host: "127.0.0.1".to_string(),
+        host: "127.0.0.1",
         port: 8080,
         max_connections: 1000,
         request_timeout: Duration::from_secs(30),
-        static_files_dir: Some("./static".to_string()),
+        static_files_dir: Some("./static"),
         enable_compression: true,
     }
     
@@ -1295,7 +1295,7 @@ async micro blog_index(request: &HttpRequest) -> Result<HttpResponse, HandlerErr
     let posts = get_recent_posts(10).await?
     
     let mut context = TemplateContext::new()
-    context.set("title", TemplateValue::String("我的博客".to_string()))
+    context.set("title", TemplateValue::String("我的博客"))
     context.set("posts", posts_to_template_value(posts))
     
     let html = template_engine.render("index", &context)?
@@ -1306,7 +1306,7 @@ async micro blog_index(request: &HttpRequest) -> Result<HttpResponse, HandlerErr
 # 文章详情页
 async micro blog_post(request: &HttpRequest) -> Result<HttpResponse, HandlerError> {
     let post_id = request.get_param("id")
-        .ok_or(HandlerError::BadRequest("Missing post ID".to_string()))?;
+        .ok_or(HandlerError::BadRequest("Missing post ID"))?;
     
     let post = get_post_by_id(post_id).await?
         .ok_or(HandlerError::NotFound)?;
@@ -1340,27 +1340,27 @@ async micro api_posts(request: &HttpRequest) -> Result<HttpResponse, HandlerErro
     })
     
     HttpResponse::ok().with_json(&response_data)
-        .map_err(|e| HandlerError::InternalError(e.to_string()))
+        .map_err(|e| HandlerError::InternalError(e))
 }
 
 # API: 创建文章
 async micro api_create_post(request: &HttpRequest) -> Result<HttpResponse, HandlerError> {
     let post_data: CreatePostRequest = request.json()
-        .map_err(|e| HandlerError::BadRequest(e.to_string()))?;
+        .map_err(|e| HandlerError::BadRequest(e))?;
     
     # 验证数据
     if post_data.title.is_empty() || post_data.content.is_empty() {
-        return Err(HandlerError::BadRequest("Title and content are required".to_string()))
+        return Err(HandlerError::BadRequest("Title and content are required"))
     }
     
     let post = create_post(post_data).await?
     
     HttpResponse::created().with_json(&post)
-        .map_err(|e| HandlerError::InternalError(e.to_string()))
+        .map_err(|e| HandlerError::InternalError(e))
 }
 
 # 数据模型
-#[derive(Serialize, Deserialize)]
+↯[derive(Serialize, Deserialize)]
 class Post {
     id: u32
     title: String
@@ -1370,7 +1370,7 @@ class Post {
     updated_at: chrono::DateTime<chrono::Utc>
 }
 
-#[derive(Deserialize)]
+↯[derive(Deserialize)]
 class CreatePostRequest {
     title: String
     content: String

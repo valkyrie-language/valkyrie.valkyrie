@@ -54,7 +54,7 @@ let big_number: Integer = 12222222222222222222222222222222  # 正确：使用Int
 ### 三角函数
 
 ```valkyrie
-use math::high_precision::*
+using math::high_precision::*
 
 let angle = pi / 4.0  # π/4
 
@@ -103,7 +103,7 @@ let elliptic_e = elliptic_e(0.5: Decimal)
 ## 数值积分
 
 ```valkyrie
-use numerical::integration::*
+using numerical::integration::*
 
 # 定义被积函数
 let f = { $x: Decimal -> exp(-$x * $x) }  # e^(-x²)
@@ -124,7 +124,7 @@ let result_2d = integrate_2d(double_integral,
 ## 微分方程求解
 
 ```valkyrie
-use numerical::ode::*
+using numerical::ode::*
 
 # 定义微分方程 dy/dx = -y
 let ode_func = { $x: Decimal, $y: Decimal -> -$y }
@@ -144,8 +144,8 @@ class LorenzSystem {
     beta: Decimal,
 }
 
-impl LorenzSystem {
-    micro equations(self, t: Decimal, state: [Decimal; 3]) -> [Decimal; 3] {
+imply LorenzSystem {
+    equations(self, t: Decimal, state: [Decimal; 3]) -> [Decimal; 3] {
         let [x, y, z] = state
         [
             self.sigma * (y - x),
@@ -168,7 +168,7 @@ let lorenz_solution = solve_ode_system(lorenz.equations, 0.0: Decimal, initial_s
 ## 线性代数
 
 ```valkyrie
-use linalg::high_precision::*
+using linalg::high_precision::*
 
 # 高精度矩阵
 let matrix = Matrix::new([
@@ -193,7 +193,7 @@ let x = A.solve(b)  # 求解 Ax = b
 ## 统计计算
 
 ```valkyrie
-use statistics::high_precision::*
+using statistics::high_precision::*
 
 # 高精度统计函数
 let data: [Decimal] = [1.0, 2.0, 3.0, 4.0, 5.0]
@@ -225,8 +225,8 @@ class AdaptivePrecision {
     tolerance: Decimal,
 }
 
-impl AdaptivePrecision {
-    micro compute_with_adaptive_precision<F>(self, f: F, x: Decimal) -> Decimal 
+imply AdaptivePrecision {
+    compute_with_adaptive_precision<F>(self, f: F, x: Decimal) -> Decimal 
     where F: Fn(Decimal) -> Decimal {
         let mut precision = self.min_precision
         let mut prev_result: Decimal = 0.0
@@ -256,10 +256,10 @@ impl AdaptivePrecision {
 ### 并行计算
 
 ```valkyrie
-use parallel::*
+using parallel::*
 
 # 并行数值积分
-micro parallel_integration(f: impl Fn(Decimal) -> Decimal + Sync, 
+micro parallel_integration(f: imply Fn(Decimal) -> Decimal + Sync, 
                        a: Decimal, b: Decimal, n_threads: usize) -> Decimal {
     let chunk_size = (b - a) / n_threads as Decimal
     
@@ -293,8 +293,8 @@ class ErrorControl {
     relative_tolerance: Decimal,
 }
 
-impl ErrorControl {
-    micro check_convergence(self, current: Decimal, previous: Decimal) -> bool {
+imply ErrorControl {
+    check_convergence(self, current: Decimal, previous: Decimal) -> bool {
         let abs_error = (current - previous).abs()
         let rel_error = abs_error / current.abs()
         

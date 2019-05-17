@@ -150,6 +150,6 @@ git commit -m "🚀 release: 添加 v1.2.0 release 报告"
 ```javascript
 const EMOJI_TYPES = {
     '🌟': {name: 'highlight', priority: 1, label: '亮点功能'},
-    // 添加更多自定义类型...
+    # 添加更多自定义类型...
 };
 ```

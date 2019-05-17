@@ -201,6 +201,71 @@ null
 
 ## 对象字面量
 
+Valkyrie 支持两种对象字面量语法：传统对象字面量和匿名类语法。推荐使用匿名类语法，它与类定义语法保持一致。
+
+### 匿名类语法（推荐）
+
+```valkyrie
+# 空对象 - 使用匿名类语法
+class { }
+
+# 简单对象 - 与类定义语法相同
+class {
+    name = "Alice",
+    age = 30,
+    active = true
+}
+
+# 嵌套对象
+class {
+    user = class {
+        name = "Bob",
+        profile = class {
+            email = "bob@example.com",
+            phone = "123-456-7890"
+        }
+    },
+    settings = class {
+        theme = "dark",
+        notifications = true
+    }
+}
+
+# 带引号的键名
+class {
+    "first-name" = "Charlie",
+    "last-name" = "Brown",
+    "age" = 25
+}
+```
+
+### 泛型匿名类
+
+```valkyrie
+# 泛型匿名类
+class<T> {
+    value = T,
+    count = i32
+}
+
+# 带继承的匿名类
+class(Shape): Drawable {
+    radius = f64,
+    
+    area(self) -> f64 {
+        3.14159 * self.radius * self.radius
+    }
+}
+
+# 多重继承的匿名类
+class(BaseClass): Trait1 + Trait2 {
+    field1 = String,
+    field2 = i32
+}
+```
+
+### 传统对象字面量语法（兼容）
+
 ```valkyrie
 # 空对象
 {}
@@ -232,6 +297,42 @@ null
     "first-name": "Charlie",
     "last-name": "Brown",
     "age": 25
+}
+```
+
+### 语法对比
+
+| 特性 | 匿名类语法 | 传统语法 |
+|------|------------|----------|
+| 空对象 | `class { }` | `{}` |
+| 字段定义 | `field: value` | `field: value` |
+| 方法定义 | 支持 | 不支持 |
+| 继承 | 支持 `class(Base): Trait { }` | 不支持 |
+| 泛型 | 支持 `class<T> { }` | 不支持 |
+| 类型一致性 | 与类定义完全一致 | 独立语法 |
+
+### 使用场景
+
+```valkyrie
+# 匿名类语法适用于需要方法的对象
+let obj = class {
+    name = "Test",
+    value = 42,
+    
+    get_name(self) -> String {
+        self.name.clone()
+    }
+    
+    calculate(self, x: i32) -> i32 {
+        self.value + x
+    }
+}
+
+# 传统语法适用于简单的数据结构
+let data = {
+    id: 1,
+    name: "Simple",
+    active: true
 }
 ```
 

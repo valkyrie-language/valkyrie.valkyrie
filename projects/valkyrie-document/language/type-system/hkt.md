@@ -10,19 +10,19 @@
 
 ```valkyrie
 # 种类 *：具体类型
-let x: i32        // i32 的种类是 *
-let y: String     // String 的种类是 *
+let x: i32        # i32 的种类是 *
+let y: String     # String 的种类是 *
 
 # 种类 * -> *：一元类型构造器
-type Vector<T>       // Vec 的种类是 * -> *
-type Option<T>    // Option 的种类是 * -> *
+type Vector<T>       # Vec 的种类是 * -> *
+type Option<T>    # Option 的种类是 * -> *
 
 # 种类 * -> * -> *：二元类型构造器
-type Result<T, E> // Result 的种类是 * -> * -> *
-type HashMap<K, V> // HashMap 的种类是 * -> * -> *
+type Result<T, E> # Result 的种类是 * -> * -> *
+type HashMap<K, V> # HashMap 的种类是 * -> * -> *
 
 # 种类 (* -> *) -> *：高阶类型构造器
-type Monad<M>     // M 的种类是 * -> *
+type Monad<M>     # M 的种类是 * -> *
 ```
 
 ### 类型构造器抽象
@@ -30,12 +30,12 @@ type Monad<M>     // M 的种类是 * -> *
 ```valkyrie
 # 定义高阶类型特征
 trait Functor<F> where F: * -> * {
-    micro map<A, B>(self: F<A>, f: micro(A) -> B) -> F<B>
+    map<A, B>(self: F<A>, f: micro(A) -> B) -> F<B>
 }
 
 # 为具体类型实现
-impl Functor<Option> {
-    micro map<A, B>(self: Option<A>, f: micro(A) -> B) -> Option<B> {
+imply Functor<Option> {
+    map<A, B>(self: Option<A>, f: micro(A) -> B) -> Option<B> {
         match self {
             Some(value) => Some(f(value)),
             None => None,
@@ -43,8 +43,8 @@ impl Functor<Option> {
     }
 }
 
-impl Functor<Vec> {
-    micro map<A, B>(self: Vector<A>, f: micro(A) -> B) -> Vector<B> {
+imply Functor<Vec> {
+    map<A, B>(self: Vector<A>, f: micro(A) -> B) -> Vector<B> {
         let mut result = Vec::new()
         for item in self {
             result.push(f(item))
@@ -62,24 +62,24 @@ impl Functor<Vec> {
 # 单子特征
 trait Monad<M> where M: * -> * {
     # 将值包装到单子中
-    micro pure<A>(value: A) -> M<A>
+    pure<A>(value: A) -> M<A>
     
     # 单子绑定操作
-    micro bind<A, B>(self: M<A>, f: micro(A) -> M<B>) -> M<B>
+    bind<A, B>(self: M<A>, f: micro(A) -> M<B>) -> M<B>
     
     # 便利方法：map 可以通过 bind 和 pure 实现
-    micro map<A, B>(self: M<A>, f: micro(A) -> B) -> M<B> {
+    map<A, B>(self: M<A>, f: micro(A) -> B) -> M<B> {
         self.bind({ M::pure(f($x)) })
     }
 }
 
 # Option 单子实现
-impl Monad<Option> {
-    micro pure<A>(value: A) -> Option<A> {
+imply Monad<Option> {
+    pure<A>(value: A) -> Option<A> {
         Some(value)
     }
     
-    micro bind<A, B>(self: Option<A>, f: micro(A) -> Option<B>) -> Option<B> {
+    bind<A, B>(self: Option<A>, f: micro(A) -> Option<B>) -> Option<B> {
         match self {
             Some(value) => f(value),
             None => None,
@@ -89,11 +89,11 @@ impl Monad<Option> {
 
 # Result 单子实现
 impl<E> Monad<Result<_, E>> {
-    micro pure<A>(value: A) -> Result<A, E> {
+    pure<A>(value: A) -> Result<A, E> {
         Fine { value }
     }
     
-    micro bind<A, B>(self: Result<A, E>, f: micro(A) -> Result<B, E>) -> Result<B, E> {
+    bind<A, B>(self: Result<A, E>, f: micro(A) -> Result<B, E>) -> Result<B, E> {
         match self {
             Fine { value } => f(value),
 Fail { error } => Fail { error },
@@ -108,7 +108,7 @@ Fail { error } => Fail { error },
 # 单子组合子库
 namespace monad_combinators {
     # 序列操作
-    micro sequence<M, A>(list: Vector<M<A>>) -> M<Vector<A>> 
+    sequence<M, A>(list: Vector<M<A>>) -> M<Vector<A>> 
     where M: Monad
     {
         list.iter().fold(
@@ -123,14 +123,14 @@ namespace monad_combinators {
     }
     
     # 遍历操作
-    micro traverse<M, A, B>(list: Vector<A>, f: micro(A) -> M<B>) -> M<Vector<B>>
+    traverse<M, A, B>(list: Vector<A>, f: micro(A) -> M<B>) -> M<Vector<B>>
     where M: Monad
     {
         sequence(list.into_iter().map(f).collect())
     }
     
     # 过滤操作
-    micro filter_m<M, A>(list: Vector<A>, predicate: micro(A) -> M<bool>) -> M<Vector<A>>
+    filter_m<M, A>(list: Vector<A>, predicate: micro(A) -> M<bool>) -> M<Vector<A>>
     where M: Monad
     {
         list.into_iter().fold(
@@ -156,24 +156,24 @@ namespace monad_combinators {
 # 应用函子特征
 trait Applicative<F> where F: * -> *, F: Functor {
     # 将值包装到应用函子中
-    micro pure<A>(value: A) -> F<A>
+    pure<A>(value: A) -> F<A>
     
     # 应用操作
-    micro apply<A, B>(self: F<micro(A) -> B>, arg: F<A>) -> F<B>
+    apply<A, B>(self: F<micro(A) -> B>, arg: F<A>) -> F<B>
     
     # 便利方法：lift2
-    micro lift2<A, B, C>(f: micro(A, B) -> C, a: F<A>, b: F<B>) -> F<C> {
+    lift2<A, B, C>(f: micro(A, B) -> C, a: F<A>, b: F<B>) -> F<C> {
         F::pure(f).apply(a).apply(b)
     }
 }
 
 # Option 应用函子实现
-impl Applicative<Option> {
-    micro pure<A>(value: A) -> Option<A> {
+imply Applicative<Option> {
+    pure<A>(value: A) -> Option<A> {
         Some(value)
     }
     
-    micro apply<A, B>(self: Option<micro(A) -> B>, arg: Option<A>) -> Option<B> {
+    apply<A, B>(self: Option<micro(A) -> B>, arg: Option<A>) -> Option<B> {
         match (self, arg) {
             (Some(f), Some(x)) => Some(f(x)),
             _ => None,
@@ -217,11 +217,11 @@ union Free<F, A> where F: * -> * {
 
 # 自由单子实现
 impl<F> Monad<Free<F, _>> where F: Functor {
-    micro pure<A>(value: A) -> Free<F, A> {
+    pure<A>(value: A) -> Free<F, A> {
         Free::Pure { value }
     }
     
-    micro bind<A, B>(self: Free<F, A>, f: micro(A) -> Free<F, B>) -> Free<F, B> {
+    bind<A, B>(self: Free<F, A>, f: micro(A) -> Free<F, B>) -> Free<F, B> {
         match self {
             Free::Pure { value } => f(value),
             Free::Free { fa } => Free::Free { 
@@ -237,8 +237,8 @@ union FileOp<A> {
     WriteFile { path: String, content: String, cont: micro(()) -> A },
 }
 
-impl Functor<FileOp> {
-    micro map<A, B>(self: FileOp<A>, f: micro(A) -> B) -> FileOp<B> {
+imply Functor<FileOp> {
+    map<A, B>(self: FileOp<A>, f: micro(A) -> B) -> FileOp<B> {
         match self {
             FileOp::ReadFile { path, cont } => 
                 FileOp::ReadFile { path, cont: { f(cont($s)) } },
@@ -305,8 +305,8 @@ trait Collection {
     type Element
     type Iterator: Iterator<Item = Self::Element>
     
-    micro iter(&self) -> Self::Iterator
-    micro len(&self) -> usize
+    iter(&self) -> Self::Iterator
+    len(&self) -> usize
 }
 
 # 实现关联类型族
@@ -314,11 +314,11 @@ impl<T> Collection for Vector<T> {
     type Element = T
     type Iterator = std::vec::IntoIter<T>
     
-    micro iter(&self) -> Self::Iterator {
+    iter(&self) -> Self::Iterator {
         self.clone().into_iter()
     }
     
-    micro len(&self) -> usize {
+    len(&self) -> usize {
         self.len()
     }
 }
@@ -353,7 +353,7 @@ class Vector<T, N> {
 
 impl<T, N> Vector<T, N> {
     # 类型安全的连接
-    micro append<M>(self, other: Vector<T, M>) -> Vector<T, Add(N, M)> {
+    append<M>(self, other: Vector<T, M>) -> Vector<T, Add(N, M)> {
         let mut result = self.data
         result.extend(other.data)
         Vec {
@@ -363,7 +363,7 @@ impl<T, N> Vector<T, N> {
     }
     
     # 类型安全的头部
-    micro head(self) -> Option<T> where N: NonZero {
+    head(self) -> Option<T> where N: NonZero {
         self.data.first().cloned()
     }
 }
@@ -389,31 +389,31 @@ class Door<S> {
 }
 
 # 状态转换
-impl Door<Closed> {
-    micro new() -> Self {
+imply Door<Closed> {
+    new() -> Self {
         Door { _state: PhantomData }
     }
     
-    micro open(self) -> Door<Open> {
+    open(self) -> Door<Open> {
         println("Door opened")
         Door { _state: PhantomData }
     }
 }
 
-impl Door<Open> {
-    micro close(self) -> Door<Closed> {
+imply Door<Open> {
+    close(self) -> Door<Closed> {
         println("Door closed")
         Door { _state: PhantomData }
     }
     
-    micro lock(self) -> Door<Locked> {
+    lock(self) -> Door<Locked> {
         println("Door locked")
         Door { _state: PhantomData }
     }
 }
 
-impl Door<Locked> {
-    micro unlock(self) -> Door<Closed> {
+imply Door<Locked> {
+    unlock(self) -> Door<Closed> {
         println("Door unlocked")
         Door { _state: PhantomData }
     }
@@ -447,17 +447,17 @@ class QueryBuilder<Table, Where> {
 }
 
 # 查询构建方法
-impl QueryBuilder<NoTable, NoWhere> {
-    micro new() -> Self {
+imply QueryBuilder<NoTable, NoWhere> {
+    new() -> Self {
         QueryBuilder {
-            query: "SELECT".to_string(),
+            query: "SELECT",
             _phantom: PhantomData,
         }
     }
 }
 
 impl<W> QueryBuilder<NoTable, W> {
-    micro from<T>(mut self, table: String) -> QueryBuilder<HasTable<T>, W> {
+    from<T>(mut self, table: String) -> QueryBuilder<HasTable<T>, W> {
         self.query.push_str(&format!(" FROM {}", table))
         QueryBuilder {
             query: self.query,
@@ -467,7 +467,7 @@ impl<W> QueryBuilder<NoTable, W> {
 }
 
 impl<T> QueryBuilder<HasTable<T>, NoWhere> {
-    micro where_clause(mut self, condition: String) -> QueryBuilder<HasTable<T>, HasWhere> {
+    where_clause(mut self, condition: String) -> QueryBuilder<HasTable<T>, HasWhere> {
         self.query.push_str(&format!(" WHERE {}", condition))
         QueryBuilder {
             query: self.query,
@@ -477,7 +477,7 @@ impl<T> QueryBuilder<HasTable<T>, NoWhere> {
 }
 
 impl<T> QueryBuilder<HasTable<T>, HasWhere> {
-    micro build(self) -> String {
+    build(self) -> String {
         self.query
     }
 }
@@ -500,13 +500,13 @@ micro query_example() {
 
 ```valkyrie
 # 高阶类型在编译时完全消除
-@.inline
+↯inline
 micro map_option<A, B>(opt: Option<A>, f: micro(A) -> B) -> Option<B> {
     opt.map(f)  # 编译后等价于 match 语句
 }
 
 # 单态化确保没有运行时开销
-@.specialize
+↯specialize
 micro generic_computation<M, A>(m: M<A>) -> M<i32>
 where M: Monad
 {

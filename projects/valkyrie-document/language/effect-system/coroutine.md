@@ -195,7 +195,7 @@ class CoroutinePool {
     max_size: i32,
     active_count: i32
     
-    micro new(max_size: i32) -> Self {
+    new(max_size: i32) -> Self {
         CoroutinePool {
             coroutines: [],
             max_size: max_size,
@@ -203,7 +203,7 @@ class CoroutinePool {
         }
     }
     
-    micro spawn(task: micro() -> Any) -> bool {
+    spawn(task: micro() -> Any) -> bool {
         if self.active_count < self.max_size {
             let coro = Coroutine::new(task)
             self.coroutines.push(coro)
@@ -214,7 +214,7 @@ class CoroutinePool {
         }
     }
     
-    micro run_all() {
+    run_all() {
         while self.active_count > 0 {
             for coro in self.coroutines {
                 if coro.state() == CoroutineState::Suspended {

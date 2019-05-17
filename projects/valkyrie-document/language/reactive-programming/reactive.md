@@ -11,11 +11,11 @@ Observable 是反应式编程的基础，表示一个可观察的数据流：
 ```valkyrie
 # Observable 特征定义
 trait Observable<T> {
-    micro subscribe<F>(self, observer: F) -> Subscription where F: micro(T) -> Unit
-    micro map<U, F>(self, f: F) -> Observable<U> where F: micro(T) -> U
-    micro filter<F>(self, predicate: F) -> Observable<T> where F: micro(T) -> Boolean
-    micro merge(self, other: Observable<T>) -> Observable<T>
-    micro take(self, count: usize) -> Observable<T>
+    subscribe<F>(self, observer: F) -> Subscription where F: micro(T) -> Unit
+    map<U, F>(self, f: F) -> Observable<U> where F: micro(T) -> U
+    filter<F>(self, predicate: F) -> Observable<T> where F: micro(T) -> Boolean
+    merge(self, other: Observable<T>) -> Observable<T>
+    take(self, count: usize) -> Observable<T>
 }
 
 # 创建 Observable
@@ -34,11 +34,11 @@ class Signal<T> {
     private value: T
     private observers: [micro(T) -> Unit]
     
-    micro new(initial: T) -> Signal<T>
-    micro get(self) -> T
-    micro set(mut self, new_value: T)
-    micro update<F>(mut self, updater: F) where F: micro(T) -> T
-    micro subscribe<F>(self, observer: F) -> Subscription where F: micro(T) -> Unit
+    new(initial: T) -> Signal<T>
+    get(self) -> T
+    set(mut self, new_value: T)
+    update<F>(mut self, updater: F) where F: micro(T) -> T
+    subscribe<F>(self, observer: F) -> Subscription where F: micro(T) -> Unit
 }
 
 # 使用 Signal
@@ -127,7 +127,7 @@ class CounterComponent {
     private increment_clicks: Observable<Unit>
     private decrement_clicks: Observable<Unit>
     
-    micro new() -> CounterComponent {
+    new() -> CounterComponent {
         let count = Signal::new(0)
         let increment_clicks = Observable::from_events("increment")
         let decrement_clicks = Observable::from_events("decrement")
@@ -148,7 +148,7 @@ class CounterComponent {
         }
     }
     
-    micro render(self) -> Widget {
+    render(self) -> Widget {
         let count_text = self.count.map(|value| "计数: ${value}")
         
         VStack {
@@ -167,7 +167,7 @@ class CounterComponent {
 ```valkyrie
 # 实时数据处理管道
 class DataProcessor {
-    micro process_sensor_data(sensor_stream: Observable<SensorReading>) -> Observable<ProcessedData> {
+    process_sensor_data(sensor_stream: Observable<SensorReading>) -> Observable<ProcessedData> {
         sensor_stream
             .filter(|reading| reading.is_valid())  # 过滤无效数据
             .map(|reading| reading.normalize())    # 标准化数据
@@ -208,7 +208,7 @@ processed_stream.subscribe(|data| {
 ```valkyrie
 # 反应式 HTTP 客户端
 class ReactiveHttpClient {
-    micro get<T>(url: String) -> Observable<Result<T, HttpError>> {
+    get<T>(url: String) -> Observable<Result<T, HttpError>> {
         Observable::create(|observer| {
             async {
                 try {
@@ -225,7 +225,7 @@ class ReactiveHttpClient {
         })
     }
     
-    micro retry<T>(observable: Observable<Result<T, HttpError>>, max_retries: usize) -> Observable<Result<T, HttpError>> {
+    retry<T>(observable: Observable<Result<T, HttpError>>, max_retries: usize) -> Observable<Result<T, HttpError>> {
         observable.catch_error(|error| {
             if max_retries > 0 {
                 print("重试请求，剩余次数: ${max_retries}")
@@ -262,13 +262,13 @@ user_data.subscribe(|result| {
 # 错误处理操作符
 trait ObservableErrorHandling<T> {
     # 捕获错误并提供默认值
-    micro catch_error<F>(self, handler: F) -> Observable<T> where F: micro(Error) -> Observable<T>
+    catch_error<F>(self, handler: F) -> Observable<T> where F: micro(Error) -> Observable<T>
     
     # 重试操作
-    micro retry(self, count: usize) -> Observable<T>
+    retry(self, count: usize) -> Observable<T>
     
     # 超时处理
-    micro timeout(self, duration: Duration) -> Observable<T>
+    timeout(self, duration: Duration) -> Observable<T>
 }
 
 # 实际使用
@@ -316,14 +316,14 @@ class Subscription {
     private is_disposed: Boolean
     private cleanup: micro() -> Unit
     
-    micro dispose(mut self) {
+    dispose(mut self) {
         if !self.is_disposed {
             self.cleanup()
             self.is_disposed = true
         }
     }
     
-    micro is_disposed(self) -> Boolean {
+    is_disposed(self) -> Boolean {
         self.is_disposed
     }
 }
@@ -332,11 +332,11 @@ class Subscription {
 class CompositeSubscription {
     private subscriptions: [Subscription]
     
-    micro add(mut self, subscription: Subscription) {
+    add(mut self, subscription: Subscription) {
         self.subscriptions.push(subscription)
     }
     
-    micro dispose_all(mut self) {
+    dispose_all(mut self) {
         for subscription in self.subscriptions {
             subscription.dispose()
         }
@@ -418,7 +418,7 @@ class TestScheduler {
     private virtual_time: Duration
     private scheduled_actions: [(Duration, micro() -> Unit)]
     
-    micro advance_time_by(mut self, duration: Duration) {
+    advance_time_by(mut self, duration: Duration) {
         let target_time = self.virtual_time + duration
         
         while let Some((time, action)) = self.scheduled_actions.first() {
@@ -436,7 +436,7 @@ class TestScheduler {
 }
 
 # 测试示例
-#[test]
+↯[test]
 micro test_timer_observable() {
     let scheduler = TestScheduler::new()
     let timer = Observable::timer(Duration::seconds(5), scheduler)
@@ -464,7 +464,7 @@ micro test_timer_observable() {
 class Component {
     private subscriptions: CompositeSubscription
     
-    micro new() -> Component {
+    new() -> Component {
         let subscriptions = CompositeSubscription::new()
         
         # 订阅数据流
@@ -477,7 +477,7 @@ class Component {
         Component { subscriptions }
     }
     
-    micro destroy(mut self) {
+    destroy(mut self) {
         # 组件销毁时清理订阅
         self.subscriptions.dispose_all()
     }

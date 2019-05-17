@@ -408,9 +408,9 @@ micro test_pipeline() {
 ```valkyrie
 # 生成器返回值不能是匿名类
 # 错误示例：
-micro bad_generator() -> class { x: i32 } {  # 编译错误
+micro bad_generator() -> class { x = i32 } {  # 编译错误
     yield 1
-    class { x: 42 }  # 匿名类作为返回值会导致类型推断困难
+    class { x = 42 }  # 匿名类作为返回值会导致类型推断困难
 }
 
 # 正确示例：
@@ -420,7 +420,7 @@ class Result {
 
 micro good_generator() -> Result {
     yield 1
-    Result { x: 42 }  # 使用具名类型
+    new Result { x: 42 }  # 使用具名类型
 }
 
 # 或者使用类型别名
@@ -428,6 +428,6 @@ type GeneratorResult = class { x: i32 }
 
 micro another_good_generator() -> GeneratorResult {
     yield 1
-    GeneratorResult { x: 42 }
+    new GeneratorResult { x: 42 }
 }
 ```

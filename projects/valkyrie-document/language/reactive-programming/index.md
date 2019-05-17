@@ -12,7 +12,7 @@ Valkyrie 的异步系统基于 `Future` 作为底层原语。所有异步操作�
 # 所有这些都是 Promise 实例（实现了 Future 接口）
 let promise1: Promise<String> = async { "hello" }
 let promise2: Promise<i32> = Promise::resolve(42)
-let composed: Promise<String> = async { promise1.await + promise2.await.to_string() }
+let composed: Promise<String> = async { promise1.await + promise2.await }
 ```
 
 ## 异步块：async { }
@@ -274,7 +274,7 @@ async micro process_all_pages() {
 ```valkyrie
 # Future Iterator: Iterator<Future<T>>
 class FutureIterator<T> {
-    micro next(mut self) -> Option<Promise<T>>
+    next(mut self) -> Option<Promise<T>>
 }
 
 # 使用示例

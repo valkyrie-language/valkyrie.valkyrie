@@ -16,7 +16,7 @@ Valkyrie 提供了高性能的实体组件系统 (Entity Component System) 实�
 ## 基本ECS实现
 
 ```valkyrie
-use valkyrie::ecs::*
+using valkyrie::ecs::*
 
 # 定义组件
 class Position {
@@ -84,8 +84,8 @@ let enemy = world.spawn()
 # 移动系统
 class MovementSystem;
 
-impl System for MovementSystem {
-    micro run(self, world: &mut World, delta_time: Float64) {
+imply System for MovementSystem {
+    run(self, world: &mut World, delta_time: Float64) {
         # 查询所有具有Position和Velocity组件的实体
         for (entity, (pos, vel)) in world.query::<(&mut Position, &Velocity)>() {
             pos.x += vel.dx * delta_time
@@ -100,8 +100,8 @@ class RenderSystem {
     renderer: Renderer
 }
 
-impl System for RenderSystem {
-    micro run(self, world: &World, _delta_time: Float64) {
+imply System for RenderSystem {
+    run(self, world: &World, _delta_time: Float64) {
         # 查询所有可渲染的实体
         for (entity, (pos, sprite)) in world.query::<(&Position, &Sprite)>() {
             self.renderer.draw_sprite(
@@ -117,8 +117,8 @@ impl System for RenderSystem {
 # 碰撞检测系统
 class CollisionSystem;
 
-impl System for CollisionSystem {
-    micro run(self, world: &mut World, _delta_time: Float64) {
+imply System for CollisionSystem {
+    run(self, world: &mut World, _delta_time: Float64) {
         let entities: Vector<(Entity, &Position, &Sprite)> = 
             world.query::<(&Position, &Sprite)>().collect()
         
@@ -135,7 +135,7 @@ impl System for CollisionSystem {
         }
     }
     
-    micro check_collision(self, pos1: &Position, sprite1: &Sprite,
+    check_collision(self, pos1: &Position, sprite1: &Sprite,
                           pos2: &Position, sprite2: &Sprite) -> Boolean {
         let dx = abs(pos1.x - pos2.x)
         let dy = abs(pos1.y - pos2.y)
@@ -160,8 +160,8 @@ class Collectible;  # 标记实体为可收集物品
 # 使用标记组件进行查询
 class PlayerControlSystem;
 
-impl System for PlayerControlSystem {
-    micro run(self, world: &mut World, input: &Input) {
+imply System for PlayerControlSystem {
+    run(self, world: &mut World, input: &Input) {
         # 只处理玩家实体
         for (entity, (pos, vel)) in world.query::<(&mut Position, &mut Velocity)>()
                                               .with::<Player>() {
@@ -206,8 +206,8 @@ class AssetManager {
 # 在系统中使用资源
 class ScoreSystem;
 
-impl System for ScoreSystem {
-    micro run(self, world: &mut World, _delta_time: Float64) {
+imply System for ScoreSystem {
+    run(self, world: &mut World, _delta_time: Float64) {
         let mut score = world.get_resource_mut::<Score>()
         let game_time = world.get_resource::<GameTime>()
         
@@ -244,8 +244,8 @@ class ScoreEvent {
 # 事件处理系统
 class EventHandlerSystem;
 
-impl System for EventHandlerSystem {
-    micro run(self, world: &mut World, _delta_time: Float64) {
+imply System for EventHandlerSystem {
+    run(self, world: &mut World, _delta_time: Float64) {
         # 处理碰撞事件
         for event in world.read_events::<CollisionEvent>() {
             let e1_has_player = world.has_component::<Player>(event.entity1)
@@ -290,8 +290,8 @@ class PositionStorage {
 # 批量处理
 class BatchMovementSystem;
 
-impl System for BatchMovementSystem {
-    micro run(self, world: &mut World, delta_time: Float64) {
+imply System for BatchMovementSystem {
+    run(self, world: &mut World, delta_time: Float64) {
         # 获取所有位置和速度数据
         let positions = world.get_component_storage_mut::<Position>()
         let velocities = world.get_component_storage::<Velocity>()
@@ -309,15 +309,15 @@ impl System for BatchMovementSystem {
 ### 并行系统执行
 
 ```valkyrie
-use valkyrie::threading::*
+using valkyrie::threading::*
 
 # 并行系统调度器
 class ParallelScheduler {
     thread_pool: ThreadPool
 }
 
-impl ParallelScheduler {
-    micro run_systems(self, world: &mut World, systems: &[Box<dyn System>]) {
+imply ParallelScheduler {
+    run_systems(self, world: &mut World, systems: &[Box<dyn System>]) {
         # 分析系统依赖关系
         let dependency_graph = self.analyze_dependencies(systems)
         
@@ -348,8 +348,8 @@ class SpaceShooterGame {
     renderer: Renderer
 }
 
-impl SpaceShooterGame {
-    micro new() -> Self {
+imply SpaceShooterGame {
+    new() -> Self {
         let mut world = World::new()
         
         # 添加资源
@@ -382,7 +382,7 @@ impl SpaceShooterGame {
         }
     }
     
-    micro update(mut self, delta_time: Float64) {
+    update(mut self, delta_time: Float64) {
         # 更新游戏时间
         let mut game_time = self.world.get_resource_mut::<GameTime>()
         game_time.delta_time = delta_time
@@ -398,7 +398,7 @@ impl SpaceShooterGame {
         self.world.maintain()
     }
     
-    micro spawn_enemy(mut self) {
+    spawn_enemy(mut self) {
         let x = random_range(0.0, 800.0)
         self.world.spawn()
             .with(Position { x, y: -50.0, z: 0.0 })
@@ -408,7 +408,7 @@ impl SpaceShooterGame {
             .with(Enemy)
     }
     
-    micro spawn_bullet(mut self, x: Float64, y: Float64) {
+    spawn_bullet(mut self, x: Float64, y: Float64) {
         self.world.spawn()
             .with(Position { x, y, z: 0.0 })
             .with(Velocity { dx: 0.0, dy: -200.0, dz: 0.0 })

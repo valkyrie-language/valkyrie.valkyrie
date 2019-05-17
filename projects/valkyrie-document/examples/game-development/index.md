@@ -19,8 +19,8 @@ class GameEngine {
     target_fps: f64,
 }
 
-impl GameEngine {
-    micro new(title: &str, width: u32, height: u32) -> Self {
+imply GameEngine {
+    new(title: &str, width: u32, height: u32) -> Self {
         let window = Window::new(title, width, height)
         let renderer = Renderer::new(&window)
         let scene = Scene::new()
@@ -40,7 +40,7 @@ impl GameEngine {
         }
     }
     
-    micro run(&mut self) {
+    run(&mut self) {
         let mut last_time = std::time::Instant::now()
         let frame_duration = std::time::Duration::from_secs_f64(1.0 / self.target_fps)
         
@@ -69,7 +69,7 @@ impl GameEngine {
         }
     }
     
-    micro update(&mut self, delta_time: f64) {
+    update(&mut self, delta_time: f64) {
         # 更新物理世界
         self.physics.step(delta_time)
         
@@ -80,7 +80,7 @@ impl GameEngine {
         self.audio.update()
     }
     
-    micro render(&mut self) {
+    render(&mut self) {
         self.renderer.clear(Color::BLACK)
         self.renderer.render_scene(&self.scene)
         self.renderer.present()
@@ -93,29 +93,29 @@ impl GameEngine {
 ```valkyrie
 # 组件定义
 trait Component {
-    micro type_id() -> ComponentTypeId
+    type_id() -> ComponentTypeId
 }
 
-#[derive(Clone, Copy)]
+↯[derive(Clone, Copy)]
 class Transform {
     position: Vec3
     rotation: Quaternion
     scale: Vec3
 }
 
-impl Component for Transform {
-    micro type_id() -> ComponentTypeId { ComponentTypeId::Transform }
+imply Component for Transform {
+    type_id() -> ComponentTypeId { ComponentTypeId::Transform }
 }
 
-#[derive(Clone)]
+↯[derive(Clone)]
 class Sprite {
     texture: TextureHandle
     color: Color
     size: Vec2
 }
 
-impl Component for Sprite {
-    micro type_id() -> ComponentTypeId { ComponentTypeId::Sprite }
+imply Component for Sprite {
+    type_id() -> ComponentTypeId { ComponentTypeId::Sprite }
 }
 
 class RigidBody {
@@ -125,8 +125,8 @@ class RigidBody {
     drag: f32
 }
 
-impl Component for RigidBody {
-    micro type_id() -> ComponentTypeId { ComponentTypeId::RigidBody }
+imply Component for RigidBody {
+    type_id() -> ComponentTypeId { ComponentTypeId::RigidBody }
 }
 
 # 实体管理器
@@ -137,8 +137,8 @@ class EntityManager {
     next_entity_id: EntityId
 }
 
-impl EntityManager {
-    micro new() -> Self {
+imply EntityManager {
+    new() -> Self {
         EntityManager {
             entities: Vec::new(),
             components: HashMap::new(),
@@ -147,7 +147,7 @@ impl EntityManager {
         }
     }
     
-    micro create_entity(&mut self) -> EntityId {
+    create_entity(&mut self) -> EntityId {
         let id = self.next_entity_id
         self.next_entity_id += 1
         
@@ -158,7 +158,7 @@ impl EntityManager {
         id
     }
     
-    micro add_component<T: Component + 'static>(&mut self, entity_id: EntityId, component: T) {
+    add_component<T: Component + 'static>(&mut self, entity_id: EntityId, component: T) {
         let type_id = T::type_id()
         
         # 添加组件到存储
@@ -188,8 +188,8 @@ class SpriteSheet {
     total_frames: u32
 }
 
-impl SpriteSheet {
-    micro new(texture: TextureHandle, frame_width: u32, frame_height: u32) -> Self {
+imply SpriteSheet {
+    new(texture: TextureHandle, frame_width: u32, frame_height: u32) -> Self {
         let texture_info = texture.get_info()
         let frames_per_row = texture_info.width / frame_width
         let frames_per_col = texture_info.height / frame_height
@@ -204,7 +204,7 @@ impl SpriteSheet {
         }
     }
     
-    micro get_frame_rect(&self, frame_index: u32) -> Rect {
+    get_frame_rect(&self, frame_index: u32) -> Rect {
         let row = frame_index / self.frames_per_row
         let col = frame_index % self.frames_per_row
         
@@ -226,8 +226,8 @@ class Animation {
     elapsed_time: f64
 }
 
-impl Animation {
-    micro new(frames: Vector<u32>, frame_duration: f64, looping: bool) -> Self {
+imply Animation {
+    new(frames: Vector<u32>, frame_duration: f64, looping: bool) -> Self {
         Animation {
             frames,
             frame_duration,
@@ -237,7 +237,7 @@ impl Animation {
         }
     }
     
-    micro update(&mut self, delta_time: f64) -> bool {
+    update(&mut self, delta_time: f64) -> bool {
         self.elapsed_time += delta_time
         
         if self.elapsed_time >= self.frame_duration {
@@ -257,7 +257,7 @@ impl Animation {
         false
     }
     
-    micro get_current_frame(&self) -> u32 {
+    get_current_frame(&self) -> u32 {
         self.frames[self.current_frame]
     }
 }
@@ -290,8 +290,8 @@ class Vertex {
     color: Color
 }
 
-impl Mesh {
-    micro create_cube(size: f32) -> Self {
+imply Mesh {
+    create_cube(size: f32) -> Self {
         let half_size = size * 0.5
         
         let vertices = vec![
@@ -323,15 +323,15 @@ class AudioEngine {
     master_volume: f32
 }
 
-impl AudioEngine {
-    micro play_sound(&mut self, clip: AudioClip, volume: f32) {
+imply AudioEngine {
+    play_sound(&mut self, clip: AudioClip, volume: f32) {
         let mut source = AudioSource::new(clip)
         source.volume = volume
         source.play()
         self.sources.push(source)
     }
     
-    micro play_sound_3d(&mut self, clip: AudioClip, position: Vec3, volume: f32) {
+    play_sound_3d(&mut self, clip: AudioClip, position: Vec3, volume: f32) {
         let mut source = AudioSource::new(clip)
         source.volume = volume
         source.set_spatial(position, 1.0, 50.0)
@@ -351,16 +351,16 @@ class InputManager {
     gamepads: HashMap<GamepadId, GamepadState>
 }
 
-impl InputManager {
-    micro is_key_pressed(&self, key: Key) -> bool {
+imply InputManager {
+    is_key_pressed(&self, key: Key) -> bool {
         *self.key_states.get(&key).unwrap_or(&false)
     }
     
-    micro get_mouse_position(&self) -> Vec2 {
+    get_mouse_position(&self) -> Vec2 {
         self.mouse_position
     }
     
-    micro bind_action(&mut self, action: &str, binding: InputBinding) {
+    bind_action(&mut self, action: &str, binding: InputBinding) {
         # 绑定输入动作
     }
 }
@@ -378,8 +378,8 @@ class PlatformGame {
     score: u32
 }
 
-impl PlatformGame {
-    micro update(&mut self, input: &InputManager, delta_time: f64) {
+imply PlatformGame {
+    update(&mut self, input: &InputManager, delta_time: f64) {
         # 处理玩家输入
         if input.is_key_pressed(Key::Space) {
             # 跳跃逻辑
@@ -391,7 +391,7 @@ impl PlatformGame {
         self.update_camera()
     }
     
-    micro render(&self, renderer: &mut Renderer) {
+    render(&self, renderer: &mut Renderer) {
         renderer.set_camera_2d(self.camera.position, self.camera.zoom)
         
         # 渲染游戏对象

@@ -83,8 +83,8 @@ class MetricsHandler {
 ```valkyrie
 class PaymentService {
     # 使用多个切面
-    @.around(LogAspect, MetricsAspect)
-    micro process_payment(self, order_id: String, amount: Decimal) -> Receipt {
+    ↯around(LogAspect, MetricsAspect)
+    process_payment(self, order_id: String, amount: Decimal) -> Receipt {
         # 前置通知自动执行
         perform LogAspect.before_method("PaymentService", "process_payment", [order_id, amount])
         let timing_ctx = perform MetricsAspect.start_timing("payment_processing")
@@ -125,8 +125,8 @@ effect AuditAspect {
 
 # 安全审计服务
 class SecurityAuditService {
-    @.around(LogAspect, AuditAspect)
-    micro update_user_profile(self, user_id: String, profile: UserProfile) -> Unit {
+    ↯around(LogAspect, AuditAspect)
+    update_user_profile(self, user_id: String, profile: UserProfile) -> Unit {
         perform AuditAspect.log_access(user_id, "user_profile", "update")
         
         let old_profile = self.get_user_profile(user_id)
@@ -212,16 +212,16 @@ class AspectComposer {
 class DynamicAspectManager {
     private mut aspects: [Effect] = []
     
-    micro add_aspect(self, aspect: Effect) {
+    add_aspect(self, aspect: Effect) {
         self.aspects.push(aspect)
     }
     
-    micro remove_aspect(self, aspect: Effect) {
+    remove_aspect(self, aspect: Effect) {
         self.aspects.retain({ $a != aspect })
     }
     
-    @.around(DynamicAspect)
-    micro execute_with_aspects<T>(self, operation: { -> T }) -> T {
+    ↯around(DynamicAspect)
+    execute_with_aspects<T>(self, operation: { -> T }) -> T {
         let context = AspectContext::new()
         
         # 动态应用所有注册的切面
@@ -257,7 +257,7 @@ class AspectChain {
     private aspects: [Effect]
     private mut current_index: usize = 0
     
-    micro proceed<T>(mut self, context: AspectContext) -> T {
+    proceed<T>(mut self, context: AspectContext) -> T {
         if self.current_index >= self.aspects.len() {
             # 执行原始方法
             context.target_method()
@@ -289,8 +289,8 @@ class AspectChain {
 ```valkyrie
 # 示例：完整的 AOP 应用
 class OrderService {
-    @.around(LogAspect, MetricsAspect, SecurityAspect, TransactionAspect)
-    micro create_order(self, user_id: String, items: [OrderItem]) -> Order {
+    ↯around(LogAspect, MetricsAspect, SecurityAspect, TransactionAspect)
+    create_order(self, user_id: String, items: [OrderItem]) -> Order {
         # 所有切面的前置通知会自动执行
         # - 日志记录方法调用
         # - 开始性能计时
@@ -318,14 +318,14 @@ class OrderService {
 }
 
 # 使用示例
-let order_service = OrderService {}
-let log_handler = ConsoleLogHandler {}
-let metrics_handler = MetricsHandler {}
+let order_service = new OrderService {}
+let log_handler = new ConsoleLogHandler {}
+let metrics_handler = new MetricsHandler {}
 
 with log_handler, metrics_handler {
     let order = order_service.create_order("user123", [
-        OrderItem { product_id: "p1", quantity: 2 },
-        OrderItem { product_id: "p2", quantity: 1 }
+        new OrderItem { product_id: "p1", quantity: 2 },
+        new OrderItem { product_id: "p2", quantity: 1 }
     ])
     println(f"Created order: {order.id}")
 }

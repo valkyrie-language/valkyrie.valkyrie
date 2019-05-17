@@ -38,7 +38,7 @@ set_age(mut self, new_age: i32) {
 
 # 静态方法
 static create_anonymous() -> Person {
-    Person { name: "Anonymous", age: 0 }
+    new Person { name: "Anonymous", age: 0 }
 }
 
 # 带返回值的方法
@@ -56,7 +56,7 @@ class Person {
     age: i32
     
     new(name: String, age: i32) -> Self {
-        Self { name, age }
+        new Self { name, age }
     }
     
     greet(self) {
@@ -92,7 +92,7 @@ class Animal {
     name: String
     
     new(name: String) -> Self {
-        Self { name }
+        new Self { name }
     }
     
     virtual make_sound(self) {
@@ -197,15 +197,15 @@ flags Permissions {
     execute = 4,
     
     # 方法
-    micro has_read(self) -> bool {
+    has_read(self) -> bool {
         self.contains(Permissions::read)
     }
     
-    micro add_write(mut self) {
+    add_write(mut self) {
         self |= Permissions::write
     }
     
-    micro remove_execute(mut self) {
+    remove_execute(mut self) {
         self &= !Permissions::execute
     }
 }
@@ -218,25 +218,25 @@ flags Permissions {
 ```valkyrie
 # 简单特征
 trait Display {
-    micro to_string(self) -> String
+    to_string(self) -> String
 }
 
 # 带默认实现的特征
 trait Debug {
-    micro debug(self) -> String
+    debug(self) -> String
     
     # 默认实现
-    micro print_debug(self) {
+    print_debug(self) {
         print(self.debug())
     }
 }
 
 # 泛型特征
 trait Iterator<T> {
-    micro next(mut self) -> Option<T>
+    next(mut self) -> Option<T>
     
     # 默认方法
-    micro collect(mut self) -> [T] {
+    collect(mut self) -> [T] {
         let mut result = []
         while let Some(item) = self.next() {
             result.push(item)
@@ -244,7 +244,7 @@ trait Iterator<T> {
         result
     }
     
-    micro map<U>(self, f: micro(T) -> U) -> MapIterator<T, U> {
+    map<U>(self, f: micro(T) -> U) -> MapIterator<T, U> {
         MapIterator::new(self, f)
     }
 }
@@ -254,23 +254,23 @@ trait Iterator<T> {
 
 ```valkyrie
 # 为类型实现特征
-impl Display for Person {
-    micro to_string(self) -> String {
+imply Display for Person {
+    to_string(self) -> String {
         "${self.name} (${self.age} years old)"
     }
 }
 
-impl Debug for Person {
-    micro debug(self) -> String {
+imply Debug for Person {
+    debug(self) -> String {
         "Person { name: \"${self.name}\", age: ${self.age} }"
     }
 }
 
 # 条件实现
 impl<T> Display for Option<T> where T: Display {
-    micro to_string(self) -> String {
+    to_string(self) -> String {
         match self {
-            Some(value) => "Some(${value.to_string()})",
+            Some(value) => "Some(${value})",
             None => "None"
         }
     }
@@ -283,7 +283,7 @@ impl<T> Display for Option<T> where T: Display {
 # 函数中的特征约束
 micro print_items<T>(items: [T]) where T: Display {
     for item in items {
-        print(item.to_string())
+        print(item)
     }
 }
 
@@ -293,14 +293,14 @@ where
     T: Display + Debug + Clone 
 {
     let cloned = value.clone()
-    "Display: ${value.to_string()}, Debug: ${cloned.debug()}"
+    "Display: ${value}, Debug: ${cloned.debug()}"
 }
 
 # 关联类型
 trait Collect<T> {
     type Output
     
-    micro collect(self) -> Self::Output
+    collect(self) -> Self::Output
 }
 ```
 
@@ -346,21 +346,23 @@ const HALF_PI: f64 = PI / 2.0
 ```valkyrie
 # 模块声明
 mod utils {
-    pub micro helper_function() {
+    # 工具函数
+    helper_function() {
         # 实现
     }
     
-    pub class UtilityClass {
+    # 工具类
+    class UtilityClass {
         # 实现
     }
 }
 
 # 使用模块
-use utils::helper_function
-use utils::UtilityClass
+using utils::helper_function
+using utils::UtilityClass
 
 # 重导出
-pub use utils::*
+using utils::*
 ```
 
 ## 泛型定义
@@ -378,7 +380,7 @@ class Container<T> {
     value: T
     
     new(value: T) {
-        Self { value }
+        new Self { value }
     }
     
     get(self) -> &T {
@@ -406,26 +408,24 @@ class SortedList<T> where T: Ord {
 
 ```valkyrie
 # 属性装饰器
-@.derive(Debug, Clone, PartialEq)
+↯derive(Debug, Clone, PartialEq)
 class Point {
     x: f64
     y: f64
 }
 
-@.test
+↯test
 micro test_addition() {
     @assert_equal(2 + 2, 4)
 }
 
-@.deprecated("Use new_function instead")
+↯deprecated("Use new_function instead")
 micro old_function() {
     # 已废弃的函数
 }
 
-@.inline
+↯inline
 micro fast_calculation(x: i32) -> i32 {
     x * x + 2 * x + 1
 }
 ```
-
-

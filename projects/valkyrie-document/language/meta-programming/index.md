@@ -28,18 +28,18 @@ Nyar 平台的元编程系统集成在多层 IR 架构中，在不同层次提�
 
 **常量表达式求值**:
 ```valkyrie
-// 编译时常量计算
+# 编译时常量计算
 let FIBONACCI_10: i32 = @const_eval(fibonacci(10))
 let LOOKUP_TABLE: [i32; 256] = @const_eval(generate_lookup_table())
 
-// 编译时字符串处理
+# 编译时字符串处理
 let CONFIG_KEY: String = @const_eval(@format("app.{}.version", @env("BUILD_TARGET")))
 ```
 
 **编译时函数执行**:
 ```valkyrie
-// 标记为编译时函数
-@.const_fn
+# 标记为编译时函数
+↯const_fn
 micro fibonacci(n: i32) -> i32 {
     n.match {
         case 0 | 1: n
@@ -47,8 +47,8 @@ micro fibonacci(n: i32) -> i32 {
     }
 }
 
-// 编译时数据结构操作
-@.const_fn
+# 编译时数据结构操作
+↯const_fn
 micro build_state_machine() -> StateMachine {
     let mut sm = StateMachine::new()
     sm.add_state("start")
@@ -64,7 +64,7 @@ micro build_state_machine() -> StateMachine {
 
 **声明式宏**:
 ```valkyrie
-// 模式匹配宏
+# 模式匹配宏
 macro vec_of {
     (#elem:expr; #n:expr) => {
         {
@@ -80,29 +80,29 @@ macro vec_of {
     }
 }
 
-// 使用示例
+# 使用示例
 let zeros = @vec_of(0; 10)
 let numbers = @vec_of(1, 2, 3, 4, 5)
 ```
 
 **过程宏**:
 ```valkyrie
-// 自定义派生宏
-@.derive(Serialize, Deserialize, Debug)
+# 自定义派生宏
+↯derive(Serialize, Deserialize, Debug)
 class User {
     id: u64,
     name: String,
     email: String,
 }
 
-// 属性宏
-@.api_endpoint(method: "GET", path: "/users/{id}")
+# 属性宏
+↯api_endpoint(method: "GET", path: "/users/{id}")
 micro get_user(id: u64) -> Result<User, ApiError> {
-    // 自动生成路由注册和参数验证代码
+    # 自动生成路由注册和参数验证代码
     database::find_user(id)
 }
 
-// 函数式宏
+# 函数式宏
 let sql_query = @sql(
     "SELECT id, name, email FROM users WHERE active = $1",
     true
@@ -113,32 +113,32 @@ let sql_query = @sql(
 
 **基于模板的代码生成**:
 ```valkyrie
-// 模板定义
+# 模板定义
 @template {
     name: "crud_operations",
     params: [Entity: Type, Key: Type],
     body: {
-        impl CrudOperations<{{Key}}> for {{Entity}} {
-            micro create(data: {{Entity}}) -> Result<{{Key}}, Error> {
-                // 生成创建逻辑
+        imply CrudOperations<{{Key}}> for {{Entity}} {
+            create(data: {{Entity}}) -> Result<{{Key}}, Error> {
+                # 生成创建逻辑
             }
             
-            micro read(id: {{Key}}) -> Result<{{Entity}}, Error> {
-                // 生成读取逻辑
+            read(id: {{Key}}) -> Result<{{Entity}}, Error> {
+                # 生成读取逻辑
             }
             
-            micro update(id: {{Key}}, data: {{Entity}}) -> Result<(), Error> {
-                // 生成更新逻辑
+            update(id: {{Key}}, data: {{Entity}}) -> Result<(), Error> {
+                # 生成更新逻辑
             }
             
-            micro delete(id: {{Key}}) -> Result<(), Error> {
-                // 生成删除逻辑
+            delete(id: {{Key}}) -> Result<(), Error> {
+                # 生成删除逻辑
             }
         }
     }
 }
 
-// 模板实例化
+# 模板实例化
 @generate_code {
     crud_operations<User, UserId>
     crud_operations<Product, ProductId>
@@ -148,17 +148,17 @@ let sql_query = @sql(
 
 **反射驱动的代码生成**:
 ```valkyrie
-// 自动生成序列化代码
-@.auto_serialize
+# 自动生成序列化代码
+↯auto_serialize
 class Config {
     database_url: String,
     port: u16,
     debug: bool,
 }
 
-// 编译时生成的代码
-impl Serialize for Config {
-    micro serialize(self) -> SerializedData {
+# 编译时生成的代码
+imply Serialize for Config {
+    serialize(self) -> SerializedData {
         let mut data = SerializedData::new()
         data.insert("database_url", self.database_url)
         data.insert("port", self.port)
@@ -172,41 +172,41 @@ impl Serialize for Config {
 
 **类型级函数**:
 ```valkyrie
-// 类型级计算
+# 类型级计算
 type Add(a: Nat, b: Nat) -> Nat {
     Add(Zero, b) = b,
     Add(Succ(a), b) = Succ(Add(a, b))
 }
 
-// 类型级列表操作
+# 类型级列表操作
 type Length(list: List<T>) -> Nat {
     Length(Nil) = Zero,
     Length(Cons(_, tail)) = Succ(Length(tail))
 }
 
-// 编译时类型验证
+# 编译时类型验证
 micro safe_array_access<const N: usize, const I: usize>(arr: [i32; N]) -> i32 
 where
     Assert<LessThan<I, N>>: True
 {
-    arr[I]  // 编译时保证索引安全
+    arr[I]  # 编译时保证索引安全
 }
 ```
 
 **依赖类型支持**:
 ```valkyrie
-// 长度依赖的向量类型
+# 长度依赖的向量类型
 class Vector<T, const N: usize> {
     data: [T; N],
 }
 
 impl<T, const N: usize> Vector<T, N> {
-    micro push<const M: usize>(self, item: T) -> Vector<T, {N + 1}> {
-        // 类型级别保证长度正确性
+    push<const M: usize>(self, item: T) -> Vector<T, {N + 1}> {
+        # 类型级别保证长度正确性
     }
     
-    micro concat<const M: usize>(self, other: Vector<T, M>) -> Vector<T, {N + M}> {
-        // 编译时计算结果长度
+    concat<const M: usize>(self, other: Vector<T, M>) -> Vector<T, {N + M}> {
+        # 编译时计算结果长度
     }
 }
 ```
@@ -215,22 +215,22 @@ impl<T, const N: usize> Vector<T, N> {
 
 **注解驱动的代码变换**:
 ```valkyrie
-// 性能监控注解
-@.monitor_performance
+# 性能监控注解
+↯monitor_performance
 micro expensive_computation(data: [f64]) -> f64 {
-    // 自动插入性能监控代码
+    # 自动插入性能监控代码
     data.iter().map({ $x => $x.powi(2) }).sum()
 }
-
-// 缓存注解
-@.cache(ttl: "1h", key: "user_profile_{id}")
+```
+# 缓存注解
+↯cache(ttl: "1h", key: "user_profile_{id}")
 micro get_user_profile(id: UserId) -> UserProfile {
-    // 自动生成缓存逻辑
+    # 自动生成缓存逻辑
     database::load_user_profile(id)
 }
 
-// 验证注解
-@.validate(email: "valid_email", age: "min:18,max:120")
+# 验证注解
+↯validate(email: "valid_email", age: "min:18,max:120")
 class UserRegistration {
     email: String,
     age: u8,
@@ -240,17 +240,17 @@ class UserRegistration {
 
 **编译时分析注解**:
 ```valkyrie
-// 安全性分析
-@.security_analysis(check: "sql_injection,xss")
+# 安全性分析
+↯security_analysis(check: "sql_injection,xss")
 micro handle_user_input(input: String) -> String {
-    // 编译时静态分析潜在安全问题
+    # 编译时静态分析潜在安全问题
     sanitize_input(input)
 }
 
-// 内存安全注解
-@.memory_safe
+# 内存安全注解
+↯memory_safe
 micro process_buffer(buffer: mut [u8]) {
-    // 编译时验证内存访问安全性
+    # 编译时验证内存访问安全性
 }
 ```
 
@@ -261,15 +261,15 @@ micro process_buffer(buffer: mut [u8]) {
 Nyar 平台提供了隔离的编译时执行环境：
 
 ```valkyrie
-// 编译时环境配置
+# 编译时环境配置
 @compile_time_env {
     memory_limit: "256MB",
     execution_timeout: "30s",
     allowed_operations: ["file_read", "network_disabled", "system_disabled"]
 }
 
-// 编译时资源管理
-@.const_fn
+# 编译时资源管理
+↯const_fn
 micro load_config_file() -> Config {
     let content = @compile_time_read_file("config.toml")
     parse_toml(content)
@@ -279,16 +279,16 @@ micro load_config_file() -> Config {
 ### **宏展开策略**
 
 ```valkyrie
-// 宏展开控制
-@.macro_expansion(strategy: "eager", max_depth: 100)
+# 宏展开控制
+↯macro_expansion(strategy: "eager", max_depth: 100)
 macro recursive_macro {
-    // 宏定义
+    # 宏定义
 }
 
-// 宏卫生性保证
+# 宏卫生性保证
 macro hygienic_macro(var) {
     {
-        let var = 42  // 不会与调用处的变量冲突
+        let var = 42  # 不会与调用处的变量冲突
         var * 2
     }
 }
@@ -297,11 +297,11 @@ macro hygienic_macro(var) {
 ### **代码生成缓存**
 
 ```valkyrie
-// 生成代码缓存配置
-@.code_generation(cache: true, cache_key: "struct_hash")
-@.derive(Serialize)
+# 生成代码缓存配置
+↯code_generation(cache: true, cache_key: "struct_hash")
+↯derive(Serialize)
 class CachedStruct {
-    // 结构体定义
+    # 结构体定义
 }
 ```
 
@@ -312,19 +312,19 @@ class CachedStruct {
 Nyar 平台为不同语言提供统一的元编程接口：
 
 ```valkyrie
-// Valkyrie 语言的宏
+# Valkyrie 语言的宏
 macro debug_print(#args...) {
-    @.cfg(debug_assertions)
+    ↯cfg(debug_assertions)
     println("DEBUG: {}", @format(#args...))
 }
 
-// 对应的 Python 风格宏（假设支持）
+# 对应的 Python 风格宏（假设支持）
 @macro
 def debug_print(*args):
     if DEBUG:
         print(f"DEBUG: {format(*args)}")
 
-// 对应的 JavaScript 风格宏（假设支持）
+# 对应的 JavaScript 风格宏（假设支持）
 macro debugPrint(...args) {
     if (process.env.NODE_ENV === 'development') {
         console.log(`DEBUG: ${format(...args)}`);
@@ -335,16 +335,16 @@ macro debugPrint(...args) {
 ### **跨语言代码生成**
 
 ```valkyrie
-// 接口定义
+# 接口定义
 trait UserService {
-    micro get_user(id: UserId) -> Result<User, Error>
-micro create_user(data: CreateUserRequest) -> Result<User, Error>
-micro update_user(id: UserId, data: UpdateUserRequest) -> Result<User, Error>
-micro delete_user(id: UserId) -> Result<(), Error>
+    get_user(id: UserId) -> Result<User, Error>
+    create_user(data: CreateUserRequest) -> Result<User, Error>
+    update_user(id: UserId, data: UpdateUserRequest) -> Result<User, Error>
+    delete_user(id: UserId) -> Result<(), Error>
 }
 
-// 自动生成多语言绑定
-@.generate_bindings(languages: ["rust", "javascript", "python"])
+# 自动生成多语言绑定
+↯generate_bindings(languages: ["rust", "javascript", "python"])
 class UserServiceBindings
 ```
 
@@ -369,14 +369,14 @@ class UserServiceBindings
 ### **元编程调试器**
 
 ```valkyrie
-// 宏展开调试
-@.debug_macro_expansion
+# 宏展开调试
+↯debug_macro_expansion
 macro complex_macro {
-    // 可以单步调试宏展开过程
+    # 可以单步调试宏展开过程
 }
 
-// 编译时执行跟踪
-@.trace_const_eval
+# 编译时执行跟踪
+↯trace_const_eval
 const RESULT: i32 = complex_computation()
 ```
 

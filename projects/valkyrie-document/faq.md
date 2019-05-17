@@ -52,17 +52,17 @@ A: Valkyrie 支持丰富的类型系统：
 A: 使用 `type` 关键字定义：
 
 ```valkyrie
-// Sum 类型（联合类型）
+# Sum 类型（联合类型）
 type Result<T, E> = Fine(T) | Fail(E)
 
-// Product 类型（记录类型）
+# Product 类型（记录类型）
 type User = {
     id: Int,
     name: String,
     email: Option<String>
 }
 
-// 模式匹配
+# 模式匹配
 match result {
     Fine(value): println("成功: ${value}"),
     Fail(error): println("错误: ${error}")
@@ -83,7 +83,7 @@ micro fetch_user_data(id: Int) -> User {
     parse_json(response)
 }
 
-// 处理异步效应
+# 处理异步效应
 handle fetch_user_data(42) with Async {
     await(promise) -> resume(promise.await)
 }
@@ -94,7 +94,7 @@ handle fetch_user_data(42) with Async {
 A: Valkyrie 提供多种错误处理方式：
 
 ```valkyrie
-// 1. 使用 Result 类型
+# 1. 使用 Result 类型
 micro divide(a: Float, b: Float) -> Result<Float, String> {
     if b == 0.0 {
         Fail("除零错误")
@@ -103,7 +103,7 @@ micro divide(a: Float, b: Float) -> Result<Float, String> {
     }
 }
 
-// 2. 使用异常效应
+# 2. 使用异常效应
 effect Exception {
     throw(message: String): Never
 }
@@ -142,18 +142,18 @@ valkyrie build --target ts-defs
 A: Valkyrie 提供无缝集成：
 
 ```valkyrie
-// 导入 JavaScript 模块
-import { fetch } from "@std/fetch"
-import { console } from "@std/console"
+# 导入 JavaScript 模块
+using { fetch } from "@std/fetch"
+using { console } from "@std/console"
 
-// 导出给 JavaScript 使用
+# 导出给 JavaScript 使用
 export micro greet(name: String) -> String {
     `Hello, ${name}!`
 }
 
-// 使用 JavaScript 对象
+# 使用 JavaScript 对象
 micro process_data(data: JSObject) -> JSObject {
-    // 处理逻辑
+    # 处理逻辑
     data
 }
 ```
@@ -184,20 +184,20 @@ A: Valkyrie 提供完整的工具链：
 A: 使用内置测试框架：
 
 ```valkyrie
-// 单元测试
+# 单元测试
 test "addition works correctly" {
     assert_eq(add(2, 3), 5)
     assert_eq(add(-1, 1), 0)
 }
 
-// 属性测试
+# 属性测试
 test "addition is commutative" {
     forall (a: Int, b: Int) {
         assert_eq(add(a, b), add(b, a))
     }
 }
 
-// 效应测试
+# 效应测试
 test "state effect works" {
     let result = handle counter() with State {
         get() -> resume(0),

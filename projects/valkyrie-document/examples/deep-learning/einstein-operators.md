@@ -13,7 +13,7 @@ Einstein 操作符使用字符串模式来描述张量操作，其中：
 ## 重排操作 (Rearrange)
 
 ```valkyrie
-use valkyrie::tensor::einops::*
+using valkyrie::tensor::einops::*
 
 # 图像数据格式转换
 let images = ArrayND::random([32, 224, 224, 3])  # NHWC格式

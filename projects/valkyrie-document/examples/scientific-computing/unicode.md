@@ -43,16 +43,16 @@ class NeuralNetwork {
     ν: Vector<Tensor>,  # 二阶动量项
 }
 
-impl NeuralNetwork {
+imply NeuralNetwork {
     # 使用希腊字母的梯度下降
-    micro gradient_descent(&mut self, α: f32) {
+    gradient_descent(&mut self, α: f32) {
         for (θᵢ, ∇θᵢ) in self.θ.iter_mut().zip(&self.∇θ) {
             *θᵢ = θᵢ - α * ∇θᵢ
         }
     }
     
     # Adam 优化器
-    micro adam_step(&mut self, α: f32, β₁: f32, β₂: f32, ε: f32, t: usize) {
+    adam_step(&mut self, α: f32, β₁: f32, β₂: f32, ε: f32, t: usize) {
         for i in 0..self.θ.len() {
             let m = β₁ * self.μ[i] + (1.0 - β₁) * self.∇θ[i]
             let v = β₂ * self.ν[i] + (1.0 - β₂) * self.∇θ[i].powi(2)
@@ -67,7 +67,7 @@ impl NeuralNetwork {
     }
     
     # 带正则化的损失函数
-    micro regularized_loss(&self, ŷ: &Tensor, y: &Tensor, λ: f32) -> f32 {
+    regularized_loss(&self, ŷ: &Tensor, y: &Tensor, λ: f32) -> f32 {
         let ℒ = self.cross_entropy_loss(ŷ, y)
         let Ω = self.l2_regularization(λ)
         ℒ + Ω
@@ -134,8 +134,8 @@ class DirichletDistribution {
 }
 
 # 概率密度函数
-impl BetaDistribution {
-    micro pdf(&self, x: f64) -> f64 {
+imply BetaDistribution {
+    pdf(&self, x: f64) -> f64 {
         let Β = gamma_function(self.α) * gamma_function(self.β) / gamma_function(self.α + self.β)
         x.powf(self.α - 1.0) * (1.0 - x).powf(self.β - 1.0) / Β
     }

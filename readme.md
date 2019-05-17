@@ -76,7 +76,7 @@ const COMMIT_TYPES = {
     '✨': { label: 'Stable Features', priority: 0 },
     '🐛': { label: 'Bug Fixes', priority: 0 },
     '📚': { label: 'Documentation', priority: 0 },
-    // 添加新的类型...
+    # 添加新的类型...
 };
 ```
 

@@ -317,7 +317,7 @@ widget Counter {
                 0.0, 1.0, FlexBasis::Auto
             )
             .add_flex_child(
-                Box::new(Text::new(self.count.to_string())
+                Box::new(Text::new(self.count)
                     .align(TextAlign::Center)),
                 1.0, 1.0, FlexBasis::Auto
             )
@@ -465,7 +465,7 @@ widget Form<T> {
             }
         }
         
-        let result = ValidationResult { is_valid, errors: self.errors.clone() }
+        let result = new ValidationResult { is_valid, errors: self.errors.clone() }
         
         if let Some(handler) = self.on_validate {
             handler(result.clone())
@@ -876,7 +876,7 @@ widget TodoApp {
             .render()
     }
     
-    render_header(self) -> impl Widget {
+    render_header(self) -> imply Widget {
         FlexBox::new(FlexDirection::Row)
             .gap(10.0)
             .add_flex_child(

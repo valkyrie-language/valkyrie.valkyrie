@@ -120,7 +120,7 @@ class ParallelReduction {
     output_buffer: wgpu::Buffer,
     staging_buffer: wgpu::Buffer
     
-    micro new(device: wgpu::Device, queue: wgpu::Queue) -> ParallelReduction {
+    new(device: wgpu::Device, queue: wgpu::Queue) -> ParallelReduction {
         let shader = compile_valkyrie_shader(include_str!("parallel_sum.val"))
         let compute_pipeline = create_compute_pipeline(device, shader)
         
@@ -134,7 +134,7 @@ class ParallelReduction {
         }
     }
     
-    micro compute_sum(mut self, data: [f32]) -> f32 {
+    compute_sum(mut self, data: [f32]) -> f32 {
         # 上传数据
         self.queue.write_buffer(self.input_buffer, 0, bytemuck::cast_slice(data))
         
@@ -1030,7 +1030,7 @@ class GPUPerformanceCounter {
     query_sets: [wgpu::QuerySet],
     timestamp_period: f32
     
-    micro new(device: wgpu::Device) -> GPUPerformanceCounter {
+    new(device: wgpu::Device) -> GPUPerformanceCounter {
         let timestamp_query = device.create_query_set(wgpu::QuerySetDescriptor {
             label: Some("Timestamp Queries"),
             ty: wgpu::QueryType::Timestamp,
@@ -1043,7 +1043,7 @@ class GPUPerformanceCounter {
         }
     }
     
-    micro measure_compute_time(self, encoder: wgpu::CommandEncoder, compute_pass: impl FnOnce()) -> f64 {
+    measure_compute_time(self, encoder: wgpu::CommandEncoder, compute_pass: imply FnOnce()) -> f64 {
         encoder.write_timestamp(self.query_sets[0], 0)
         
         compute_pass()

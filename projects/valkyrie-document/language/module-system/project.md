@@ -30,33 +30,33 @@ project-root/
 
 ```json5
 {
-    // 项目基本信息
+    # 项目基本信息
     "name": "my-valkyrie-project",
     "version": "1.0.0",
     "description": "A Valkyrie language project",
-    "type": "application", // 或 "library", "plugin", "tool"
+    "type": "application", # 或 "library", "plugin", "tool"
     
-    // 作者信息
+    # 作者信息
     "authors": [
         "Developer Name <email@example.com>"
     ],
     
-    // 许可证
+    # 许可证
     "license": "MIT",
     
-    // 仓库信息
+    # 仓库信息
     "repository": "https://github.com/user/my-valkyrie-project",
     "homepage": "https://my-project.dev",
     "documentation": "https://docs.my-project.dev",
     
-    // 发布配置
+    # 发布配置
     "publish": true,
     "private": false,
     
-    // 语言版本
+    # 语言版本
     "edition": "2024",
     
-    // 入口文件
+    # 入口文件
     "main": "binary/main.vk",
     "lib": "library/_.vk"
 }
@@ -66,7 +66,7 @@ project-root/
 
 ```json5
 {
-    // 运行时依赖
+    # 运行时依赖
     "dependencies": {
         "valkyrie-std": "^1.0.0",
         "serde": {
@@ -82,18 +82,18 @@ project-root/
         }
     },
     
-    // 构建时依赖
+    # 构建时依赖
     "build-dependencies": {
         "build-script": "^0.1.0"
     },
     
-    // 开发依赖
+    # 开发依赖
     "dev-dependencies": {
         "test-framework": "^2.0.0",
         "benchmark": "^1.5.0"
     },
     
-    // 可选依赖
+    # 可选依赖
     "optional-dependencies": {
         "feature-x": "^1.0.0",
         "feature-y": "^2.0.0"
@@ -105,7 +105,7 @@ project-root/
 
 ```json5
 {
-    // 功能特性定义
+    # 功能特性定义
     "features": {
         "default": ["std", "serde"],
         "std": [],
@@ -120,17 +120,17 @@ project-root/
 
 ```json5
 {
-    // 构建设置
+    # 构建设置
     "build": {
-        "target": "native", // 或 "wasm", "js", "llvm"
-        "optimization": "release", // 或 "debug", "size", "speed"
+        "target": "native", # 或 "wasm", "js", "llvm"
+        "optimization": "release", # 或 "debug", "size", "speed"
         "output": "target/",
         "incremental": true,
         "parallel": true,
         "cache": true
     },
     
-    // 编译器选项
+    # 编译器选项
     "compiler": {
         "warnings": "deny",
         "errors": "abort",
@@ -138,7 +138,7 @@ project-root/
         "strip-symbols": false
     },
     
-    // 链接器选项
+    # 链接器选项
     "linker": {
         "lto": true,
         "strip": false,
@@ -151,7 +151,7 @@ project-root/
 
 ```json5
 {
-    // 自定义脚本
+    # 自定义脚本
     "scripts": {
         "build": "valkyrie build --release",
         "test": "valkyrie test",

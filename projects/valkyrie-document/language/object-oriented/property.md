@@ -25,7 +25,7 @@ class Rectangle {
 }
 
 # 使用方式
-let rect = Rectangle { width: 10.0, height: 5.0 }
+let rect = new Rectangle { width: 10.0, height: 5.0 }
 let area = rect.area        # 调用 getter，返回 50.0
 let perimeter = rect.perimeter  # 调用 getter，返回 30.0
 ```
@@ -58,7 +58,7 @@ class Temperature {
 }
 
 # 使用方式
-let mut temp = Temperature { celsius: 25.0 }
+let mut temp = new Temperature { celsius: 25.0 }
 print("摄氏度: ${temp.celsius}")     # 25.0
 print("华氏度: ${temp.fahrenheit}")   # 77.0
 print("开尔文: ${temp.kelvin}")      # 298.15
@@ -93,8 +93,8 @@ class Person {
 }
 
 let person = Person {
-    first_name: "张".to_string(),
-    last_name: "三".to_string(),
+    first_name: "张",
+    last_name: "三",
     birth_year: 1990
 }
 
@@ -116,12 +116,12 @@ class Logger {
     }
     
     # 获取所有消息的方法
-    micro get_messages(self) -> &Vector<String> {
+    get_messages(self) -> &Vector<String> {
         &self.messages
     }
 }
 
-let mut logger = Logger { messages: Vec::new() }
+let mut logger = new Logger { messages: Vec::new() }
 logger.message = "系统启动"  # 使用 setter
 logger.message = "用户登录"  # 使用 setter
 # let msg = logger.message   # 编译错误：没有 getter
@@ -180,7 +180,7 @@ class DataProcessor {
         }
     }
     
-    micro process_item(self, item: &String) -> ProcessedItem {
+    process_item(self, item: &String) -> ProcessedItem {
         # 复杂的处理逻辑
         ProcessedItem::from(item)
     }
@@ -211,20 +211,20 @@ class Builder {
         self
     }
     
-    micro build(self) -> Person {
+    build(self) -> Person {
         Person {
-            name: self.name.unwrap_or("Unknown".to_string()),
+            name: self.name.unwrap_or("Unknown"),
             age: self.age.unwrap_or(0),
-            email: self.email.unwrap_or("unknown@example.com".to_string())
+            email: self.email.unwrap_or("unknown@example.com")
         }
     }
 }
 
 # 链式调用
 let person = Builder::new()
-    .name("Alice".to_string())
+    .name("Alice")
     .age(30)
-    .email("alice@example.com".to_string())
+    .email("alice@example.com")
     .build()
 ```
 
@@ -305,7 +305,7 @@ class Counter {
         self.value = new_value
     }
     
-    micro increment(mut self) {
+    increment(mut self) {
         self.count = self.count + 1
     }
 }

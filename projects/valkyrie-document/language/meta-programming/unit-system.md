@@ -239,8 +239,8 @@ class UnitConverter {
     conversion_factors: HashMap<(Unit, Unit), f64>,
 }
 
-impl UnitConverter {
-    micro convert<T: Dimension>(&self, value: Quantity<T>, from: Unit, to: Unit) -> Quantity<T> {
+imply UnitConverter {
+    convert<T: Dimension>(&self, value: Quantity<T>, from: Unit, to: Unit) -> Quantity<T> {
         if from == to {
             return value
         }
@@ -267,14 +267,14 @@ let mass_kg = converter.convert(10lb, lb, kg)   # 4.53592kg
 # 定义新的基本单位
 macro_rules! define_unit {
     ($name:ident, $symbol:literal, $dimension:expr) => {
-        pub class $name;
+        class $name;
         
-        impl Unit for $name {
+        imply Unit for $name {
             const SYMBOL: &'static str = $symbol;
             type Dimension = $dimension;
         }
         
-        pub const $name: Quantity<$dimension> = Quantity::new(1.0);
+        const $name: Quantity<$dimension> = Quantity::new(1.0);
     }
 }
 
@@ -325,8 +325,8 @@ class Particle {
     acceleration: Vector3<Acceleration>,
 }
 
-impl Particle {
-    micro apply_force(&mut self, force: Vector3<Force>, dt: Time) {
+imply Particle {
+    apply_force(&mut self, force: Vector3<Force>, dt: Time) {
         # F = ma => a = F/m
         self.acceleration = force / self.mass
         
@@ -335,7 +335,7 @@ impl Particle {
         self.position += self.velocity * dt
     }
     
-    micro kinetic_energy(&self) -> Energy {
+    kinetic_energy(&self) -> Energy {
         0.5 * self.mass * self.velocity.magnitude_squared()
     }
 }
@@ -345,8 +345,8 @@ class GravityField {
     g: Acceleration,  # 重力加速度
 }
 
-impl GravityField {
-    micro force_on(&self, particle: &Particle) -> Vector3<Force> {
+imply GravityField {
+    force_on(&self, particle: &Particle) -> Vector3<Force> {
         Vector3::new(0, -particle.mass * self.g, 0)
     }
 }
@@ -363,13 +363,13 @@ class Beam {
     elastic_modulus: Pressure,
 }
 
-impl Beam {
-    micro max_deflection(&self, load: Force) -> Length {
+imply Beam {
+    max_deflection(&self, load: Force) -> Length {
         # 简支梁中点最大挠度公式
         load * self.length.pow(3) / (48 * self.elastic_modulus * self.moment_of_inertia)
     }
     
-    micro max_stress(&self, moment: Moment, distance: Length) -> Pressure {
+    max_stress(&self, moment: Moment, distance: Length) -> Pressure {
         moment * distance / self.moment_of_inertia
     }
 }
@@ -420,7 +420,7 @@ micro power_dissipation(voltage: Voltage, current: Current) -> Power {
 
 ```valkyrie
 # 编译时单位消除
-#[inline(always)]
+↯[inline(always)]
 micro optimized_calculation(distance: Length, time: Time) -> Velocity {
     # 编译后等价于: distance_value / time_value
     distance / time
@@ -444,20 +444,20 @@ class VectorQuantity<T: Dimension, const N: usize> {
 }
 
 impl<T: Dimension, const N: usize> VectorQuantity<T, N> {
-    micro add(&self, other: &Self) -> Self {
+    add(&self, other: &Self) -> Self {
         let mut result = [0.0; N];
         for i in 0..N {
             result[i] = self.values[i] + other.values[i];
         }
-        Self { values: result, _phantom: PhantomData }
+        new Self { values: result, _phantom: PhantomData }
     }
     
-    micro multiply_scalar(&self, scalar: f64) -> Self {
+    multiply_scalar(&self, scalar: f64) -> Self {
         let mut result = [0.0; N];
         for i in 0..N {
             result[i] = self.values[i] * scalar;
         }
-        Self { values: result, _phantom: PhantomData }
+        new Self { values: result, _phantom: PhantomData }
     }
 }
 ```

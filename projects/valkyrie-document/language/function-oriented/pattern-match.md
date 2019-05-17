@@ -50,7 +50,7 @@ let processed = input
         case Fine { value }: value * 2
         case Fail { error }: 0
     }
-    .to_string()
+    
 ```
 
 ## 解构匹配

@@ -22,17 +22,17 @@ class Point {
     x: f64,
     y: f64,
     
-    micro new(x: f64, y: f64) -> Self {
-        Point { x, y }
+    new(x: f64, y: f64) -> Self {
+        new Point { x, y }
     }
     
     # 只读访问器（也可用属性语法表示）
-    micro get_x(self) -> f64 { self.x }
-    micro get_y(self) -> f64 { self.y }
+    get_x(self) -> f64 { self.x }
+    get_y(self) -> f64 { self.y }
 
     # 产生新值：平移而不修改原对象
-    micro translate(self, dx: f64, dy: f64) -> Self {
-        Point { x: self.x + dx, y: self.y + dy }
+    translate(self, dx: f64, dy: f64) -> Self {
+        new Point { x: self.x + dx, y: self.y + dy }
     }
 }
 
@@ -47,12 +47,12 @@ class Person {
     name: String,
     age: i32,
 
-    micro new(name: String, age: i32) -> Self {
-        Person { name, age }
+    new(name: String, age: i32) -> Self {
+        new Person { name, age }
     }
 
     # 复制并按需改动部分字段
-    micro with(self, name?: String, age?: i32) -> Self {
+    with(self, name?: String, age?: i32) -> Self {
         Person {
             name: name ?? self.name,
             age: age ?? self.age,
@@ -72,9 +72,9 @@ let older = alice.with(age: 21)   # 仅变更 age，name 复用
 class Email {
     address: String,
 
-    micro new(address: String) -> Self {
-        @.require(is_valid_email(address), "邮箱格式不合法")
-        Email { address }
+    new(address: String) -> Self {
+        ↯require(is_valid_email(address), "邮箱格式不合法")
+        new Email { address }
     }
 }
 ```
@@ -87,11 +87,11 @@ class Email {
 class RGB {
     r: u8, g: u8, b: u8,
 
-    micro equals(self, other: &RGB) -> bool {
+    equals(self, other: &RGB) -> bool {
         self.r == other.r && self.g == other.g && self.b == other.b
     }
 
-    micro hash(self) -> i64 {
+    hash(self) -> i64 {
         ((self.r as i64) << 16) | ((self.g as i64) << 8) | (self.b as i64)
     }
 }

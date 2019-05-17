@@ -96,13 +96,13 @@ Variable(String),
 ```valkyrie
 # 基本特征
 trait Display {
-    micro fmt(self) -> String
+    fmt(self) -> String
 }
 
 # 泛型特征
 trait Iterator<T> {
-    micro next(mut self) -> Option<T>
-    micro collect<C: FromIterator<T>>(self) -> C
+    next(mut self) -> Option<T>
+    collect<C: FromIterator<T>>(self) -> C
 }
 
 # 关联类型特征
@@ -110,7 +110,7 @@ trait IntoIterator {
     type Item
     type IntoIter: Iterator<Self::Item>
     
-    micro into_iter(self) -> Self::IntoIter
+    into_iter(self) -> Self::IntoIter
 }
 ```
 
@@ -118,22 +118,22 @@ trait IntoIterator {
 
 ```valkyrie
 # 为类型实现特征
-impl Display for Point {
-    micro fmt(self) -> String {
+imply Display for Point {
+    fmt(self) -> String {
         @format("Point({}, {})", self.x, self.y)
     }
 }
 
 # 泛型实现
 impl<T: Display> Display for Container<T> {
-    micro fmt(self) -> String {
+    fmt(self) -> String {
         @format("Container({})", self.value.fmt())
     }
 }
 
 # 条件实现
 impl<T> Clone for Container<T> where T: Clone {
-    micro clone(self) -> Self {
+    clone(self) -> Self {
         Container {
             value: self.value.clone(),
             metadata: self.metadata.clone(),
@@ -174,14 +174,14 @@ where
 trait Collect<T> {
     type Output
     
-    micro collect(self, items: [T]) -> Self::Output
+    collect(self, items: [T]) -> Self::Output
 }
 
 # 实现关联类型
-impl Collect<i32> for Vector<i32> {
+imply Collect<i32> for Vector<i32> {
     type Output = Vector<i32>
     
-    micro collect(mut self, items: [i32]) -> Vector<i32> {
+    collect(mut self, items: [i32]) -> Vector<i32> {
         for item in items {
             self.push(item)
         }
@@ -203,7 +203,7 @@ micro process_data(data: String) -> String {
 # 自动内存管理
 micro safe_string_processing(input: String) -> String {
     let result = input.trim().to_uppercase()
-    result  // 垃圾回收器自动管理内存
+    result  # 垃圾回收器自动管理内存
 }
 
 # 解析器示例
@@ -212,12 +212,12 @@ type Parser = {
     position: i32,
 }
 
-impl Parser {
-    micro new(input: String) -> Self {
-        Parser { input, position: 0 }
+imply Parser {
+    new(input: String) -> Self {
+        new Parser { input, position: 0 }
     }
     
-    micro current(self) -> Option<String> {
+    current(self) -> Option<String> {
         if self.position < self.input.len() {
             Some(self.input[self.position..])
         } else {
@@ -233,20 +233,20 @@ impl Parser {
 
 ```valkyrie
 # 编译器可以推导出类型
-let numbers = [1, 2, 3, 4, 5]  // 推导为 [i32; 5]
-let text = "Hello"              // 推导为 &str
-let result = Some(42)          // 推导为 Option<i32>
+let numbers = [1, 2, 3, 4, 5]  # 推导为 [i32; 5]
+let text = "Hello"              # 推导为 &str
+let result = Some(42)          # 推导为 Option<i32>
 
 # 部分类型注解
 let container: Container<_> = Container {
-    value: 42,  // 推导为 i32
-    metadata: "test".to_string(),
+    value: 42,  # 推导为 i32
+    metadata: "test",
 }
 
 # 函数返回类型推导
 micro create_vec() {
-    let mut v = Vec::new()  // 类型待定
-    v.push(1)               // 现在推导为 Vector<i32>
+    let mut v = Vec::new()  # 类型待定
+    v.push(1)               # 现在推导为 Vector<i32>
     v
 }
 ```
@@ -293,12 +293,12 @@ type Meters = { value: f64 }
 type Seconds = { value: f64 }
 
 # 为新类型实现操作
-impl Meters {
-    micro new(value: f64) -> Self {
-        Meters { value }
+imply Meters {
+    new(value: f64) -> Self {
+        new Meters { value }
     }
     
-    micro value(self) -> f64 {
+    value(self) -> f64 {
         self.value
     }
 }
@@ -320,23 +320,23 @@ type State<S> = {
 type Open = {}
 type Closed = {}
 
-impl State<Closed> {
-    micro new(data: String) -> Self {
-        State { data }
+imply State<Closed> {
+    new(data: String) -> Self {
+        new State { data }
     }
     
-    micro open(self) -> State<Open> {
-        State { data: self.data }
+    open(self) -> State<Open> {
+        new State { data: self.data }
     }
 }
 
-impl State<Open> {
-    micro read(self) -> String {
+imply State<Open> {
+    read(self) -> String {
         self.data
     }
     
-    micro close(self) -> State<Closed> {
-        State { data: self.data }
+    close(self) -> State<Closed> {
+        new State { data: self.data }
     }
 }
 ```
@@ -351,10 +351,10 @@ micro type_safe_example() {
     let x: i32 = 42
     let y: f64 = 3.14
     
-    // 编译错误：类型不匹配
-    // let result = x + y
+    # 编译错误：类型不匹配
+    # let result = x + y
     
-    // 正确的做法
+    # 正确的做法
     let result = (x as f64) + y
 }
 
@@ -363,7 +363,7 @@ micro memory_safe_example() {
     let mut data = vec![1, 2, 3]
     let first_element = data[0]
     
-    // GC语言中可以安全地修改数据
+    # GC语言中可以安全地修改数据
     data.push(4)
     
     println("First element: {}", first_element)
@@ -428,21 +428,21 @@ micro sum_squares_manual(numbers: [i32]) -> i32 {
 
 ```valkyrie
 # 内联函数
-@.inline
+↯inline
 micro fast_add(a: i32, b: i32) -> i32 {
     a + b
 }
 
 # 特化实现
-@.specialize
+↯specialize
 micro generic_function<T: Display>(value: T) -> String {
     value.fmt()
 }
 
 # 为特定类型提供优化实现
-@.specialize
+↯specialize
 micro generic_function(value: i32) -> String {
-    // 针对 i32 的优化实现
+    # 针对 i32 的优化实现
     @format("{}", value)
 }
 ```
