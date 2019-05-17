@@ -1,25 +1,23 @@
 #!/usr/bin/env node
 
 // Valkyrie 语言自举编译器主程序
-import { ValkyrieCompiler } from './bootstrap/compiler.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 项目路径配置
 const PATHS = {
-    bootstrap: path.join(__dirname, 'bootstrap'),
+    root: __dirname,
     library: path.join(__dirname, 'library'),
+    bootstrap: path.join(__dirname, 'bootstrap'),
     dist: path.join(__dirname, 'dist'),
     stage0: path.join(__dirname, 'dist', 'stage-0'),
-    stage1: path.join(__dirname, 'dist', 'stage-1')
+    stage1: path.join(__dirname, 'dist', 'stage-1'),
+    tests: path.join(__dirname, 'tests')
 };
-
-// 创建编译器实例
-const compiler = new ValkyrieCompiler();
 
 // 日志函数
 function log(message) {
@@ -49,13 +47,10 @@ function cleanDir(dirPath) {
 // 复制目录
 function copyDir(src, dest) {
     ensureDir(dest);
-    
     const entries = fs.readdirSync(src, { withFileTypes: true });
-    
     for (const entry of entries) {
         const srcPath = path.join(src, entry.name);
         const destPath = path.join(dest, entry.name);
-        
         if (entry.isDirectory()) {
             copyDir(srcPath, destPath);
         } else {
@@ -64,209 +59,353 @@ function copyDir(src, dest) {
     }
 }
 
-// 编译单个文件
-function compileFile(inputPath, outputPath) {
+// --- Compiler Logic ---
+
+function compileSource(source, compilerParts) {
+    const { lexer, parser, codegen } = compilerParts;
     try {
-        const result = compiler.compileFile(inputPath);
+        let tokens;
+        if (typeof lexer.initLexer === 'function') {
+            // API for handwritten bootstrap/lexer.js
+            const lexerInstance = lexer.initLexer(source);
+            tokens = lexer.tokenize(lexerInstance);
+        } else {
+            // API for compiled lexer.js
+            const lexerInstance = lexer.initLexer(source);
+            tokens = lexer.tokenize(lexerInstance);
+        }
+
+        if (tokens.length === 0) {
+            // Handle empty files gracefully
+            if (source.trim() === '') return { success: true, code: '' };
+            return { success: false, error: "Lexical analysis failed: No tokens produced." };
+        }
+        const ast = parser.parse(tokens);
+        if (!ast || !ast.type) {
+            return { success: false, error: "Syntax analysis failed: Invalid AST produced." };
+        }
+        const code = codegen.generate(ast);
+        return { success: true, code };
+    } catch (err) {
+        return { success: false, error: `Exception during compilation: ${err.message}\n${err.stack}` };
+    }
+}
+
+function compileFile(inputPath, outputPath, compilerParts) {
+    try {
+        log(`Compiling file: ${path.relative(__dirname, inputPath)}`);
+        const source = fs.readFileSync(inputPath, 'utf8');
+        const result = compileSource(source, compilerParts);
         
         if (!result.success) {
-            error(`Failed to compile ${inputPath}: ${result.error}`);
+            error(`Failed to compile ${path.relative(__dirname, inputPath)}: ${result.error}`);
             return false;
         }
         
-        // Write the compiled code to the output file
         fs.writeFileSync(outputPath, result.code, 'utf8');
-        
-        log(`Compiled: ${path.relative(__dirname, inputPath)} -> ${path.relative(__dirname, outputPath)}`);
         return true;
     } catch (err) {
-        error(`Exception while compiling ${inputPath}: ${err.message}`);
+        error(`Exception while compiling file ${path.relative(__dirname, inputPath)}: ${err.message}`);
         return false;
     }
 }
 
-// 编译目录中的所有 .valkyrie 文件
-function compileDirectory(inputDir, outputDir) {
+function compileDirectory(inputDir, outputDir, compilerParts) {
     log(`Compiling directory: ${path.relative(__dirname, inputDir)} -> ${path.relative(__dirname, outputDir)}`);
-    
     ensureDir(outputDir);
-    
-    const result = compiler.compileDirectory(inputDir, outputDir);
-    
-    if (!result.success) {
-        error(`Failed to compile directory ${inputDir}: ${result.error}`);
-        return false;
+
+    const files = fs.readdirSync(inputDir).filter(f => f.endsWith('.valkyrie'));
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of files) {
+        const inputPath = path.join(inputDir, file);
+        const outputPath = path.join(outputDir, file.replace('.valkyrie', '.js'));
+        if (compileFile(inputPath, outputPath, compilerParts)) {
+            successCount++;
+        } else {
+            errorCount++;
+        }
     }
+
+    if (errorCount === 0) {
+        log(`Compilation completed: ${successCount}/${files.length} files successful`);
+        return true;
+    }
+
+    error(`Failed to compile directory ${path.relative(__dirname, inputDir)}. ${errorCount} of ${files.length} files failed.`);
+    return false;
+}
+
+// --- Comparison Logic ---
+
+function generateDetailedDiff(content1, content2, filename) {
+    const lines1 = content1.split('\n');
+    const lines2 = content2.split('\n');
+    const maxLines = Math.max(lines1.length, lines2.length);
     
-    log(`Compilation completed: ${result.successCount}/${result.totalFiles} files successful`);
+    let diffReport = [];
+    diffReport.push(`\n📋 详细差异报告: ${filename}`);
+    diffReport.push(`${'='.repeat(60)}`);
+    diffReport.push(`Stage-0 行数: ${lines1.length}, Stage-1 行数: ${lines2.length}`);
+    diffReport.push('');
     
-    if (result.errorCount > 0) {
-        error(`${result.errorCount} files failed to compile`);
+    let differenceCount = 0;
+    let contextLines = 2; // 显示差异前后的上下文行数
+    
+    for (let i = 0; i < maxLines; i++) {
+        const line1 = lines1[i] || '';
+        const line2 = lines2[i] || '';
         
-        // 显示错误详情
-        for (const fileResult of result.results) {
-            if (!fileResult.result.success) {
-                error(`  ${fileResult.inputPath}: ${fileResult.result.error}`);
+        if (line1 !== line2) {
+            differenceCount++;
+            
+            // 显示上下文
+            const startContext = Math.max(0, i - contextLines);
+            const endContext = Math.min(maxLines - 1, i + contextLines);
+            
+            if (differenceCount === 1 || i > 0) {
+                diffReport.push(`📍 差异 #${differenceCount} 在行 ${i + 1}:`);
+                diffReport.push(`${'-'.repeat(40)}`);
+                
+                // 显示上下文
+                for (let ctx = startContext; ctx <= endContext; ctx++) {
+                    const ctxLine1 = lines1[ctx] || '';
+                    const ctxLine2 = lines2[ctx] || '';
+                    
+                    if (ctx === i) {
+                        // 当前差异行
+                        diffReport.push(`❌ ${(ctx + 1).toString().padStart(4)}: Stage-0 | ${ctxLine1}`);
+                        diffReport.push(`✅ ${(ctx + 1).toString().padStart(4)}: Stage-1 | ${ctxLine2}`);
+                        
+                        // 字符级别的差异分析
+                        if (ctxLine1 && ctxLine2) {
+                            const charDiff = findCharacterDifferences(ctxLine1, ctxLine2);
+                            if (charDiff.length > 0) {
+                                diffReport.push(`   🔍 字符差异: ${charDiff}`);
+                            }
+                        }
+                    } else if (ctxLine1 === ctxLine2) {
+                        // 相同的上下文行
+                        diffReport.push(`   ${(ctx + 1).toString().padStart(4)}: ${ctxLine1}`);
+                    }
+                }
+                diffReport.push('');
             }
         }
-        
-        return false;
     }
     
-    return true;
+    if (differenceCount === 0) {
+        diffReport.push('✅ 文件内容完全相同');
+    } else {
+        diffReport.push(`📊 总计发现 ${differenceCount} 处差异`);
+    }
+    
+    return diffReport.join('\n');
 }
 
-// 比较两个目录的内容
+function findCharacterDifferences(str1, str2) {
+    const maxLen = Math.max(str1.length, str2.length);
+    let differences = [];
+    
+    for (let i = 0; i < maxLen; i++) {
+        const char1 = str1[i] || '';
+        const char2 = str2[i] || '';
+        
+        if (char1 !== char2) {
+            differences.push(`位置${i + 1}: '${char1}' → '${char2}'`);
+        }
+    }
+    
+    return differences.slice(0, 5).join(', ') + (differences.length > 5 ? '...' : '');
+}
+
 function compareDirectories(dir1, dir2) {
     log(`Comparing directories: ${path.relative(__dirname, dir1)} vs ${path.relative(__dirname, dir2)}`);
     
-    const result = ValkyrieCompiler.compareDirectories(dir1, dir2);
-    
-    if (result.equal) {
-        log(`✅ Directories are identical (${result.fileCount} files)`);
-        return true;
-    } else {
-        error(`❌ Directories differ: ${result.reason}`);
-        if (result.file) {
-            error(`  Different file: ${result.file}`);
-        }
+    if (!fs.existsSync(dir1) || !fs.existsSync(dir2)) {
+        error(`❌ Directories differ: One or both directories do not exist`);
         return false;
     }
+    
+    const files1 = fs.readdirSync(dir1).filter(f => f.endsWith('.js')).sort();
+    const files2 = fs.readdirSync(dir2).filter(f => f.endsWith('.js')).sort();
+    
+    if (files1.length !== files2.length) {
+        error(`❌ Directories differ: Different number of files (${files1.length} vs ${files2.length})`);
+        return false;
+    }
+    
+    let hasAnyDifferences = false;
+    
+    for (let i = 0; i < files1.length; i++) {
+        if (files1[i] !== files2[i]) {
+            error(`❌ Directories differ: Different file names (${files1[i]} vs ${files2[i]})`);
+            return false;
+        }
+        
+        const content1 = fs.readFileSync(path.join(dir1, files1[i]), 'utf8').trim();
+        const content2 = fs.readFileSync(path.join(dir2, files2[i]), 'utf8').trim();
+        
+        if (content1 !== content2) {
+            hasAnyDifferences = true;
+            error(`❌ Directories differ: File contents differ: ${files1[i]}`);
+            
+            // 生成详细的差异报告
+            const detailedDiff = generateDetailedDiff(content1, content2, files1[i]);
+            // console.log(detailedDiff);
+            
+            // 保存差异文件和报告
+            const diffDir = path.join(PATHS.dist, 'diff');
+            ensureDir(diffDir);
+            fs.writeFileSync(path.join(diffDir, `${files1[i]}.stage0`), content1);
+            fs.writeFileSync(path.join(diffDir, `${files1[i]}.stage1`), content2);
+            fs.writeFileSync(path.join(diffDir, `${files1[i]}.diff.txt`), detailedDiff);
+            
+            error(`  📁 差异文件保存到: ${path.relative(__dirname, diffDir)}`);
+            error(`  📄 详细报告: ${files1[i]}.diff.txt`);
+        }
+    }
+    
+    if (hasAnyDifferences) {
+        return false;
+    }
+    
+    log(`✅ Directories are identical (${files1.length} files)`);
+    return true;
 }
 
-// 执行自举过程
+// --- Bootstrap Process ---
+
+// --- Bootstrap Process ---
+
+async function loadBootstrapCompiler() {
+    log('Loading bootstrap compiler components...');
+    const bootstrapLexer = await import(pathToFileURL(path.join(PATHS.bootstrap, 'lexer.js')).href);
+    const bootstrapParser = await import(pathToFileURL(path.join(PATHS.bootstrap, 'parser.js')).href);
+    const bootstrapCodegen = await import(pathToFileURL(path.join(PATHS.bootstrap, 'codegen.js')).href);
+    log('Bootstrap compiler components loaded.');
+    return { lexer: bootstrapLexer, parser: bootstrapParser, codegen: bootstrapCodegen };
+}
+
 async function bootstrap() {
-    console.log("DEBUG: bootstrap() function called");
     log("Starting Valkyrie language bootstrap process...");
-    
+
     try {
-        // 步骤 1: 清理输出目录
+        // Load the initial compiler parts from the bootstrap directory
+        const bootstrapCompilerParts = await loadBootstrapCompiler();
+
+        // Step 1: Clean output directories
         log("Step 1: Cleaning output directories");
         cleanDir(PATHS.dist);
         ensureDir(PATHS.dist);
-        
-        // 步骤 2: 使用 bootstrap 编译器编译 library 到 stage-0
+
+        // Step 2: Use bootstrap compiler to compile library to stage-0
         log("Step 2: Compiling library with bootstrap compiler to stage-0");
-        if (!compileDirectory(PATHS.library, PATHS.stage0)) {
+        if (!compileDirectory(PATHS.library, PATHS.stage0, bootstrapCompilerParts)) {
             throw new Error("Stage-0 compilation failed");
         }
-        
-        // 步骤 3: 使用 stage-0 编译器编译 library 到 stage-1
+
+        // Step 3: Use stage-0 compiler to compile library to stage-1
         log("Step 3: Compiling library with stage-0 compiler to stage-1");
-        
-        // 确保 stage-1 目录存在
-        ensureDir(PATHS.stage1);
-        
-        // 加载 stage-0 编译器
-        const stage0CompilerPath = path.join(PATHS.stage0, 'compiler.js');
-        if (!fs.existsSync(stage0CompilerPath)) {
-            throw new Error(`Stage-0 compiler not found at: ${stage0CompilerPath}`);
+
+        log('Loading stage-0 compiler components...');
+        const stage0Lexer = await import(pathToFileURL(path.join(PATHS.stage0, 'lexer.js')).href);
+        const stage0Parser = await import(pathToFileURL(path.join(PATHS.stage0, 'parser.js')).href);
+        const stage0Codegen = await import(pathToFileURL(path.join(PATHS.stage0, 'codegen.js')).href);
+        const stage0CompilerParts = { lexer: stage0Lexer, parser: stage0Parser, codegen: stage0Codegen };
+        log('Stage-0 compiler components loaded.');
+
+        if (!compileDirectory(PATHS.library, PATHS.stage1, stage0CompilerParts)) {
+            throw new Error("Stage-1 compilation failed");
         }
-        
-        // 动态导入 stage-0 编译器
-        const stage0CompilerModule = await import(pathToFileURL(stage0CompilerPath).href);
-        const stage0Compiler = stage0CompilerModule.compiler || new stage0CompilerModule.ValkyrieCompiler();
-        
-        // 使用 stage-0 编译器编译 library 到 stage-1
-        const stage1Result = stage0Compiler.compileDirectory(PATHS.library, PATHS.stage1);
-        
-        if (!stage1Result.success) {
-            throw new Error(`Stage-1 compilation failed: ${stage1Result.error}`);
-        }
-        
-        log(`Stage-1 compilation completed: ${stage1Result.successCount}/${stage1Result.totalFiles} files`);
-        
-        // 步骤 4: 比较 stage-0 和 stage-1
+
+        // Step 4: Compare stage-0 and stage-1
         log("Step 4: Comparing stage-0 and stage-1 outputs");
         if (!compareDirectories(PATHS.stage0, PATHS.stage1)) {
             throw new Error("Bootstrap verification failed: stage-0 and stage-1 differ");
         }
-        
-        // 步骤 5: 自举成功，替换 bootstrap
+
+        // Step 5: Bootstrap successful, update bootstrap directory
         log("Step 5: Bootstrap successful! Updating bootstrap directory");
-        
-        // 备份当前 bootstrap
+
         const backupPath = path.join(__dirname, 'bootstrap.backup.' + Date.now());
         log(`Backing up current bootstrap to: ${path.relative(__dirname, backupPath)}`);
         copyDir(PATHS.bootstrap, backupPath);
-        
-        // 清理并替换 bootstrap
+
         cleanDir(PATHS.bootstrap);
         copyDir(PATHS.stage1, PATHS.bootstrap);
-        
+
         log("🎉 Bootstrap completed successfully!");
         log("The Valkyrie compiler has successfully bootstrapped itself.");
-        
+
         return true;
-        
+
     } catch (err) {
         error(`Bootstrap failed: ${err.message}`);
+        console.error(err.stack);
         return false;
     }
 }
 
-// 创建合并的编译器文件
-async function createMergedCompiler(sourceDir, outputPath) {
-    const files = ['lexer.js', 'ast.js', 'parser.js', 'codegen.js', 'compiler.js'];
-    let mergedContent = '';
-    let hasValkyrieRuntime = false;
-    let hasValkyrieCompiler = false;
-    let hasCompilerExport = false;
-    
-    for (const file of files) {
-        const filePath = path.join(sourceDir, file);
-        if (fs.existsSync(filePath)) {
-            const content = fs.readFileSync(filePath, 'utf8');
-            // 移除 import/export 语句，保留类和函数定义
-            let cleanContent = content
-                .replace(/^import\s+.*$/gm, '')
-                .replace(/^export\s+/gm, '')
-                .trim();
-            
-            // 只保留第一个 ValkyrieRuntime 定义
-            if (cleanContent.includes('const ValkyrieRuntime')) {
-                if (hasValkyrieRuntime) {
-                    // 移除后续的 ValkyrieRuntime 定义
-                    cleanContent = cleanContent.replace(/const ValkyrieRuntime\s*=\s*\{[\s\S]*?\};/g, '');
-                } else {
-                    hasValkyrieRuntime = true;
-                }
-            }
-            
-            // 只保留第一个 ValkyrieCompiler 类定义
-            if (cleanContent.includes('class ValkyrieCompiler')) {
-                if (hasValkyrieCompiler) {
-                    // 移除后续的 ValkyrieCompiler 类定义
-                    cleanContent = cleanContent.replace(/class ValkyrieCompiler\s*\{[\s\S]*?\n\}/g, '');
-                } else {
-                    hasValkyrieCompiler = true;
-                }
-            }
-            
-            // 只保留第一个 compiler 实例导出
-            if (cleanContent.includes('const compiler = new ValkyrieCompiler()')) {
-                if (hasCompilerExport) {
-                    // 移除后续的 compiler 实例定义
-                    cleanContent = cleanContent.replace(/const compiler = new ValkyrieCompiler\(\);/g, '');
-                } else {
-                    hasCompilerExport = true;
-                }
-            }
-            
-            if (cleanContent.trim()) {
-                mergedContent += cleanContent + '\n\n';
+function findParseErrors(node) {
+    if (!node || typeof node !== 'object') {
+        return;
+    }
+
+    if (node.type === 'Identifier' && node.name === '__PARSE_ERROR__') {
+        console.error(`[Valkyrie Debug] Parse Error Found at ${node.line}:${node.column}`);
+    }
+
+    for (const key in node) {
+        if (Object.prototype.hasOwnProperty.call(node, key)) {
+            const child = node[key];
+            if (Array.isArray(child)) {
+                child.forEach(findParseErrors);
+            } else if (child && typeof child === 'object') {
+                findParseErrors(child);
             }
         }
     }
-    
-    // 添加导出语句
-    mergedContent += 'export { ValkyrieCompiler };\n';
-    
-    fs.writeFileSync(outputPath, mergedContent);
-    log(`Created merged compiler at: ${outputPath}`);
 }
 
-// 命令行接口
+
+async function compileTest() {
+    log("Starting Valkyrie test compilation...");
+    try {
+        const { lexer, parser, codegen } = await loadBootstrapCompiler();
+        const testFile = path.join(PATHS.root, 'debug_parser.valkyrie');
+        log(`Compiling file: ${path.basename(testFile)}`);
+        const source = fs.readFileSync(testFile, 'utf-8');
+
+        const lexerInstance = lexer.initLexer(source);
+        const tokens = lexer.tokenize(lexerInstance);
+
+        console.log('--- TOKENS ---');
+        console.log(tokens.map(t => `[${t.line}:${t.column}] ${t.type}: '${t.value}'`).join('\n'));
+        console.log('--------------');
+
+        const ast = parser.parse(tokens);
+
+        console.log('[Valkyrie Debug] AST generated. Checking for parse errors...');
+        console.log('[Valkyrie Debug] AST structure:', JSON.stringify(ast, null, 2));
+        findParseErrors(ast);
+
+        const compiled = codegen.generate(ast);
+        const outputFile = path.join(PATHS.dist, 'test.js');
+        fs.writeFileSync(outputFile, compiled);
+        log(`Test compilation successful. Output at: ${outputFile}`);
+        return true;
+    } catch (e) {
+        error(`Test compilation failed: ${e.message}`);
+        console.error(e.stack);
+        return false;
+    }
+}
+
+
+// --- Command-Line Interface ---
+
 function showHelp() {
     console.log(`
 Valkyrie Language Bootstrap Compiler
@@ -275,70 +414,37 @@ Usage:
   node bootstrap.js [command] [options]
 
 Commands:
-  bootstrap, boot    Run the complete bootstrap process
-  compile <input>    Compile a single .valkyrie file
-  compile-dir <dir>  Compile all .valkyrie files in a directory
-  help, -h, --help  Show this help message
+  bootstrap, boot    Run the complete bootstrap process.
+  compile-test       Compile library/parser.valkyrie with the bootstrap compiler for debugging.
+  help, -h, --help   Show this help message.
 
 Examples:
   node bootstrap.js bootstrap
-  node bootstrap.js compile example.valkyrie
-  node bootstrap.js compile-dir ./src
+  node bootstrap.js compile-test
 `);
 }
 
-// 主函数
 async function main() {
-    console.log("DEBUG: main() function called with args:", process.argv.slice(2));
     const args = process.argv.slice(2);
-    
-    if (args.length === 0 || args[0] === 'help' || args[0] === '-h' || args[0] === '--help') {
-        showHelp();
-        return;
-    }
-    
     const command = args[0];
-    console.log("DEBUG: command is:", command);
     
     switch (command) {
         case 'bootstrap':
         case 'boot':
-            console.log("DEBUG: calling bootstrap()");
             const success = await bootstrap();
-            console.log("DEBUG: bootstrap() returned:", success);
             process.exit(success ? 0 : 1);
             break;
             
-        case 'compile':
-            if (args.length < 2) {
-                error("Please specify input file");
-                process.exit(1);
-            }
-            
-            const inputFile = args[1];
-            const outputFile = args[2] || inputFile.replace(/\.valkyrie$/, '.js');
-            
-            if (compileFile(inputFile, outputFile)) {
-                log("Compilation successful");
-            } else {
-                process.exit(1);
-            }
+        case 'compile-test':
+            const testSuccess = await compileTest();
+            process.exit(testSuccess ? 0 : 1);
             break;
-            
-        case 'compile-dir':
-            if (args.length < 2) {
-                error("Please specify input directory");
-                process.exit(1);
-            }
-            
-            const inputDir = args[1];
-            const outputDir = args[2] || path.join(inputDir, '../compiled');
-            
-            if (compileDirectory(inputDir, outputDir)) {
-                log("Directory compilation successful");
-            } else {
-                process.exit(1);
-            }
+
+        case 'help':
+        case '-h':
+        case '--help':
+        case undefined:
+            showHelp();
             break;
             
         default:
@@ -348,22 +454,8 @@ async function main() {
     }
 }
 
-// 运行主函数
-console.log("DEBUG: Module loaded, checking execution condition");
-console.log("DEBUG: import.meta.url =", import.meta.url);
-console.log("DEBUG: process.argv[1] =", process.argv[1]);
-
-// 修复 Windows 路径问题：将反斜杠转换为正斜杠
-const normalizedArgv1 = process.argv[1].replace(/\\/g, '/');
-const expectedUrl = `file:///${normalizedArgv1}`;
-console.log("DEBUG: normalized argv[1] =", normalizedArgv1);
-console.log("DEBUG: expected URL =", expectedUrl);
-
-// 强制运行main函数以便调试
-console.log("DEBUG: Force running main() for debugging");
 main().catch(err => {
-    console.error("DEBUG: Error in main():", err);
-    console.error("DEBUG: Full error stack:", err.stack);
-    error(`Bootstrap failed: ${err.message}`);
+    error(`An unexpected error occurred: ${err.message}`);
+    console.error(err.stack);
     process.exit(1);
 });

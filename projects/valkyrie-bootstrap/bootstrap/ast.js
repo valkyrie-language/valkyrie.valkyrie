@@ -1,5 +1,3 @@
-import fs from "fs";
-
 // Valkyrie Runtime Support
 let ValkyrieRuntime = {
     print: console.log,
@@ -57,6 +55,16 @@ function createWhileStatement(condition, body, line, column) {
     node.type = "WhileStatement";
     node.condition = condition;
     node.body = body;
+    node.line = line;
+    node.column = column;
+    return node;
+}
+
+function createExportStatement(declaration, specifiers, line, column) {
+    let node = {};
+    node.type = "ExportStatement";
+    node.declaration = declaration;
+    node.specifiers = specifiers;
     node.line = line;
     node.column = column;
     return node;
@@ -196,33 +204,14 @@ function createArrayLiteral(elements, line, column) {
     return node;
 }
 
-class ValkyrieCompiler {
-    compile(source, options = {}) {
-        // 编译逻辑
-        return {success: true, code: "", ast: {}, tokens: []};
-    }
-
-    compileFile(filePath, options = {}) {
-        let source = fs.readFileSync(filePath, 'utf8');
-        return this.compile(source, options);
-    }
-
-    compileDirectory(dirPath, options = {}) {
-        // 目录编译逻辑
-        return {success: true, files: []};
-    }
-}
-
-// 导出编译器实例
-let compiler = new ValkyrieCompiler();
+// removed ValkyrieCompiler class and default instance; export only AST helpers
 export {
-    ValkyrieCompiler,
-    compiler,
     createProgram,
     createVariableDeclaration,
     createFunctionDeclaration,
     createIfStatement,
     createWhileStatement,
+    createExportStatement,
     createIfExpression,
     createBlockStatement,
     createExpressionStatement,
@@ -237,7 +226,8 @@ export {
     createParameter,
     createObjectLiteral,
     createArrayLiteral,
-    createMemberExpression
+    createMemberExpression,
+    createReturnStatement
 };
 
 function createMemberExpression(object, property, computed, line, column) {
@@ -246,6 +236,15 @@ function createMemberExpression(object, property, computed, line, column) {
     node.object = object;
     node.property = property;
     node.computed = computed;
+    node.line = line;
+    node.column = column;
+    return node;
+}
+
+function createReturnStatement(value, line, column) {
+    let node = {};
+    node.type = "ReturnStatement";
+    node.value = value;
     node.line = line;
     node.column = column;
     return node;

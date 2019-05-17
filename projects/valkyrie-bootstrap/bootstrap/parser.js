@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import {
     createArrayLiteral,
     createAssignmentExpression,
@@ -7,6 +5,7 @@ import {
     createBlockStatement,
     createBooleanLiteral,
     createCallExpression,
+    createExportStatement,
     createExpressionStatement,
     createFunctionDeclaration,
     createIdentifier,
@@ -17,6 +16,7 @@ import {
     createObjectLiteral,
     createParameter,
     createProgram,
+    createReturnStatement,
     createStringLiteral,
     createUnaryExpression,
     createVariableDeclaration,
@@ -30,6 +30,35 @@ let ValkyrieRuntime = {
     assert: (condition, message) => {
         if (!condition) throw new Error(message || "Assertion failed");
     }
+}
+
+function parseExportStatement(parser) {
+    let line = currentToken(parser).line;
+    let column = currentToken(parser).column;
+    expect(parser, "EXPORT");
+    
+    let declaration = null;
+    let specifiers = [];
+    
+    if (currentToken(parser).type === "LBRACE") {
+        // 解析 export { ... } 语法
+        expect(parser, "LBRACE");
+        
+        while (!check(parser, "RBRACE") && !check(parser, "EOF")) {
+            let identifier = expect(parser, "IDENTIFIER");
+            specifiers.push(createIdentifier(identifier.value, identifier.line, identifier.column));
+            
+            if (check(parser, "COMMA")) {
+                expect(parser, "COMMA");
+            }
+        }
+        
+        expect(parser, "RBRACE");
+    } else {
+        throw new Error(`Unexpected token after export: ${currentToken(parser).type}`);
+    }
+    
+    return createExportStatement(declaration, specifiers, line, column);
 };
 
 let Parser = {tokens: [], current: 0};
@@ -108,24 +137,22 @@ function parseStatement(parser) {
         return {type: ""};
     } else if ((token.type === "LET")) {
         return parseVariableDeclaration(parser);
+    } else if ((token.type === "MICRO")) {
+        return parseFunctionDeclaration(parser);
+    } else if ((token.type === "FUNCTION")) {
+        return parseFunctionDeclaration(parser);
+    } else if ((token.type === "RETURN")) {
+        return parseReturnStatement(parser);
+    } else if ((token.type === "IF")) {
+        return parseIfStatement(parser);
+    } else if ((token.type === "WHILE")) {
+        return parseWhileStatement(parser);
+    } else if ((token.type === "EXPORT")) {
+        return parseExportStatement(parser);
+    } else if ((token.type === "LBRACE")) {
+        return parseBlockStatement(parser);
     } else {
-        if ((token.type === "MICRO")) {
-            return parseFunctionDeclaration(parser);
-        } else {
-            if ((token.type === "IF")) {
-                return parseIfStatement(parser);
-            } else {
-                if ((token.type === "WHILE")) {
-                    return parseWhileStatement(parser);
-                } else {
-                    if ((token.type === "LBRACE")) {
-                        return parseBlockStatement(parser);
-                    } else {
-                        return parseExpressionStatement(parser);
-                    }
-                }
-            }
-        }
+        return parseExpressionStatement(parser);
     }
 }
 
@@ -135,11 +162,20 @@ function parseVariableDeclaration(parser) {
     expect(parser, "ASSIGN");
     // 直接解析逻辑或表达式，避免递归到赋值表达式
     let initializer = parseLogicalOr(parser);
+    // 可选的分号
+    if (check(parser, "SEMICOLON")) {
+        advance(parser);
+    }
     return createVariableDeclaration(nameToken.value, initializer, 2, 1, letToken.line, letToken.column);
 }
 
 function parseFunctionDeclaration(parser) {
-    let microToken = expect(parser, "MICRO");
+    let functionToken = currentToken(parser);
+    if (functionToken.type === "MICRO") {
+        expect(parser, "MICRO");
+    } else if (functionToken.type === "FUNCTION") {
+        expect(parser, "FUNCTION");
+    }
     let nameToken = expect(parser, "IDENTIFIER");
     expect(parser, "LPAREN");
     let parameters = [];
@@ -154,7 +190,19 @@ function parseFunctionDeclaration(parser) {
     }
     expect(parser, "RPAREN");
     let body = parseBlockStatement(parser);
-    return createFunctionDeclaration(nameToken.value, parameters, body, microToken.line, microToken.column);
+    return createFunctionDeclaration(nameToken.value, parameters, body, functionToken.line, functionToken.column);
+}
+
+function parseReturnStatement(parser) {
+    let returnToken = expect(parser, "RETURN");
+    let value = null;
+    if (!check(parser, "SEMICOLON") && !check(parser, "EOF") && !check(parser, "RBRACE")) {
+        value = parseExpression(parser);
+    }
+    if (check(parser, "SEMICOLON")) {
+        advance(parser);
+    }
+    return createReturnStatement(value, returnToken.line, returnToken.column);
 }
 
 function parseIfStatement(parser) {
@@ -209,6 +257,10 @@ function extractExpressionFromBlock(blockStatement) {
 
 function parseExpressionStatement(parser) {
     let expr = parseExpression(parser);
+    // 可选的分号
+    if (check(parser, "SEMICOLON")) {
+        advance(parser);
+    }
     return createExpressionStatement(expr, expr.line, expr.column);
 }
 
@@ -353,69 +405,107 @@ function parseObjectLiteral(parser) {
 
 function parseLogicalOr(parser) {
     let expr = parseLogicalAnd(parser);
+
     while (check(parser, "OR")) {
-        let operator = advance(parser);
+        let operator = currentToken(parser);
+        advance(parser);
         let right = parseLogicalAnd(parser);
-        expr = createBinaryExpression(expr, operator.value, right, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol = "||";
+        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column);
     }
+
     return expr;
 }
 
 function parseLogicalAnd(parser) {
     let expr = parseEquality(parser);
+
     while (check(parser, "AND")) {
-        let operator = advance(parser);
+        let operator = currentToken(parser);
+        advance(parser);
         let right = parseEquality(parser);
-        expr = createBinaryExpression(expr, operator.value, right, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol = "&&";
+        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column);
     }
+
     return expr;
 }
 
 function parseEquality(parser) {
     let expr = parseComparison(parser);
-    while ((check(parser, TokenType.EQUAL) || check(parser, TokenType.NOT_EQUAL))) {
-        let operator = advance(parser);
+    while ((check(parser, "EQUAL") || check(parser, "NOT_EQUAL"))) {
+        let operator = currentToken(parser);
+        advance(parser);
         let right = parseComparison(parser);
-        expr = createBinaryExpression(expr, operator.value, right, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol = operator.type === "EQUAL" ? "==" : "!=";
+        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column);
     }
     return expr;
 }
 
 function parseComparison(parser) {
     let expr = parseAddition(parser);
-    while ((((check(parser, TokenType.LESS) || check(parser, TokenType.LE)) || check(parser, TokenType.GREATER)) || check(parser, TokenType.GE))) {
-        let operator = advance(parser);
+
+    while ((check(parser, "LESS") || check(parser, "LE") || check(parser, "GREATER") || check(parser, "GE"))) {
+        let operator = currentToken(parser);
+        advance(parser);
         let right = parseAddition(parser);
-        expr = createBinaryExpression(expr, operator.value, right, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol;
+        if (operator.type === "LESS") operatorSymbol = "<";
+        else if (operator.type === "LE") operatorSymbol = "<=";
+        else if (operator.type === "GREATER") operatorSymbol = ">";
+        else if (operator.type === "GE") operatorSymbol = ">=";
+        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column);
     }
+
     return expr;
 }
 
 function parseAddition(parser) {
     let expr = parseMultiplication(parser);
+
     while ((check(parser, "PLUS") || check(parser, "MINUS"))) {
-        let operator = advance(parser);
+        let operator = currentToken(parser);
+        advance(parser);
         let right = parseMultiplication(parser);
-        expr = createBinaryExpression(expr, operator.value, right, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol = operator.type === "PLUS" ? "+" : "-";
+        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column);
     }
+
     return expr;
 }
 
 function parseMultiplication(parser) {
     let expr = parseUnary(parser);
-    while (((check(parser, "MULTIPLY") || check(parser, "DIVIDE")) || check(parser, "MODULO"))) {
-        let operator = advance(parser);
+
+    while ((check(parser, "MULTIPLY") || check(parser, "DIVIDE") || check(parser, "MODULO"))) {
+        let operator = currentToken(parser);
+        advance(parser);
         let right = parseUnary(parser);
-        expr = createBinaryExpression(expr, operator.value, right, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol;
+        if (operator.type === "MULTIPLY") operatorSymbol = "*";
+        else if (operator.type === "DIVIDE") operatorSymbol = "/";
+        else if (operator.type === "MODULO") operatorSymbol = "%";
+        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column);
     }
+
     return expr;
 }
 
 function parseUnary(parser) {
-    if ((check(parser, TokenType.NOT) || check(parser, TokenType.MINUS))) {
-        let operator = advance(parser);
+    if ((check(parser, "NOT") || check(parser, "MINUS"))) {
+        let operator = currentToken(parser);
+        advance(parser);
         let operand = parseUnary(parser);
-        return createUnaryExpression(operator.value, operand, operator.line, operator.column);
+        // 将 token 类型映射为操作符符号
+        let operatorSymbol = operator.type === "NOT" ? "!" : "-";
+        return createUnaryExpression(operatorSymbol, operand, operator.line, operator.column);
     } else {
         return parseCall(parser);
     }
@@ -423,12 +513,12 @@ function parseUnary(parser) {
 
 function parseCall(parser) {
     let expr = parsePrimary(parser);
-    while (check(parser, TokenType.LPAREN) || check(parser, TokenType.DOT) || check(parser, TokenType.LBRACKET)) {
-        if (check(parser, TokenType.DOT)) {
+    while (check(parser, "LPAREN") || check(parser, "DOT") || check(parser, "LBRACKET")) {
+        if (check(parser, "DOT")) {
             advance(parser); // consume DOT
-            let property = expect(parser, TokenType.IDENTIFIER);
+            let property = expect(parser, "IDENTIFIER");
             expr = createMemberExpression(expr, createIdentifier(property.value, property.line, property.column), false, expr.line, expr.column);
-        } else if (check(parser, TokenType.LBRACKET)) {
+        } else if (check(parser, "LBRACKET")) {
             advance(parser); // consume LBRACKET
             let index = parseExpression(parser);
             expect(parser, "RBRACKET");
@@ -460,9 +550,12 @@ function parsePrimary(parser) {
             advance(parser);
             return createStringLiteral(token.value, token.line, token.column);
         } else {
-            if ((token.type === "BOOLEAN")) {
+            if ((token.type === "TRUE")) {
                 advance(parser);
-                return createBooleanLiteral(token.value, token.line, token.column);
+                return createBooleanLiteral(true, token.line, token.column);
+            } else if ((token.type === "FALSE")) {
+                advance(parser);
+                return createBooleanLiteral(false, token.line, token.column);
             } else {
                 if ((token.type === "IDENTIFIER")) {
                     advance(parser);
@@ -510,32 +603,4 @@ function parse(tokens) {
 }
 
 
-// ValkyrieCompiler �?
-class ValkyrieCompiler {
-    compile(source, options = {}) {
-        let compiler = initCompiler(source);
-        let result = compile(compiler);
-        return {success: true, code: result, ast: compiler.ast, tokens: compiler.tokens};
-    }
-
-    compileFile(filePath, options = {}) {
-        let source = fs.readFileSync(filePath, "utf8");
-        return this.compile(source, options);
-    }
-
-    compileDirectory(dirPath, options = {}) {
-        let results = [];
-        let files = fs.readdirSync(dirPath);
-        for (const file of files) {
-            if (file.endsWith(".valkyrie")) {
-                let filePath = path.join(dirPath, file);
-                results.push(this.compileFile(filePath, options));
-            }
-        }
-        return results;
-    }
-}
-
-// 导出编译器实现
-let compiler = new ValkyrieCompiler();
-export {ValkyrieCompiler, compiler, parse};
+export {parse};

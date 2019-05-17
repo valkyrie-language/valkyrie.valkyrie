@@ -1,66 +1,60 @@
+# namepath package.lexer
 # Valkyrie 词法分析器
 # 使用 Valkyrie 语言实现
 
 # Token 类型
+# 词法分析器
+# 定义 Token 结构
+
 let Token = {
     type = "",
     value = "",
     line = 0,
-    column = 0,
+    column = 0
 }
 
 # TokenType 枚举
 let TokenType = {
-    # 关键字
     LET = "LET",
     MICRO = "MICRO", 
+    EXPORT = "EXPORT",
     IF = "IF",
     ELSE = "ELSE",
+    WHILE = "WHILE",
     
-    # 标识符和字面量
     IDENTIFIER = "IDENTIFIER",
-    NUMBER = "NUMBER", 
+    NUMBER = "NUMBER",
     STRING = "STRING",
     BOOLEAN = "BOOLEAN",
     
-    # 操作符
-    ASSIGN = "ASSIGN",        # =
-    PLUS = "PLUS",            # +
-    MINUS = "MINUS",          # -
-    MULTIPLY = "MULTIPLY",    # *
-    DIVIDE = "DIVIDE",        # /
-    EQUAL = "EQUAL",          # ==
-    NOT_EQUAL = "NOT_EQUAL",  # !=
-    LESS = "LESS",            # <
-    GREATER = "GREATER",      # >
-    OR = "OR",                # ||
-    AND = "AND",              # &&
+    ASSIGN = "ASSIGN",
+    PLUS = "PLUS",
+    MINUS = "MINUS",
+    MULTIPLY = "MULTIPLY",
+    DIVIDE = "DIVIDE",
+    EQUAL = "EQUAL",
+    NOT_EQUAL = "NOT_EQUAL",
+    LESS = "LESS",
+    GREATER = "GREATER",
+    LESS_EQUAL = "LESS_EQUAL",
+    GREATER_EQUAL = "GREATER_EQUAL",
+    OR = "OR",
+    AND = "AND",
     
-    # 符号
-    LPAREN = "LPAREN",        # (
-    RPAREN = "RPAREN",        # )
-    LBRACE = "LBRACE",        # {
-    RBRACE = "RBRACE",        # }
-    LBRACKET = "LBRACKET",    # [
-    RBRACKET = "RBRACKET",    # ]
-    COMMA = "COMMA",          # ,
-    SEMICOLON = "SEMICOLON",  # ;
-    COLON = "COLON",          # :
-    ARROW = "ARROW",          # ->
+    LPAREN = "LPAREN",
+    RPAREN = "RPAREN",
+    LBRACE = "LBRACE",
+    RBRACE = "RBRACE",
+    LBRACKET = "LBRACKET",
+    RBRACKET = "RBRACKET",
+    COMMA = "COMMA",
+    SEMICOLON = "SEMICOLON",
+    COLON = "COLON",
+    DOT = "DOT",
+    ARROW = "ARROW",
     
-    # 特殊
     EOF = "EOF",
     COMMENT = "COMMENT",
-}
-
-# 词法分析器类
-let Lexer = {
-    source = "",
-    position = 0,
-    line = 1,
-    column = 1,
-    tokens = [],
-    keywords = {},
 }
 
 # 初始化 Lexer
@@ -72,7 +66,15 @@ micro initLexer(source) {
     lexer.column = 1
     lexer.tokens = []
     lexer.keywords = {}
-    lexer
+    lexer.keywords["let"] = "LET"
+    lexer.keywords["micro"] = "MICRO"
+    lexer.keywords["export"] = "EXPORT"
+    lexer.keywords["if"] = "IF"
+    lexer.keywords["else"] = "ELSE"
+    lexer.keywords["while"] = "WHILE"
+    lexer.keywords["true"] = "TRUE"
+    lexer.keywords["false"] = "FALSE"
+    return lexer
 }
 
 # 获取当前字符
@@ -110,12 +112,9 @@ micro advance(lexer) {
 # 跳过空白字符
 micro skipWhitespace(lexer) {
     let char = current(lexer)
-    if (char == " ") || (char == "\t") || (char == "\r") || (char == "\n") {
+    while (char == " ") || (char == "\t") || (char == "\r") || (char == "\n") {
         advance(lexer)
-        skipWhitespace(lexer)
-    } else {
-        # 不是空白字符，直接返回
-        # 不需要返回值，这是一个递归函数的终止条件
+        char = current(lexer)
     }
 }
 
@@ -126,8 +125,8 @@ micro readString(lexer) {
     advance(lexer) # 跳过开始的引号
     
     let value = ""
-    let char = current(lexer)
-    if char != "" && char != "\"" {
+    while current(lexer) != "\"" && current(lexer) != "" {
+        let char = current(lexer)
         if char == "\\" {
             advance(lexer)
             let escaped = current(lexer)
@@ -148,14 +147,12 @@ micro readString(lexer) {
             value = value + char
         }
         advance(lexer)
-        let nextValue = readString(lexer)
-        value = value + nextValue.value
     }
     
     advance(lexer) # 跳过结束的引号
     
     let token = {}
-    token.type = TokenType.STRING
+    token.type = "STRING"
     token.value = value
     token.line = startLine
     token.column = startColumn
@@ -168,29 +165,23 @@ micro readNumber(lexer) {
     let startColumn = lexer.column
     let value = ""
     
-    let char = current(lexer)
-    if char >= "0" && char <= "9" {
-        value = value + char
+    while current(lexer) >= "0" && current(lexer) <= "9" {
+        value = value + current(lexer)
         advance(lexer)
-        let nextValue = readNumber(lexer)
-        value = value + nextValue.value
     }
     
-    # 处理小数点
     if current(lexer) == "." {
         value = value + "."
         advance(lexer)
-        let char2 = current(lexer)
-        if char2 >= "0" && char2 <= "9" {
-            value = value + char2
+        
+        while current(lexer) >= "0" && current(lexer) <= "9" {
+            value = value + current(lexer)
             advance(lexer)
-            let nextValue2 = readNumber(lexer)
-            value = value + nextValue2.value
         }
     }
     
     let token = {}
-    token.type = TokenType.NUMBER
+    token.type = "NUMBER"
     token.value = value
     token.line = startLine
     token.column = startColumn
@@ -204,26 +195,19 @@ micro readIdentifier(lexer) {
     let value = ""
     
     let char = current(lexer)
-    if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char == "_" || (char >= "0" && char <= "9") {
+    while (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char == "_" || (char >= "0" && char <= "9") {
         value = value + char
         advance(lexer)
-        let nextValue = readIdentifier(lexer)
-        value = value + nextValue.value
+        char = current(lexer)
     }
     
     let tokenType = lexer.keywords[value]
-    if tokenType == "" {
-        tokenType = TokenType.IDENTIFIER
+    if tokenType == undefined {
+        tokenType = "IDENTIFIER"
     }
     
+    # 不需要特殊处理布尔值，直接使用原始值
     let tokenValue = value
-    if tokenType == TokenType.BOOLEAN {
-        if value == "true" {
-            tokenValue = true
-        } else {
-            tokenValue = false
-        }
-    }
     
     let token = {}
     token.type = tokenType
@@ -240,16 +224,13 @@ micro readComment(lexer) {
     advance(lexer) # 跳过 #
     
     let value = ""
-    let char = current(lexer)
-    if char != "" && char != "\n" {
-        value = value + char
+    while current(lexer) != "" && current(lexer) != "\n" {
+        value = value + current(lexer)
         advance(lexer)
-        let nextValue = readComment(lexer)
-        value = value + nextValue.value
     }
     
     let token = {}
-    token.type = TokenType.COMMENT
+    token.type = "COMMENT"
     token.value = value
     token.line = startLine
     token.column = startColumn
@@ -268,11 +249,13 @@ micro createToken(type, value, line, column) {
 
 # 词法分析主函数
 micro tokenize(lexer) {
-    if lexer.position < lexer.source.length {
+    while lexer.position < lexer.source.length {
         skipWhitespace(lexer)
         
         let char = current(lexer)
-        if char != "" {
+        if char == "" {
+            # End of source, break loop by doing nothing
+        } else {
             let line = lexer.line
             let column = lexer.column
             
@@ -280,146 +263,142 @@ micro tokenize(lexer) {
             if char == "#" {
                 let comment = readComment(lexer)
                 lexer.tokens.push(comment)
-                tokenize(lexer)
             } else if char == "\"" {
                 # 字符串
                 let str = readString(lexer)
                 lexer.tokens.push(str)
-                tokenize(lexer)
             } else if char >= "0" && char <= "9" {
                 # 数字
                 let num = readNumber(lexer)
                 lexer.tokens.push(num)
-                tokenize(lexer)
             } else if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char == "_" {
                 # 标识符和关键字
                 let id = readIdentifier(lexer)
                 lexer.tokens.push(id)
-                tokenize(lexer)
             } else if char == "=" && peek(lexer, 1) == "=" {
                 # ==
-                let token = createToken(TokenType.EQUAL, "==", line, column)
+                let token = createToken("EQUAL", "==", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "!" && peek(lexer, 1) == "=" {
                 # !=
-                let token = createToken(TokenType.NOT_EQUAL, "!=", line, column)
+                let token = createToken("NOT_EQUAL", "!=", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "|" && peek(lexer, 1) == "|" {
                 # ||
-                let token = createToken(TokenType.OR, "||", line, column)
+                let token = createToken("OR", "||", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "&" && peek(lexer, 1) == "&" {
                 # &&
-                let token = createToken(TokenType.AND, "&&", line, column)
+                let token = createToken("AND", "&&", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "-" && peek(lexer, 1) == ">" {
                 # ->
-                let token = createToken(TokenType.ARROW, "->", line, column)
+                let token = createToken("ARROW", "->", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "=" {
-                let token = createToken(TokenType.ASSIGN, "=", line, column)
+                let token = createToken("ASSIGN", "=", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "+" {
-                let token = createToken(TokenType.PLUS, "+", line, column)
+                let token = createToken("PLUS", "+", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "-" {
-                let token = createToken(TokenType.MINUS, "-", line, column)
+                let token = createToken("MINUS", "-", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "*" {
-                let token = createToken(TokenType.MULTIPLY, "*", line, column)
+                let token = createToken("MULTIPLY", "*", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "/" {
-                let token = createToken(TokenType.DIVIDE, "/", line, column)
+                let token = createToken("DIVIDE", "/", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "<" {
-                let token = createToken(TokenType.LESS, "<", line, column)
-                lexer.tokens.push(token)
-                advance(lexer)
-                tokenize(lexer)
+                if peek(lexer, 1) == "=" {
+                    let token = createToken("LESS_EQUAL", "<=", line, column)
+                    lexer.tokens.push(token)
+                    advance(lexer)
+                    advance(lexer)
+                } else {
+                    let token = createToken("LESS", "<", line, column)
+                    lexer.tokens.push(token)
+                    advance(lexer)
+                }
             } else if char == ">" {
-                let token = createToken(TokenType.GREATER, ">", line, column)
-                lexer.tokens.push(token)
-                advance(lexer)
-                tokenize(lexer)
+                if peek(lexer, 1) == "=" {
+                    let token = createToken("GREATER_EQUAL", ">=", line, column)
+                    lexer.tokens.push(token)
+                    advance(lexer)
+                    advance(lexer)
+                } else {
+                    let token = createToken("GREATER", ">", line, column)
+                    lexer.tokens.push(token)
+                    advance(lexer)
+                }
             } else if char == "(" {
-                let token = createToken(TokenType.LPAREN, "(", line, column)
+                let token = createToken("LPAREN", "(", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == ")" {
-                let token = createToken(TokenType.RPAREN, ")", line, column)
+                let token = createToken("RPAREN", ")", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "{" {
-                let token = createToken(TokenType.LBRACE, "{", line, column)
+                let token = createToken("LBRACE", "{", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "}" {
-                let token = createToken(TokenType.RBRACE, "}", line, column)
+                let token = createToken("RBRACE", "}", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "[" {
-                let token = createToken(TokenType.LBRACKET, "[", line, column)
+                let token = createToken("LBRACKET", "[", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "]" {
-                let token = createToken(TokenType.RBRACKET, "]", line, column)
+                let token = createToken("RBRACKET", "]", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == "," {
-                let token = createToken(TokenType.COMMA, ",", line, column)
+                let token = createToken("COMMA", ",", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == ";" {
-                let token = createToken(TokenType.SEMICOLON, ";", line, column)
+                let token = createToken("SEMICOLON", ";", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
             } else if char == ":" {
-                let token = createToken(TokenType.COLON, ":", line, column)
+                let token = createToken("COLON", ":", line, column)
                 lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
-            } else {
+            } else if char == "." {
+                let token = createToken("DOT", ".", line, column)
+                lexer.tokens.push(token)
                 advance(lexer)
-                tokenize(lexer)
+            } else {
+                # 遇到未知字符，跳过
+                advance(lexer)
             }
         }
     }
     
     # 添加 EOF token
-    let eofToken = createToken(TokenType.EOF, "", lexer.line, lexer.column)
+    let eofToken = createToken("EOF", "", lexer.line, lexer.column)
     lexer.tokens.push(eofToken)
     lexer.tokens
 }
+
+# 导出函数
+export {initLexer, tokenize, TokenType}

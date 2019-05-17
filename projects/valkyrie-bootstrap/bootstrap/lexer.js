@@ -1,6 +1,3 @@
-import fs from "fs";
-import path from "path";
-
 // Valkyrie Runtime Support
 let ValkyrieRuntime = {
     print: console.log,
@@ -13,9 +10,12 @@ let Token = {type: "", value: "", line: 0, column: 0};
 let TokenType = {
     LET: "LET",
     MICRO: "MICRO",
+    EXPORT: "EXPORT",
     IF: "IF",
     ELSE: "ELSE",
     WHILE: "WHILE",
+    FUNCTION: "FUNCTION",
+    RETURN: "RETURN",
     IDENTIFIER: "IDENTIFIER",
     NUMBER: "NUMBER",
     STRING: "STRING",
@@ -46,8 +46,10 @@ let TokenType = {
     COLON: "COLON",
     DOT: "DOT",
     ARROW: "ARROW",
+    TRUE: "TRUE",
+    FALSE: "FALSE",
     EOF: "EOF",
-    COMMENT: "COMMENT"
+    COMMENT: "COMMENT",
 };
 let Lexer = {source: "", position: 0, line: 1, column: 1, tokens: [], keywords: {}};
 
@@ -59,13 +61,16 @@ function initLexer(source) {
     lexer.column = 1;
     lexer.tokens = [];
     lexer.keywords = {
-        "let": TokenType.LET,
-        "micro": TokenType.MICRO,
-        "if": TokenType.IF,
-        "else": TokenType.ELSE,
-        "while": TokenType.WHILE,
-        "true": TokenType.BOOLEAN,
-        "false": TokenType.BOOLEAN
+        "let": "LET",
+        "micro": "MICRO",
+        "export": "EXPORT",
+        "if": "IF",
+        "else": "ELSE",
+        "while": "WHILE",
+        "function": "FUNCTION",
+        "return": "RETURN",
+        "true": "TRUE",
+        "false": "FALSE"
     };
     return lexer;
 }
@@ -104,7 +109,7 @@ function skipWhitespace(lexer) {
     current(lexer) === "\t" ||
     current(lexer) === "\r" ||
     current(lexer) === "\n" ||
-    current(lexer).charCodeAt(0) === 65279) { // 跳过 BOM 字符
+    current(lexer).charCodeAt(0) === 65279) { // 跳过 BOM 字符和换行符
         advance(lexer);
     }
 }
@@ -162,7 +167,7 @@ function readString(lexer) {
     }
 
     let token = {};
-    token.type = TokenType.STRING;
+    token.type = "STRING";
     token.value = value;
     token.line = startLine;
     token.column = startColumn;
@@ -192,7 +197,7 @@ function readNumber(lexer) {
     }
 
     let token = {};
-    token.type = TokenType.NUMBER;
+    token.type = "NUMBER";
     token.value = value;
     token.line = startLine;
     token.column = startColumn;
@@ -222,15 +227,11 @@ function readIdentifier(lexer) {
     }
 
     // 检查是否为关键字
-    let tokenType = TokenType.IDENTIFIER;
+    let tokenType = "IDENTIFIER";
     if (lexer.keywords.hasOwnProperty(value)) {
         tokenType = lexer.keywords[value];
     }
     let tokenValue = value;
-
-    if (tokenType === TokenType.BOOLEAN) {
-        tokenValue = value === "true";
-    }
 
     let token = {};
     token.type = tokenType;
@@ -255,7 +256,7 @@ function readComment(lexer) {
     }
 
     let token = {};
-    token.type = TokenType.COMMENT;
+    token.type = "COMMENT";
     token.value = value;
     token.line = startLine;
     token.column = startColumn;
@@ -295,118 +296,118 @@ function tokenize(lexer) {
             let id = readIdentifier(lexer);
             lexer.tokens.push(id);
         } else if (char === "=" && peek(lexer, 1) === "=") {
-            let token = createToken(TokenType.EQUAL, "==", line, column);
+            let token = createToken("EQUAL", "==", line, column);
             lexer.tokens.push(token);
             advance(lexer);
             advance(lexer);
         } else if (char === "!" && peek(lexer, 1) === "=") {
-            let token = createToken(TokenType.NOT_EQUAL, "!=", line, column);
+            let token = createToken("NOT_EQUAL", "!=", line, column);
             lexer.tokens.push(token);
             advance(lexer);
             advance(lexer);
         } else if (char === "!") {
-            let token = createToken(TokenType.NOT, "!", line, column);
+            let token = createToken("NOT", "!", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "-" && peek(lexer, 1) === ">") {
-            let token = createToken(TokenType.ARROW, "->", line, column);
+            let token = createToken("ARROW", "->", line, column);
             lexer.tokens.push(token);
             advance(lexer);
             advance(lexer);
         } else if (char === "=") {
-            let token = createToken(TokenType.ASSIGN, "=", line, column);
+            let token = createToken("ASSIGN", "=", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "+") {
-            let token = createToken(TokenType.PLUS, "+", line, column);
+            let token = createToken("PLUS", "+", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "-") {
-            let token = createToken(TokenType.MINUS, "-", line, column);
+            let token = createToken("MINUS", "-", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "*") {
-            let token = createToken(TokenType.MULTIPLY, "*", line, column);
+            let token = createToken("MULTIPLY", "*", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "/") {
-            let token = createToken(TokenType.DIVIDE, "/", line, column);
+            let token = createToken("DIVIDE", "/", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "<") {
             if (peek(lexer, 1) === "=") {
-                let token = createToken(TokenType.LE, "<=", line, column);
+                let token = createToken("LE", "<=", line, column);
                 lexer.tokens.push(token);
                 advance(lexer);
                 advance(lexer);
             } else {
-                let token = createToken(TokenType.LESS, "<", line, column);
+                let token = createToken("LESS", "<", line, column);
                 lexer.tokens.push(token);
                 advance(lexer);
             }
         } else if (char === ">") {
             if (peek(lexer, 1) === "=") {
-                let token = createToken(TokenType.GE, ">=", line, column);
+                let token = createToken("GE", ">=", line, column);
                 lexer.tokens.push(token);
                 advance(lexer);
                 advance(lexer);
             } else {
-                let token = createToken(TokenType.GREATER, ">", line, column);
+                let token = createToken("GREATER", ">", line, column);
                 lexer.tokens.push(token);
                 advance(lexer);
             }
         } else if (char === "&" && peek(lexer, 1) === "&") {
-            let token = createToken(TokenType.AND, "&&", line, column);
+            let token = createToken("AND", "&&", line, column);
             lexer.tokens.push(token);
             advance(lexer);
             advance(lexer);
         } else if (char === "|" && peek(lexer, 1) === "|") {
-            let token = createToken(TokenType.OR, "||", line, column);
+            let token = createToken("OR", "||", line, column);
             lexer.tokens.push(token);
             advance(lexer);
             advance(lexer);
         } else if (char === "%") {
-            let token = createToken(TokenType.MODULO, "%", line, column);
+            let token = createToken("MODULO", "%", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "(") {
-            let token = createToken(TokenType.LPAREN, "(", line, column);
+            let token = createToken("LPAREN", "(", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === ")") {
-            let token = createToken(TokenType.RPAREN, ")", line, column);
+            let token = createToken("RPAREN", ")", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "{") {
-            let token = createToken(TokenType.LBRACE, "{", line, column);
+            let token = createToken("LBRACE", "{", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "}") {
-            let token = createToken(TokenType.RBRACE, "}", line, column);
+            let token = createToken("RBRACE", "}", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "[") {
-            let token = createToken(TokenType.LBRACKET, "[", line, column);
+            let token = createToken("LBRACKET", "[", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === "]") {
-            let token = createToken(TokenType.RBRACKET, "]", line, column);
+            let token = createToken("RBRACKET", "]", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === ",") {
-            let token = createToken(TokenType.COMMA, ",", line, column);
+            let token = createToken("COMMA", ",", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === ";") {
-            let token = createToken(TokenType.SEMICOLON, ";", line, column);
+            let token = createToken("SEMICOLON", ";", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === ":") {
-            let token = createToken(TokenType.COLON, ":", line, column);
+            let token = createToken("COLON", ":", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else if (char === ".") {
-            let token = createToken(TokenType.DOT, ".", line, column);
+            let token = createToken("DOT", ".", line, column);
             lexer.tokens.push(token);
             advance(lexer);
         } else {
@@ -414,38 +415,11 @@ function tokenize(lexer) {
         }
     }
 
-    let eofToken = createToken(TokenType.EOF, "", lexer.line, lexer.column);
+    let eofToken = createToken("EOF", "", lexer.line, lexer.column);
     lexer.tokens.push(eofToken);
     return lexer.tokens;
 }
 
 
-// ValkyrieCompiler �?
-class ValkyrieCompiler {
-    compile(source, options = {}) {
-        let compiler = initCompiler(source);
-        let result = compile(compiler);
-        return {success: true, code: result, ast: compiler.ast, tokens: compiler.tokens};
-    }
-
-    compileFile(filePath, options = {}) {
-        let source = fs.readFileSync(filePath, "utf8");
-        return this.compile(source, options);
-    }
-
-    compileDirectory(dirPath, options = {}) {
-        let results = [];
-        let files = fs.readdirSync(dirPath);
-        for (const file of files) {
-            if (file.endsWith(".valkyrie")) {
-                let filePath = path.join(dirPath, file);
-                results.push(this.compileFile(filePath, options));
-            }
-        }
-        return results;
-    }
-}
-
-// 导出编译器实例
-let compiler = new ValkyrieCompiler();
-export {ValkyrieCompiler, compiler, initLexer, tokenize, TokenType};
+// removed ValkyrieCompiler class and default instance; export only lexer API
+export {initLexer, tokenize, TokenType};
