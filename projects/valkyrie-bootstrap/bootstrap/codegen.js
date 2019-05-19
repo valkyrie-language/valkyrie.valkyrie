@@ -219,7 +219,6 @@ function generateFunctionBody(generator, node) {
       generateStatement(generator, last);
     }
   }
-  return generator;
 }
 
 function generateExpressionStatement(generator, node) {

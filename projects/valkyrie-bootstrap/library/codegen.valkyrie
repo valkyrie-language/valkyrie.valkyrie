@@ -1,19 +1,13 @@
 # Valkyrie 代码生成器
-# 使用 Valkyrie 语言实现，生成 JavaScript 代码
+# 使用 Valkyrie 语言实现
 
-# 导入 AST 模块
-# namepath package.codegen
-# using ast.*
-
-# 初始化代码生成器
 micro initCodeGenerator() {
     let generator = {}
     generator.output = ""
     generator.indentLevel = 0
-    return generator
+    generator
 }
 
-# 添加缩进
 micro addIndent(generator) {
     let indent = ""
     let i = 0
@@ -21,39 +15,33 @@ micro addIndent(generator) {
         indent = indent + "  "
         i = i + 1
     }
-    return indent
+    indent
 }
 
-# 写入代码
 micro write(generator, code) {
     generator.output = generator.output + code
-    return generator
+    generator
 }
 
-# 写入带缩进的代码行
 micro writeLine(generator, code) {
     let indent = addIndent(generator)
     generator.output = generator.output + indent + code + "\n"
-    return generator
+    generator
 }
 
-# 增加缩进级别
 micro increaseIndent(generator) {
     generator.indentLevel = generator.indentLevel + 1
-    return generator
+    generator
 }
 
-# 减少缩进级别
 micro decreaseIndent(generator) {
     if generator.indentLevel > 0 {
         generator.indentLevel = generator.indentLevel - 1
     }
-    return generator
+    generator
 }
 
-# 生成程序代码
 micro generateProgram(generator, node) {
-    # 生成运行时支持代码
     writeLine(generator, "// Valkyrie Runtime Support")
     writeLine(generator, "let ValkyrieRuntime = {")
     writeLine(generator, "    print: console.log,")
@@ -70,121 +58,141 @@ micro generateProgram(generator, node) {
         generateStatement(generator, node.statements[i])
         i = i + 1
     }
-    return generator
+    generator
 }
 
-# 生成语句代码
 micro generateStatement(generator, node) {
     if node.type == "VariableDeclaration" {
         generateVariableDeclaration(generator, node)
     } else if node.type == "FunctionDeclaration" {
         generateFunctionDeclaration(generator, node)
-    } else if node.type == "ExportStatement" {
-        generateExportStatement(generator, node)
-    } else if node.type == "WhileStatement" {
-        generateWhileStatement(generator, node)
     } else if node.type == "IfStatement" {
         generateIfStatement(generator, node)
+    } else if node.type == "WhileStatement" {
+        generateWhileStatement(generator, node)
     } else if node.type == "BlockStatement" {
         generateBlockStatement(generator, node)
-    } else if node.type == "ReturnStatement" {
-        generateReturnStatement(generator, node)
     } else if node.type == "ExpressionStatement" {
         generateExpressionStatement(generator, node)
-    } else {
-        # 空节点或未知节点类型，不生成任何代码
+    } else if node.type == "ExportStatement" {
+        generateExportStatement(generator, node)
+    } else if node.type == "ReturnStatement" {
+        generateReturnStatement(generator, node)
     }
-    return generator
+    generator
 }
 
-# 生成变量声明代码
 micro generateVariableDeclaration(generator, node) {
-    write(generator, addIndent(generator) + "let " + node.name + " = ")
-    generateExpression(generator, node.initializer)
+    let code = "let " + node.name
+
+    if node.initializer || node.value {
+        code = code + " = "
+        write(generator, addIndent(generator) + code)
+        generateExpression(generator, node.initializer || node.value)
+    } else {
+        write(generator, addIndent(generator) + code)
+    }
+
     writeLine(generator, ";")
-    return generator
+    generator
 }
 
-# 生成函数声明代码
 micro generateFunctionDeclaration(generator, node) {
-    write(generator, addIndent(generator) + "function " + node.name + "(")
-
-    # 生成参数列表
+    let code = "function " + node.name + "("
+    write(generator, addIndent(generator) + code)
     let i = 0
     while i < node.parameters.length {
         if i > 0 {
             write(generator, ", ")
         }
-        if node.parameters[i].name != "" {
-            write(generator, node.parameters[i].name)
-        }
+        write(generator, node.parameters[i].name)
         i = i + 1
     }
     writeLine(generator, ") {")
     increaseIndent(generator)
-    if node.body.type == "BlockStatement" {
-        generateFunctionBody(generator, node.body)
-    } else {
-        generateStatement(generator, node.body)
-    }
+    generateFunctionBody(generator, node.body)
     decreaseIndent(generator)
     writeLine(generator, "}")
     writeLine(generator, "")
-    return generator
+    generator
 }
 
-# 生成 If 语句代码
 micro generateIfStatement(generator, node) {
     write(generator, addIndent(generator) + "if (")
     generateExpression(generator, node.condition)
     writeLine(generator, ") {")
     increaseIndent(generator)
-    if node.thenBranch.type == "BlockStatement" {
-        generateBlockStatement(generator, node.thenBranch)
-    } else {
-        generateStatement(generator, node.thenBranch)
-    }
+    generateStatement(generator, node.thenBranch)
     decreaseIndent(generator)
-    if node.elseBranch {
-        writeLine(generator, "} else {")
-        increaseIndent(generator)
-        if node.elseBranch.type == "BlockStatement" {
-            generateBlockStatement(generator, node.elseBranch)
-        } else {
-            generateStatement(generator, node.elseBranch)
-        }
+
+    if node.elseBranch && node.elseBranch.type && node.elseBranch.type != "" {
         if node.elseBranch.type == "IfStatement" {
-            decreaseIndent(generator)
-            writeLine(generator, "}")
+            write(generator, addIndent(generator) + "} else ")
+            generateIfStatement(generator, node.elseBranch)
         } else {
+            writeLine(generator, "} else {")
+            increaseIndent(generator)
+            generateStatement(generator, node.elseBranch)
             decreaseIndent(generator)
             writeLine(generator, "}")
         }
     } else {
         writeLine(generator, "}")
     }
-    return generator
+    generator
 }
 
 micro generateWhileStatement(generator, node) {
     write(generator, addIndent(generator) + "while (")
     generateExpression(generator, node.condition)
     writeLine(generator, ") {")
+
     increaseIndent(generator)
-    if node.body.type == "BlockStatement" {
-        generateBlockStatement(generator, node.body)
-    } else {
-        generateStatement(generator, node.body)
-    }
+    generateStatement(generator, node.body)
     decreaseIndent(generator)
     writeLine(generator, "}")
-    return generator
+
+    generator
+}
+
+micro generateBlockStatement(generator, node) {
+    let i = 0
+    while i < node.statements.length {
+        generateStatement(generator, node.statements[i])
+        i = i + 1
+    }
+    generator
+}
+
+micro generateIfExpression(generator, node) {
+    write(generator, addIndent(generator) + "if (")
+    generateExpression(generator, node.condition)
+    writeLine(generator, ") {")
+    increaseIndent(generator)
+    generateFunctionBody(generator, node.thenBranch)
+    decreaseIndent(generator)
+
+    if node.elseBranch && node.elseBranch.type && node.elseBranch.type != "" {
+        if node.elseBranch.type == "IfStatement" {
+            write(generator, addIndent(generator) + "} else ")
+            generateIfExpression(generator, node.elseBranch)
+        } else {
+            writeLine(generator, "} else {")
+            increaseIndent(generator)
+            generateFunctionBody(generator, node.elseBranch)
+            decreaseIndent(generator)
+            writeLine(generator, "}")
+        }
+    } else {
+        writeLine(generator, "}")
+    }
+    generator
 }
 
 micro generateFunctionBody(generator, node) {
     let count = node.statements.length
     let i = 0
-    while i < (count - 1) {
+    while i < count - 1 {
         generateStatement(generator, node.statements[i])
         i = i + 1
     }
@@ -197,70 +205,45 @@ micro generateFunctionBody(generator, node) {
         } else if last.type == "IfStatement" {
             generateIfExpression(generator, last)
         } else if last.type == "ReturnStatement" {
-            # 对于 ReturnStatement，直接生成内容，不重复生成 return 关键字
-            write(generator, addIndent(generator) + "return")
-            if last.value {
-                write(generator, " ")
-                generateExpression(generator, last.value)
-            }
-            writeLine(generator, ";")
+            generateReturnStatement(generator, last)
         } else {
             generateStatement(generator, last)
         }
     }
-    return generator
 }
 
-# 生成 If 表达式代码（用于函数体末尾）
-micro generateIfExpression(generator, node) {
-    write(generator, addIndent(generator) + "if (")
-    generateExpression(generator, node.condition)
-    writeLine(generator, ") {")
-    increaseIndent(generator)
-    if node.thenBranch.type == "BlockStatement" {
-        generateFunctionBody(generator, node.thenBranch)
-    } else {
-        write(generator, addIndent(generator) + "return ")
-        generateExpression(generator, node.thenBranch)
-        writeLine(generator, ";")
-    }
-    decreaseIndent(generator)
-    if node.elseBranch {
-        writeLine(generator, "} else {")
-        increaseIndent(generator)
-        if node.elseBranch.type == "BlockStatement" {
-            generateFunctionBody(generator, node.elseBranch)
-        } else if node.elseBranch.type == "IfStatement" {
-            generateIfExpression(generator, node.elseBranch)
-        } else {
-            write(generator, addIndent(generator) + "return ")
-            generateExpression(generator, node.elseBranch)
-            writeLine(generator, ";")
-        }
-        decreaseIndent(generator)
-        writeLine(generator, "}")
-    } else {
-        writeLine(generator, "}")
-    }
-    return generator
-}
-
-# 生成代码块
-micro generateBlockStatement(generator, node) {
-    let i = 0
-    while i < node.statements.length {
-        generateStatement(generator, node.statements[i])
-        i = i + 1
-    }
-    return generator
-}
-
-# 生成表达式语句代码
 micro generateExpressionStatement(generator, node) {
     write(generator, addIndent(generator))
     generateExpression(generator, node.expression)
     writeLine(generator, ";")
-    return generator
+    generator
+}
+
+micro generateExportStatement(generator, node) {
+    write(generator, addIndent(generator) + "export ")
+    if node.declaration {
+        if node.declaration.type == "VariableDeclaration" {
+            generateVariableDeclaration(generator, node.declaration)
+        } else if node.declaration.type == "FunctionDeclaration" {
+            generateFunctionDeclaration(generator, node.declaration)
+        } else {
+            generateStatement(generator, node.declaration)
+        }
+    } else if node.specifiers && node.specifiers.length > 0 {
+        write(generator, "{ ")
+        let i = 0
+        while i < node.specifiers.length {
+            if i > 0 {
+                write(generator, ", ")
+            }
+            generateIdentifier(generator, node.specifiers[i])
+            i = i + 1
+        }
+        writeLine(generator, " };")
+    } else {
+        writeLine(generator, "// Invalid export statement")
+    }
+    generator
 }
 
 micro generateReturnStatement(generator, node) {
@@ -270,12 +253,15 @@ micro generateReturnStatement(generator, node) {
         generateExpression(generator, node.value)
     }
     writeLine(generator, ";")
-    return generator
+    generator
 }
 
-# 表达式分派
 micro generateExpression(generator, node) {
-    if node.type == "AssignmentExpression" {
+    if !node || !node.type {
+        console.error("Invalid node passed to generateExpression:", node)
+        write(generator, "{}")
+        generator
+    } else if node.type == "AssignmentExpression" {
         generateAssignmentExpression(generator, node)
     } else if node.type == "BinaryExpression" {
         generateBinaryExpression(generator, node)
@@ -295,77 +281,31 @@ micro generateExpression(generator, node) {
         generateBooleanLiteral(generator, node)
     } else if node.type == "ObjectLiteral" {
         generateObjectLiteral(generator, node)
-    }
-    return generator
-}
-
-# 生成导出语句代码
-micro generateExportStatement(generator, node) {
-    # export 声明形式（如 export let x = 1 或 export function f() {}）
-    if node.declaration.type == "VariableDeclaration" {
-        write(generator, addIndent(generator) + "export let " + node.declaration.name + " = ")
-        generateExpression(generator, node.declaration.initializer)
-        writeLine(generator, ";")
-    } else if node.declaration.type == "FunctionDeclaration" {
-        write(generator, addIndent(generator) + "export function " + node.declaration.name + "(")
-        # 生成参数列表
-        let i = 0
-        while i < node.declaration.parameters.length {
-            if i > 0 {
-                write(generator, ", ")
-            }
-            write(generator, node.declaration.parameters[i].name)
-            i = i + 1
-        }
-        writeLine(generator, ") {")
-        increaseIndent(generator)
-        generateStatement(generator, node.declaration.body)
-        decreaseIndent(generator)
-        writeLine(generator, "}")
-    } else if node.specifiers.length > 0 {
-        # export { ... } 形式
-        write(generator, addIndent(generator) + "export { ")
-        let i = 0
-        while i < node.specifiers.length {
-            if i > 0 {
-                write(generator, ", ")
-            }
-            write(generator, node.specifiers[i])
-            i = i + 1
-        }
-        writeLine(generator, " };")
+    } else if node.type == "ArrayLiteral" {
+        generateArrayLiteral(generator, node)
+    } else if node.type == "IfExpression" {
+        generateIfExpressionAsExpression(generator, node)
     } else {
-        # 空的导出语句，生成空的导出
-        writeLine(generator, addIndent(generator) + "export {  };")
+        write(generator, "{}")
     }
-    return generator
+    generator
 }
 
-# 生成赋值表达式代码
 micro generateAssignmentExpression(generator, node) {
     generateExpression(generator, node.left)
     write(generator, " = ")
     generateExpression(generator, node.right)
-    return generator
+    generator
 }
 
-# 运算符映射
 let operatorMap = {
-    PLUS = "+",
-    MINUS = "-",
-    MULTIPLY = "*",
-    DIVIDE = "/",
-    MODULO = "%",
-    EQUAL = "==",
-    NOT_EQUAL = "!=",
-    LESS = "<",
-    GREATER = ">",
-    LESS_EQUAL = "<=",
-    GREATER_EQUAL = ">=",
-    AND = "&&",
-    OR = "||",
-    NOT = "!",
-    ASSIGN = "="
+    "+" = "+", "-" = "-", "*" = "*", "/" = "/", "%" = "%",
+    "==" = "==", "!=" = "!=", "<" = "<", "<=" = "<=", ">" = ">", ">=" = ">=",
+    "&&" = "&&", "||" = "||", "!" = "!", "=" = "=",
+    "PLUS" = "+", "MINUS" = "-", "MULTIPLY" = "*", "DIVIDE" = "/", "MODULO" = "%",
+    "EQUAL" = "==", "NOT_EQUAL" = "!=", "LESS" = "<", "GREATER" = ">",
+    "LESS_EQUAL" = "<=", "GREATER_EQUAL" = ">=", "AND" = "&&", "OR" = "||",
+    "NOT" = "!", "ASSIGN" = "="
 }
 
 micro getOperatorSymbol(operator) {
@@ -376,7 +316,6 @@ micro getOperatorSymbol(operator) {
     }
 }
 
-# 生成二元表达式代码
 micro generateBinaryExpression(generator, node) {
     write(generator, "(")
     generateExpression(generator, node.left)
@@ -384,18 +323,16 @@ micro generateBinaryExpression(generator, node) {
     write(generator, " " + opSymbol + " ")
     generateExpression(generator, node.right)
     write(generator, ")")
-    return generator
+    generator
 }
 
-# 生成一元表达式代码
 micro generateUnaryExpression(generator, node) {
     let opSymbol = getOperatorSymbol(node.operator)
     write(generator, opSymbol)
     generateExpression(generator, node.operand)
-    return generator
+    generator
 }
 
-# 生成调用表达式代码
 micro generateCallExpression(generator, node) {
     generateExpression(generator, node.callee)
     write(generator, "(")
@@ -408,10 +345,9 @@ micro generateCallExpression(generator, node) {
         i = i + 1
     }
     write(generator, ")")
-    return generator
+    generator
 }
 
-# 生成成员表达式代码
 micro generateMemberExpression(generator, node) {
     generateExpression(generator, node.object)
     if node.computed {
@@ -422,37 +358,19 @@ micro generateMemberExpression(generator, node) {
         write(generator, ".")
         generateExpression(generator, node.property)
     }
-    return generator
+    generator
 }
 
-# 生成数组字面量
-micro generateArrayLiteral(generator, node) {
-    write(generator, "[")
-    let i = 0
-    while i < node.elements.length {
-        if i > 0 {
-            write(generator, ", ")
-        }
-        generateExpression(generator, node.elements[i])
-        i = i + 1
-    }
-    write(generator, "]")
-    return generator
-}
-
-# 生成标识符
 micro generateIdentifier(generator, node) {
     write(generator, node.name)
-    return generator
+    generator
 }
 
-# 生成数字字面量
 micro generateNumberLiteral(generator, node) {
     write(generator, node.value)
-    return generator
+    generator
 }
 
-# 生成字符串字面量
 micro generateStringLiteral(generator, node) {
     if node.value == "\n" {
         write(generator, "\"\\n\"")
@@ -488,45 +406,50 @@ micro generateStringLiteral(generator, node) {
     return generator
 }
 
-# 生成布尔字面量代码
 micro generateBooleanLiteral(generator, node) {
     if node.value {
         write(generator, "true")
     } else {
         write(generator, "false")
     }
-    return generator
+    generator
 }
 
-# 生成对象字面量代码
 micro generateObjectLiteral(generator, node) {
     write(generator, "{")
-    
     let i = 0
     while i < node.properties.length {
         if i > 0 {
             write(generator, ", ")
         }
-        
-        # 生成属性键值对
         let property = node.properties[i]
         write(generator, "\"" + property.key + "\"")
         write(generator, ": ")
         generateExpression(generator, property.value)
-        
         i = i + 1
     }
-    
     write(generator, "}")
-    return generator
+    generator
 }
 
-# 代码生成主函数
+micro generateArrayLiteral(generator, node) {
+    write(generator, "[")
+    let i = 0
+    while i < node.elements.length {
+        if i > 0 {
+            write(generator, ", ")
+        }
+        generateExpression(generator, node.elements[i])
+        i = i + 1
+    }
+    write(generator, "]")
+    generator
+}
+
 micro generate(ast) {
     let generator = initCodeGenerator()
     generateProgram(generator, ast)
     generator.output
 }
 
-# 导出函数
 export {generate}
