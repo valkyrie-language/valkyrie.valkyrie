@@ -1,757 +1,478 @@
-# Valkyrie 语法分析器
-# 使用 Valkyrie 语言实现
+// Valkyrie 语法分析器 - 超简单版本
 
-micro createProgram(statements, line, column) {
-    let node = {}
-    node.type = "Program"
-    node.statements = statements
-    node.line = line
-    node.column = column
-    node
+fn makeParser(tokens) {
+    let parser = {};
+    parser.tokens = tokens;
+    parser.position = 0;
+    parser.current_token = tokens[0];
+    return parser;
 }
 
-micro createVariableDeclaration(name, value, mutable, typeAnnotation, line, column) {
-    let node = {}
-    node.type = "VariableDeclaration"
-    node.name = name
-    node.value = value
-    node.mutable = mutable
-    node.typeAnnotation = typeAnnotation
-    node.line = line
-    node.column = column
-    node
+fn advance(parser) {
+    parser.position = parser.position + 1;
+    if parser.position < parser.tokens.length {
+        parser.current_token = parser.tokens[parser.position];
+    } else {
+        parser.current_token = {};
+        parser.current_token.type = "EOF";
+    }
 }
 
-micro createFunctionDeclaration(name, parameters, body, returnType, line, column) {
-    let node = {}
-    node.type = "FunctionDeclaration"
-    node.name = name
-    node.parameters = parameters
-    node.body = body
-    node.returnType = returnType
-    node.line = line
-    node.column = column
-    node
+fn expect(parser, tokenType) {
+    if parser.current_token.type != tokenType {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Expected " + tokenType + " but got " + parser.current_token.type;
+        error.line = parser.current_token.line;
+        error.column = parser.current_token.column;
+        return error;
+    }
+    let token = parser.current_token;
+    advance(parser);
+    return token;
 }
 
-micro createIfStatement(condition, thenBranch, elseBranch, line, column) {
-    let node = {}
-    node.type = "IfStatement"
-    node.condition = condition
-    node.thenBranch = thenBranch
-    node.elseBranch = elseBranch
-    node.line = line
-    node.column = column
-    node
+fn makeNode(type) {
+    let node = {};
+    node.type = type;
+    return node;
 }
 
-micro createWhileStatement(condition, body, line, column) {
-    let node = {}
-    node.type = "WhileStatement"
-    node.condition = condition
-    node.body = body
-    node.line = line
-    node.column = column
-    node
+fn parseExpression(parser) {
+    return parseAssignment(parser);
 }
 
-micro createExportStatement(declaration, specifiers, line, column) {
-    let node = {}
-    node.type = "ExportStatement"
-    node.declaration = declaration
-    node.specifiers = specifiers
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createIfExpression(condition, thenExpr, elseExpr, line, column) {
-    let node = {}
-    node.type = "IfExpression"
-    node.condition = condition
-    node.thenExpr = thenExpr
-    node.elseExpr = elseExpr
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createBlockStatement(statements, line, column) {
-    let node = {}
-    node.type = "BlockStatement"
-    node.statements = statements
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createExpressionStatement(expression, line, column) {
-    let node = {}
-    node.type = "ExpressionStatement"
-    node.expression = expression
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createAssignmentExpression(left, right, line, column) {
-    let node = {}
-    node.type = "AssignmentExpression"
-    node.left = left
-    node.right = right
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createBinaryExpression(left, operator, right, line, column) {
-    let node = {}
-    node.type = "BinaryExpression"
-    node.left = left
-    node.operator = operator
-    node.right = right
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createUnaryExpression(operator, operand, line, column) {
-    let node = {}
-    node.type = "UnaryExpression"
-    node.operator = operator
-    node.operand = operand
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createCallExpression(callee, args, line, column) {
-    let node = {}
-    node.type = "CallExpression"
-    node.callee = callee
-    node.arguments = args
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createIdentifier(name, line, column) {
-    let node = {}
-    node.type = "Identifier"
-    node.name = name
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createNumberLiteral(value, line, column) {
-    let node = {}
-    node.type = "NumberLiteral"
-    node.value = value
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createStringLiteral(value, line, column) {
-    let node = {}
-    node.type = "StringLiteral"
-    node.value = value
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createBooleanLiteral(value, line, column) {
-    let node = {}
-    node.type = "BooleanLiteral"
-    node.value = value
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createParameter(name, line, column) {
-    let node = {}
-    node.type = "Parameter"
-    node.name = name
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createObjectLiteral(properties, line, column) {
-    let node = {}
-    node.type = "ObjectLiteral"
-    node.properties = properties
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createArrayLiteral(elements, line, column) {
-    let node = {}
-    node.type = "ArrayLiteral"
-    node.elements = elements
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createMemberExpression(object, property, computed, line, column) {
-    let node = {}
-    node.type = "MemberExpression"
-    node.object = object
-    node.property = property
-    node.computed = computed
-    node.line = line
-    node.column = column
-    node
-}
-
-micro createReturnStatement(value, line, column) {
-    let node = {}
-    node.type = "ReturnStatement"
-    node.value = value
-    node.line = line
-    node.column = column
-    node
-}
-
-micro parseExportStatement(parser) {
-    let line = currentToken(parser).line
-    let column = currentToken(parser).column
-    expect(parser, "EXPORT")
+fn parseAssignment(parser) {
+    let left = parseLogic(parser);
     
-    let declaration = null;
-    let specifiers = [];
+    if parser.current_token.type == "ASSIGN" {
+        advance(parser);
+        let right = parseAssignment(parser); // Right-associative for assignment
+        let node = makeNode("Assignment");
+        node.left = left;
+        node.right = right;
+        return node;
+    }
     
-    if currentToken(parser).type == "LBRACE" {
-        expect(parser, "LBRACE")
-        
-        while !check(parser, "RBRACE") && !check(parser, "EOF") {
-            let identifier = expect(parser, "IDENTIFIER")
-            specifiers.push(createIdentifier(identifier.value, identifier.line, identifier.column))
+    return left;
+}
+
+fn parseLogic(parser) {
+    let left = parseEquality(parser);
+
+    while parser.current_token.type == "AND" || parser.current_token.type == "OR" {
+        let op = parser.current_token.value;
+        advance(parser);
+        let right = parseEquality(parser);
+        let node = makeNode("BinaryOp");
+        node.left = left;
+        node.operator = op;
+        node.right = right;
+        left = node;
+    }
+
+    return left;
+}
+
+fn parseEquality(parser) {
+    let left = parseComparison(parser);
+
+    while parser.current_token.type == "EQ" || parser.current_token.type == "NE" {
+        let op = parser.current_token.value;
+        advance(parser);
+        let right = parseComparison(parser);
+        let node = makeNode("BinaryOp");
+        node.left = left;
+        node.operator = op;
+        node.right = right;
+        left = node;
+    }
+
+    return left;
+}
+
+fn parseComparison(parser) {
+    let left = parseArithmetic(parser);
+    
+    while parser.current_token.type == "GT" || parser.current_token.type == "LT" || parser.current_token.type == "GTE" || parser.current_token.type == "LTE" || parser.current_token.type == "PIPE" || parser.current_token.type == "AMPERSAND" {
+        let op = parser.current_token.value;
+        advance(parser);
+        let right = parseArithmetic(parser);
+        let node = makeNode("BinaryOp");
+        node.left = left;
+        node.operator = op;
+        node.right = right;
+        left = node;
+    }
+    
+    return left;
+}
+
+fn parseArithmetic(parser) {
+    let left = parseTerm(parser);
+    
+    while parser.current_token.type == "PLUS" || parser.current_token.type == "MINUS" {
+        let op = parser.current_token.value;
+        advance(parser);
+        let right = parseTerm(parser);
+        let node = makeNode("BinaryOp");
+        node.left = left;
+        node.operator = op;
+        node.right = right;
+        left = node;
+    }
+    
+    return left;
+}
+
+fn parseTerm(parser) {
+    let left = parseFactor(parser);
+    
+    while parser.current_token.type == "MULTIPLY" || parser.current_token.type == "DIVIDE" {
+        let op = parser.current_token.value;
+        advance(parser);
+        let right = parseFactor(parser);
+        let node = makeNode("BinaryOp");
+        node.left = left;
+        node.operator = op;
+        node.right = right;
+        left = node;
+    }
+    
+    return left;
+}
+
+fn parsePrimary(parser) {
+    if parser.current_token.type == "NUMBER" {
+        let value = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("Number");
+        node.value = value;
+        return node;
+    }
+    
+    if parser.current_token.type == "STRING" {
+        let value = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("String");
+        node.value = value;
+        return node;
+    }
+    
+    if parser.current_token.type == "BOOLEAN" {
+        let value = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("Boolean");
+        node.value = value;
+        return node;
+    }
+    
+    if parser.current_token.type == "IDENTIFIER" {
+        let name = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("Identifier");
+        node.name = name;
+        return node;
+    }
+    
+    return parseCallMemberExpression(parser);
+}
+
+fn parseCallMemberExpression(parser) {
+    let expr = parsePrimary(parser);
+    
+    while true {
+        if parser.current_token.type == "LPAREN" {
+            advance(parser);
+            let args = [];
             
-            if check(parser, "COMMA") {
-                expect(parser, "COMMA")
+            if parser.current_token.type != "RPAREN" {
+                args.push(parseExpression(parser));
+                
+                while parser.current_token.type == "COMMA" {
+                    advance(parser);
+                    args.push(parseExpression(parser));
+                }
             }
+            
+            expect(parser, "RPAREN");
+            
+            let callNode = makeNode("FunctionCall");
+            callNode.callee = expr;
+            callNode.arguments = args;
+            expr = callNode;
+        } else if parser.current_token.type == "DOT" {
+            advance(parser);
+            let property = expect(parser, "IDENTIFIER");
+            let accessNode = makeNode("PropertyAccess");
+            accessNode.object = expr;
+            accessNode.property = property.value;
+            expr = accessNode;
+        } else if parser.current_token.type == "LBRACKET" {
+            advance(parser);
+            let index = parseExpression(parser);
+            expect(parser, "RBRACKET");
+            let accessNode = makeNode("ArrayAccess");
+            accessNode.object = expr;
+            accessNode.index = index;
+            expr = accessNode;
+        } else {
+            break;
         }
-        
-        expect(parser, "RBRACE")
-    } else {
-        # throw new Error("Unexpected token after export: " + currentToken(parser).type)
     }
     
-    createExportStatement(declaration, specifiers, line, column)
+    return expr;
 }
 
-micro initParser(tokens) {
-    let parser = {}
-    parser.tokens = tokens
-    parser.current = 0
-    parser
-}
-
-micro currentToken(parser) {
-    if parser.current >= parser.tokens.length {
-        parser.tokens[parser.tokens.length - 1]
-    } else {
-        parser.tokens[parser.current]
+fn parseFactor(parser) {
+    if parser.current_token.type == "NOT" {
+        advance(parser);
+        let operand = parseFactor(parser);
+        let node = makeNode("UnaryOp");
+        node.operator = "!";
+        node.operand = operand;
+        return node;
     }
-}
-
-micro peekToken(parser) {
-    if parser.current + 1 >= parser.tokens.length {
-        parser.tokens[parser.tokens.length - 1]
-    } else {
-        parser.tokens[parser.current + 1]
+    
+    if parser.current_token.type == "LPAREN" {
+        advance(parser);
+        let expr = parseExpression(parser);
+        expect(parser, "RPAREN");
+        return expr;
     }
-}
-
-micro advance(parser) {
-    if parser.current < parser.tokens.length - 1 {
-        parser.current = parser.current + 1
+    
+    // 支持数组字面量 []
+    if parser.current_token.type == "LBRACKET" {
+        advance(parser);
+        let node = makeNode("ArrayLiteral");
+        node.elements = [];
+        
+        // 简单的空数组支持
+        if parser.current_token.type == "RBRACKET" {
+            advance(parser);
+            return node;
+        }
+        
+        // 跳过数组内容，直到找到 ]
+        while parser.current_token.type != "RBRACKET" && parser.current_token.type != "EOF" {
+            advance(parser);
+        }
+        
+        if parser.current_token.type == "RBRACKET" {
+            advance(parser);
+        }
+        
+        return node;
     }
-    parser
-}
-
-micro check(parser, tokenType) {
-    let token = currentToken(parser)
-    token.type == tokenType
-}
-
-micro match(parser, tokenType) {
-    if check(parser, tokenType) {
-        let token = currentToken(parser)
-        advance(parser)
-        token
-    } else {
-        null
+    
+    // 支持对象字面量 {}
+    if parser.current_token.type == "LBRACE" {
+        advance(parser);
+        let node = makeNode("ObjectLiteral");
+        node.properties = [];
+        
+        // 简单的空对象支持
+        if parser.current_token.type == "RBRACE" {
+            advance(parser);
+            return node;
+        }
+        
+        // 跳过对象内容，直到找到 }
+        while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+            advance(parser);
+        }
+        
+        if parser.current_token.type == "RBRACE" {
+            advance(parser);
+        }
+        
+        return node;
     }
+    
+    return parseCallMemberExpression(parser);
 }
 
-micro expect(parser, tokenType) {
-    let token = match(parser, tokenType)
-    if token == null {
-        let current = currentToken(parser)
-        console.log("[DEBUG] Expected " + tokenType + " but got " + current.type + " at line " + current.line + ", value: " + current.value)
-        # throw new Error("Expected " + tokenType + " but got " + current.type + " at line " + current.line)
-    } else {
-        token
+
+
+fn parseStatement(parser) {
+    // 检查 EOF
+    if parser.current_token.type == "EOF" {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Unexpected EOF in statement";
+        error.line = parser.current_token.line;
+        error.column = parser.current_token.column;
+        return error;
     }
+    
+    if parser.current_token.type == "LET" {
+        return parseLetStatement(parser);
+    }
+    
+    if parser.current_token.type == "FUNCTION" {
+        return parseFunctionDeclaration(parser);
+    }
+    
+    if parser.current_token.type == "IF" {
+        return parseIfStatement(parser);
+    }
+    
+    if parser.current_token.type == "WHILE" {
+        return parseWhileStatement(parser);
+    }
+    
+    if parser.current_token.type == "RETURN" {
+        return parseReturnStatement(parser);
+    }
+    
+    if parser.current_token.type == "LBRACE" {
+        return parseBlock(parser);
+    }
+    
+    // 表达式语句
+    let expr = parseExpression(parser);
+    
+    // 检查表达式是否有错误
+    if expr.type == "ParseError" {
+        return expr;
+    }
+    
+    expect(parser, "SEMICOLON");
+    
+    // 创建ExpressionStatement节点
+    let stmt = makeNode("ExpressionStatement");
+    stmt.expression = expr;
+    return stmt;
 }
 
-micro parseProgram(parser) {
-    let statements = []
-    while !check(parser, "EOF") {
-        let stmt = parseStatement(parser)
-        if stmt.type != "" {
-            statements.push(stmt)
+fn parseLetStatement(parser) {
+    advance(parser); // skip 'let'
+    let name = expect(parser, "IDENTIFIER");
+    
+    // 检查 expect 是否返回错误
+    if name && name.type == "ParseError" {
+        return name;
+    }
+    
+    let assignToken = expect(parser, "ASSIGN");
+    if assignToken && assignToken.type == "ParseError" {
+        return assignToken;
+    }
+    
+    let value = parseExpression(parser);
+    if value && value.type == "ParseError" {
+        return value;
+    }
+    
+    expect(parser, "SEMICOLON");
+    
+    let node = makeNode("LetStatement");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+
+fn parseFunctionDeclaration(parser) {
+    advance(parser); // skip 'fn'
+    let name = expect(parser, "IDENTIFIER");
+    expect(parser, "LPAREN");
+    
+    let params = [];
+    if parser.current_token.type != "RPAREN" {
+        params.push(expect(parser, "IDENTIFIER").value);
+        
+        while parser.current_token.type == "COMMA" {
+            advance(parser);
+            params.push(expect(parser, "IDENTIFIER").value);
         }
     }
-    createProgram(statements, 1, 1)
+    
+    expect(parser, "RPAREN");
+    let body = parseBlock(parser);
+    
+    let node = makeNode("FunctionDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.body = body;
+    return node;
 }
 
-micro parseStatement(parser) {
-    let token = currentToken(parser)
-    if token.type == "COMMENT" {
-        advance(parser)
-        token.type = ""
-    } else if token.type == "LET" {
-        parseVariableDeclaration(parser)
-    } else if token.type == "MICRO" {
-        parseFunctionDeclaration(parser)
-    } else if token.type == "FUNCTION" {
-        parseFunctionDeclaration(parser)
-    } else if token.type == "RETURN" {
-        parseReturnStatement(parser)
-    } else if token.type == "IF" {
-        parseIfStatement(parser)
-    } else if token.type == "WHILE" {
-        parseWhileStatement(parser)
-    } else if token.type == "EXPORT" {
-        parseExportStatement(parser)
-    } else if token.type == "LBRACE" {
-        parseBlockStatement(parser)
+fn parseIfStatement(parser) {
+    advance(parser); // skip 'if'
+    let condition = parseExpression(parser);
+    let thenBranch = parseStatement(parser);
+    
+    let node = makeNode("IfStatement");
+    node.condition = condition;
+    node.thenBranch = thenBranch;
+    node.elseBranch = null;
+    
+    if parser.current_token.type == "ELSE" {
+        advance(parser);
+        node.elseBranch = parseStatement(parser);
+    }
+    
+    return node;
+}
+
+fn parseWhileStatement(parser) {
+    advance(parser); // skip 'while'
+    let condition = parseExpression(parser);
+    let body = parseBlock(parser);
+    
+    let node = makeNode("WhileStatement");
+    node.condition = condition;
+    node.body = body;
+    return node;
+}
+
+fn parseReturnStatement(parser) {
+    advance(parser); // skip 'return'
+    
+    let node = makeNode("ReturnStatement");
+    
+    if parser.current_token.type == "SEMICOLON" {
+        node.value = null;
     } else {
-        parseExpressionStatement(parser)
+        node.value = parseExpression(parser);
     }
+    
+    expect(parser, "SEMICOLON");
+    
+    return node;
 }
 
-micro parseVariableDeclaration(parser) {
-    let letToken = expect(parser, "LET")
-    let nameToken = expect(parser, "IDENTIFIER")
-    expect(parser, "ASSIGN")
-    let initializer = parseLogicalOr(parser)
-    if check(parser, "SEMICOLON") {
-        advance(parser)
+fn parseBlock(parser) {
+    expect(parser, "LBRACE");
+    
+    let statements = [];
+    
+    while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+        let stmt = parseStatement(parser);
+        statements.push(stmt);
     }
-    createVariableDeclaration(nameToken.value, initializer, 2, 1, letToken.line, letToken.column)
+    
+    expect(parser, "RBRACE");
+    
+    let node = makeNode("Block");
+    node.statements = statements;
+    return node;
 }
 
-micro parseFunctionDeclaration(parser) {
-    let functionToken = currentToken(parser)
-    if functionToken.type == "MICRO" {
-        expect(parser, "MICRO")
-    } else if functionToken.type == "FUNCTION" {
-        expect(parser, "FUNCTION")
+fn parseProgram(parser) {
+    let statements = [];
+    
+    while parser.current_token.type != "EOF" {
+        let stmt = parseStatement(parser);
+        statements.push(stmt);
     }
-    let nameToken = expect(parser, "IDENTIFIER")
-    expect(parser, "LPAREN")
-    let parameters = []
-    if !check(parser, "RPAREN") {
-        let param = expect(parser, "IDENTIFIER")
-        parameters.push(createParameter(param.value, param.line, param.column))
-        while check(parser, "COMMA") {
-            advance(parser)
-            param = expect(parser, "IDENTIFIER")
-            parameters.push(createParameter(param.value, param.line, param.column))
-        }
-    }
-    expect(parser, "RPAREN")
-    let body = parseBlockStatement(parser)
-    createFunctionDeclaration(nameToken.value, parameters, body, functionToken.line, functionToken.column)
+    
+    let node = makeNode("Program");
+    node.statements = statements;
+    return node;
 }
 
-micro parseReturnStatement(parser) {
-    let returnToken = expect(parser, "RETURN")
-    let value = null
-    if !check(parser, "SEMICOLON") && !check(parser, "EOF") && !check(parser, "RBRACE") {
-        value = parseExpression(parser)
-    }
-    if check(parser, "SEMICOLON") {
-        advance(parser)
-    }
-    createReturnStatement(value, returnToken.line, returnToken.column)
+fn parse(tokens) {
+    let parser = makeParser(tokens);
+    return parseProgram(parser);
 }
-
-micro parseIfStatement(parser) {
-    let ifToken = expect(parser, "IF")
-    let condition = parseExpression(parser)
-    let thenBranch = parseBlockStatement(parser)
-    let elseBranch = {}
-    if check(parser, "ELSE") {
-        advance(parser)
-        if check(parser, "IF") {
-            elseBranch = parseIfStatement(parser)
-        } else {
-            elseBranch = parseBlockStatement(parser)
-        }
-    }
-    createIfStatement(condition, thenBranch, elseBranch, ifToken.line, ifToken.column)
-}
-
-micro parseWhileStatement(parser) {
-    let whileToken = expect(parser, "WHILE")
-    let condition = parseExpression(parser)
-    let body = parseBlockStatement(parser)
-    createWhileStatement(condition, body, whileToken.line, whileToken.column)
-}
-
-micro parseBlockStatement(parser) {
-    let lbraceToken = expect(parser, "LBRACE")
-    let statements = []
-    while !check(parser, "RBRACE") && !check(parser, "EOF") {
-        let stmt = parseStatement(parser)
-        if stmt.type != "" {
-            statements.push(stmt)
-        }
-    }
-    expect(parser, "RBRACE")
-    createBlockStatement(statements, lbraceToken.line, lbraceToken.column)
-}
-
-micro extractExpressionFromBlock(blockStatement) {
-    if blockStatement.statements.length == 0 {
-        # throw new Error("Block statement cannot be empty in expression context")
-    }
-
-    let lastStatement = blockStatement.statements[blockStatement.statements.length - 1]
-    if lastStatement.type == "ExpressionStatement" {
-        lastStatement.expression
-    } else {
-        # throw new Error("Last statement in block must be an expression statement")
-    }
-}
-
-micro parseExpressionStatement(parser) {
-    let expr = parseExpression(parser)
-    if check(parser, "SEMICOLON") {
-        advance(parser)
-    }
-    createExpressionStatement(expr, expr.line, expr.column)
-}
-
-micro parseExpression(parser) {
-    parseAssignment(parser)
-}
-
-micro parseAssignment(parser) {
-    let expr = parseLogicalOr(parser)
-
-    if check(parser, "ASSIGN") {
-        let assignToken = advance(parser)
-        let right = parseAssignment(parser)
-        createAssignmentExpression(expr, right, assignToken.line, assignToken.column)
-    } else {
-        expr
-    }
-}
-
-micro parseObjectValue(parser) {
-    let currentTok = currentToken(parser)
-
-    if currentTok.type == "STRING" {
-        let value = createStringLiteral(currentTok.value, currentTok.line, currentTok.column)
-        advance(parser)
-        value
-    } else if currentTok.type == "NUMBER" {
-        let value = createNumberLiteral(currentTok.value, currentTok.line, currentTok.column)
-        advance(parser)
-        value
-    } else if currentTok.type == "TRUE" {
-        let value = createBooleanLiteral(true, currentTok.line, currentTok.column)
-        advance(parser)
-        value
-    } else if currentTok.type == "FALSE" {
-        let value = createBooleanLiteral(false, currentTok.line, currentTok.column)
-        advance(parser)
-        value
-    } else if currentTok.type == "IDENTIFIER" {
-        let value = createIdentifier(currentTok.value, currentTok.line, currentTok.column)
-        advance(parser)
-        value
-    } else if currentTok.type == "LBRACKET" {
-        parseArrayLiteral(parser)
-    } else if currentTok.type == "LBRACE" {
-        parseObjectLiteral(parser)
-    } else {
-        parseLogicalOr(parser)
-    }
-}
-
-micro parseArrayLiteral(parser) {
-    let lbracketToken = expect(parser, "LBRACKET")
-    let elements = []
-
-    if check(parser, "RBRACKET") {
-        expect(parser, "RBRACKET")
-        createArrayLiteral([], lbracketToken.line, lbracketToken.column)
-    } else {
-        while !check(parser, "RBRACKET") && !check(parser, "EOF") {
-            let element = parseObjectValue(parser)
-            elements.push(element)
-
-            if check(parser, "COMMA") {
-                advance(parser)
-                if check(parser, "RBRACKET") {
-                    break
-                }
-            } else if !check(parser, "RBRACKET") {
-                # throw new Error("Expected ',' or ']' in array literal at line " + currentToken(parser).line)
-            }
-        }
-
-        expect(parser, "RBRACKET")
-        createArrayLiteral(elements, lbracketToken.line, lbracketToken.column)
-    }
-}
-
-micro parseObjectLiteral(parser) {
-    let lbraceToken = expect(parser, "LBRACE")
-    let properties = []
-
-    if check(parser, "RBRACE") {
-        expect(parser, "RBRACE")
-        createObjectLiteral([], lbraceToken.line, lbraceToken.column)
-    } else {
-        while !check(parser, "RBRACE") && !check(parser, "EOF") {
-            while check(parser, "COMMENT") {
-                advance(parser)
-            }
-
-            if check(parser, "RBRACE") {
-                break
-            }
-
-            let keyToken = {};
-            if check(parser, "IDENTIFIER") {
-                keyToken = expect(parser, "IDENTIFIER")
-            } else if check(parser, "STRING") {
-                keyToken = expect(parser, "STRING")
-            } else {
-                # throw new Error("Expected identifier or string as object key at line " + currentToken(parser).line)
-            }
-            expect(parser, "ASSIGN")
-
-            let value = parseObjectValue(parser)
-
-            let property = {}
-            property.key = keyToken.value;
-            property.value = value
-
-            properties.push(property)
-
-            if check(parser, "COMMA") {
-                advance(parser)
-                if check(parser, "RBRACE") {
-                    break
-                }
-            } else if !check(parser, "RBRACE") {
-                # throw new Error("Expected ',' or '}' after object property at line " + currentToken(parser).line)
-            }
-        }
-
-        expect(parser, "RBRACE")
-        createObjectLiteral(properties, lbraceToken.line, lbraceToken.column)
-    }
-}
-
-micro parseLogicalOr(parser) {
-    let expr = parseLogicalAnd(parser)
-
-    while check(parser, "OR") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let right = parseLogicalAnd(parser)
-        let operatorSymbol = "||"
-        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column)
-    }
-
-    expr
-}
-
-micro parseLogicalAnd(parser) {
-    let expr = parseEquality(parser)
-
-    while check(parser, "AND") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let right = parseEquality(parser)
-        let operatorSymbol = "&&"
-        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column)
-    }
-
-    expr
-}
-
-micro parseEquality(parser) {
-    let expr = parseComparison(parser)
-    while check(parser, "EQUAL") || check(parser, "NOT_EQUAL") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let right = parseComparison(parser)
-        let operatorSymbol = if operator.type == "EQUAL" { "==" } else { "!=" }
-        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column)
-    }
-    expr
-}
-
-micro parseComparison(parser) {
-    let expr = parseAddition(parser)
-
-    while check(parser, "LESS") || check(parser, "LE") || check(parser, "GREATER") || check(parser, "GE") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let right = parseAddition(parser)
-        let operatorSymbol = "";
-        if operator.type == "LESS" {
-            operatorSymbol = "<"
-        } else if operator.type == "LE" {
-            operatorSymbol = "<="
-        } else if operator.type == "GREATER" {
-            operatorSymbol = ">"
-        } else if operator.type == "GE" {
-            operatorSymbol = ">="
-        }
-        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column)
-    }
-
-    expr
-}
-
-micro parseAddition(parser) {
-    let expr = parseMultiplication(parser)
-
-    while check(parser, "PLUS") || check(parser, "MINUS") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let right = parseMultiplication(parser)
-        let operatorSymbol = if operator.type == "PLUS" { "+" } else { "-" }
-        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column)
-    }
-
-    expr
-}
-
-micro parseMultiplication(parser) {
-    let expr = parseUnary(parser)
-
-    while check(parser, "MULTIPLY") || check(parser, "DIVIDE") || check(parser, "MODULO") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let right = parseUnary(parser)
-        let operatorSymbol = "";
-        if operator.type == "MULTIPLY" {
-            operatorSymbol = "*"
-        } else if operator.type == "DIVIDE" {
-            operatorSymbol = "/"
-        } else if operator.type == "MODULO" {
-            operatorSymbol = "%"
-        }
-        expr = createBinaryExpression(expr, operatorSymbol, right, operator.line, operator.column)
-    }
-
-    expr
-}
-
-micro parseUnary(parser) {
-    if check(parser, "NOT") || check(parser, "MINUS") {
-        let operator = currentToken(parser)
-        advance(parser)
-        let operand = parseUnary(parser)
-        let operatorSymbol = if operator.type == "NOT" { "!" } else { "-" }
-        createUnaryExpression(operatorSymbol, operand, operator.line, operator.column)
-    } else {
-        parseCall(parser)
-    }
-}
-
-micro parseCall(parser) {
-    let expr = parsePrimary(parser)
-    while check(parser, "LPAREN") || check(parser, "DOT") || check(parser, "LBRACKET") {
-        if check(parser, "DOT") {
-            advance(parser)
-            let property = expect(parser, "IDENTIFIER")
-            expr = createMemberExpression(expr, createIdentifier(property.value, property.line, property.column), false, expr.line, expr.column)
-        } else if check(parser, "LBRACKET") {
-            advance(parser)
-            let index = parseExpression(parser)
-            expect(parser, "RBRACKET")
-            expr = createMemberExpression(expr, index, true, expr.line, expr.column)
-        } else {
-            advance(parser)
-            let args = []
-            if !check(parser, "RPAREN") {
-                args.push(parseExpression(parser))
-                while check(parser, "COMMA") {
-                    advance(parser)
-                    args.push(parseExpression(parser))
-                }
-            }
-            let rparenToken = expect(parser, "RPAREN")
-            expr = createCallExpression(expr, args, expr.line, expr.column)
-        }
-    }
-    expr
-}
-
-micro parsePrimary(parser) {
-    let token = currentToken(parser)
-    if token.type == "NUMBER" {
-        advance(parser)
-        createNumberLiteral(token.value, token.line, token.column)
-    } else if token.type == "STRING" {
-        advance(parser)
-        createStringLiteral(token.value, token.line, token.column)
-    } else if token.type == "TRUE" {
-        advance(parser)
-        createBooleanLiteral(true, token.line, token.column)
-    } else if token.type == "FALSE" {
-        advance(parser)
-        createBooleanLiteral(false, token.line, token.column)
-    } else if token.type == "IDENTIFIER" {
-        advance(parser)
-        createIdentifier(token.value, token.line, token.column)
-    } else if token.type == "IF" {
-        advance(parser)
-        let condition = parseExpression(parser)
-        let thenBlock = parseBlockStatement(parser)
-        expect(parser, "ELSE")
-        let elseBlock = parseBlockStatement(parser)
-
-        let thenExpr = extractExpressionFromBlock(thenBlock)
-        let elseExpr = extractExpressionFromBlock(elseBlock)
-
-        createIfExpression(condition, thenExpr, elseExpr, token.line, token.column)
-    } else if token.type == "LBRACE" {
-        parseObjectLiteral(parser)
-    } else if token.type == "LBRACKET" {
-        parseArrayLiteral(parser)
-    } else if token.type == "LPAREN" {
-        advance(parser)
-        let expr = parseExpression(parser)
-        expect(parser, "RPAREN")
-        expr
-    } else {
-        # throw new Error("Unexpected token " + token.type + " at line " + token.line)
-    }
-}
-
-micro parse(tokens) {
-    let parser = initParser(tokens)
-    parseProgram(parser)
-}
-
-export {parse}

@@ -1,455 +1,207 @@
-# Valkyrie 代码生成器
-# 使用 Valkyrie 语言实现
+// Valkyrie 代码生成器 - 超简单版本
 
-micro initCodeGenerator() {
-    let generator = {}
-    generator.output = ""
-    generator.indentLevel = 0
-    generator
-}
-
-micro addIndent(generator) {
-    let indent = ""
-    let i = 0
-    while i < generator.indentLevel {
-        indent = indent + "  "
-        i = i + 1
+fn replaceAll(str, search, replace) {
+    let result = "";
+    let i = 0;
+    while i < str.length {
+        if str[i] == search {
+            result = result + replace;
+        } else {
+            result = result + str[i];
+        }
+        i = i + 1;
     }
-    indent
+    return result;
 }
 
-micro write(generator, code) {
-    generator.output = generator.output + code
-    generator
-}
-
-micro writeLine(generator, code) {
-    let indent = addIndent(generator)
-    generator.output = generator.output + indent + code + "\n"
-    generator
-}
-
-micro increaseIndent(generator) {
-    generator.indentLevel = generator.indentLevel + 1
-    generator
-}
-
-micro decreaseIndent(generator) {
-    if generator.indentLevel > 0 {
-        generator.indentLevel = generator.indentLevel - 1
+fn generateExpression(node) {
+    if node.type == "Number" {
+        return node.value;
     }
-    generator
-}
-
-micro generateProgram(generator, node) {
-    writeLine(generator, "// Valkyrie Runtime Support")
-    writeLine(generator, "let ValkyrieRuntime = {")
-    writeLine(generator, "    print: console.log,")
-    writeLine(generator, "    assert: (condition, message) => {")
-    writeLine(generator, "        if (!condition) throw new Error(message || \"Assertion failed\");")
-    writeLine(generator, "    }")
-    writeLine(generator, "};")
-    writeLine(generator, "")
-    writeLine(generator, "let CodeGenerator = {output: \"\", indentLevel: 0};")
-    writeLine(generator, "")
     
-    let i = 0
-    while i < node.statements.length {
-        generateStatement(generator, node.statements[i])
-        i = i + 1
+    if node.type == "String" {
+        // 处理字符串转义，确保与bootstrap/codegen.js一致
+        let escaped = node.value;
+        // 替换反斜杠
+        escaped = replaceAll(escaped, "\\", "\\\\");
+        // 替换双引号
+        escaped = replaceAll(escaped, "\"", "\\\"");
+        // 替换换行符
+        escaped = replaceAll(escaped, "\n", "\\n");
+        // 替换回车符
+        escaped = replaceAll(escaped, "\r", "\\r");
+        // 替换制表符
+        escaped = replaceAll(escaped, "\t", "\\t");
+        return "\"" + escaped + "\"";
     }
-    generator
-}
-
-micro generateStatement(generator, node) {
-    if node.type == "VariableDeclaration" {
-        generateVariableDeclaration(generator, node)
-    } else if node.type == "FunctionDeclaration" {
-        generateFunctionDeclaration(generator, node)
-    } else if node.type == "IfStatement" {
-        generateIfStatement(generator, node)
-    } else if node.type == "WhileStatement" {
-        generateWhileStatement(generator, node)
-    } else if node.type == "BlockStatement" {
-        generateBlockStatement(generator, node)
-    } else if node.type == "ExpressionStatement" {
-        generateExpressionStatement(generator, node)
-    } else if node.type == "ExportStatement" {
-        generateExportStatement(generator, node)
-    } else if node.type == "ReturnStatement" {
-        generateReturnStatement(generator, node)
+    
+    if node.type == "Boolean" {
+        return node.value;
     }
-    generator
-}
-
-micro generateVariableDeclaration(generator, node) {
-    let code = "let " + node.name
-
-    if node.initializer || node.value {
-        code = code + " = "
-        write(generator, addIndent(generator) + code)
-        generateExpression(generator, node.initializer || node.value)
-    } else {
-        write(generator, addIndent(generator) + code)
+    
+    if node.type == "Identifier" {
+        return node.name;
     }
-
-    writeLine(generator, ";")
-    generator
-}
-
-micro generateFunctionDeclaration(generator, node) {
-    let code = "function " + node.name + "("
-    write(generator, addIndent(generator) + code)
-    let i = 0
-    while i < node.parameters.length {
-        if i > 0 {
-            write(generator, ", ")
+    
+    if node.type == "BinaryOp" {
+        let left = generateExpression(node.left);
+        let right = generateExpression(node.right);
+        let result = "(";
+        result = result + left;
+        result = result + " ";
+        result = result + node.operator;
+        result = result + " ";
+        result = result + right;
+        result = result + ")";
+        return result;
+    }
+    
+    if node.type == "Assignment" {
+        let left = generateExpression(node.left);
+        let right = generateExpression(node.right);
+        return left + " = " + right;
+    }
+    
+    if node.type == "FunctionCall" {
+        let callee = generateExpression(node.callee);
+        let args = "";
+        
+        let i = 0;
+        while i < node.arguments.length {
+            let arg = generateExpression(node.arguments[i]);
+            args = args + arg;
+            if i < node.arguments.length - 1 {
+                args = args + ", ";
+            }
+            i = i + 1;
         }
-        write(generator, node.parameters[i].name)
-        i = i + 1
+        
+        return callee + "(" + args + ")";
     }
-    writeLine(generator, ") {")
-    increaseIndent(generator)
-    generateFunctionBody(generator, node.body)
-    decreaseIndent(generator)
-    writeLine(generator, "}")
-    writeLine(generator, "")
-    generator
-}
-
-micro generateIfStatement(generator, node) {
-    write(generator, addIndent(generator) + "if (")
-    generateExpression(generator, node.condition)
-    writeLine(generator, ") {")
-    increaseIndent(generator)
-    generateStatement(generator, node.thenBranch)
-    decreaseIndent(generator)
-
-    if node.elseBranch && node.elseBranch.type && node.elseBranch.type != "" {
-        if node.elseBranch.type == "IfStatement" {
-            write(generator, addIndent(generator) + "} else ")
-            generateIfStatement(generator, node.elseBranch)
+    
+    if node.type == "PropertyAccess" {
+        if node.object.type {
+            let obj = generateExpression(node.object);
+            return obj + "." + node.property;
         } else {
-            writeLine(generator, "} else {")
-            increaseIndent(generator)
-            generateStatement(generator, node.elseBranch)
-            decreaseIndent(generator)
-            writeLine(generator, "}")
+            return node.object + "." + node.property;
         }
-    } else {
-        writeLine(generator, "}")
     }
-    generator
-}
-
-micro generateWhileStatement(generator, node) {
-    write(generator, addIndent(generator) + "while (")
-    generateExpression(generator, node.condition)
-    writeLine(generator, ") {")
-
-    increaseIndent(generator)
-    generateStatement(generator, node.body)
-    decreaseIndent(generator)
-    writeLine(generator, "}")
-
-    generator
-}
-
-micro generateBlockStatement(generator, node) {
-    let i = 0
-    while i < node.statements.length {
-        generateStatement(generator, node.statements[i])
-        i = i + 1
-    }
-    generator
-}
-
-micro generateIfExpression(generator, node) {
-    write(generator, addIndent(generator) + "if (")
-    generateExpression(generator, node.condition)
-    writeLine(generator, ") {")
-    increaseIndent(generator)
-    generateFunctionBody(generator, node.thenBranch)
-    decreaseIndent(generator)
-
-    if node.elseBranch && node.elseBranch.type && node.elseBranch.type != "" {
-        if node.elseBranch.type == "IfStatement" {
-            write(generator, addIndent(generator) + "} else ")
-            generateIfExpression(generator, node.elseBranch)
+    
+    if node.type == "ArrayAccess" {
+        let obj = "";
+        if node.object.type {
+            obj = generateExpression(node.object);
         } else {
-            writeLine(generator, "} else {")
-            increaseIndent(generator)
-            generateFunctionBody(generator, node.elseBranch)
-            decreaseIndent(generator)
-            writeLine(generator, "}")
+            obj = node.object;
         }
-    } else {
-        writeLine(generator, "}")
+        let index = generateExpression(node.index);
+        return obj + "[" + index + "]";
     }
-    generator
+    
+    if node.type == "ObjectLiteral" {
+        return "{}";
+    }
+    
+    if node.type == "ArrayLiteral" {
+        return "[]";
+    }
+    
+    if node.type == "UnaryOp" {
+        let operand = generateExpression(node.operand);
+        return node.operator + operand;
+    }
+    
+    return "/* Unknown expression: " + node.type + " */";
 }
 
-micro generateFunctionBody(generator, node) {
-    let count = node.statements.length
-    let i = 0
-    while i < count - 1 {
-        generateStatement(generator, node.statements[i])
-        i = i + 1
+fn generateStatement(node) {
+    if node.type == "LetStatement" {
+        let value = generateExpression(node.value);
+        return "let " + node.name + " = " + value + ";";
     }
-    if count > 0 {
-        let last = node.statements[count - 1]
-        if last.type == "ExpressionStatement" {
-            write(generator, addIndent(generator) + "return ")
-            generateExpression(generator, last.expression)
-            writeLine(generator, ";")
-        } else if last.type == "IfStatement" {
-            generateIfExpression(generator, last)
-        } else if last.type == "ReturnStatement" {
-            generateReturnStatement(generator, last)
-        } else {
-            generateStatement(generator, last)
-        }
-    }
-}
-
-micro generateExpressionStatement(generator, node) {
-    write(generator, addIndent(generator))
-    generateExpression(generator, node.expression)
-    writeLine(generator, ";")
-    generator
-}
-
-micro generateExportStatement(generator, node) {
-    write(generator, addIndent(generator) + "export ")
-    if node.declaration {
-        if node.declaration.type == "VariableDeclaration" {
-            generateVariableDeclaration(generator, node.declaration)
-        } else if node.declaration.type == "FunctionDeclaration" {
-            generateFunctionDeclaration(generator, node.declaration)
-        } else {
-            generateStatement(generator, node.declaration)
-        }
-    } else if node.specifiers && node.specifiers.length > 0 {
-        write(generator, "{ ")
-        let i = 0
-        while i < node.specifiers.length {
+    
+    if node.type == "FunctionDeclaration" {
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
             if i > 0 {
-                write(generator, ", ")
+                params = params + ", ";
             }
-            generateIdentifier(generator, node.specifiers[i])
-            i = i + 1
+            params = params + node.parameters[i];
+            i = i + 1;
         }
-        writeLine(generator, " };")
-    } else {
-        writeLine(generator, "// Invalid export statement")
+        
+        let body = generateStatement(node.body);
+        return "export function " + node.name + "(" + params + ") " + body;
     }
-    generator
-}
-
-micro generateReturnStatement(generator, node) {
-    write(generator, addIndent(generator) + "return")
-    if node.value {
-        write(generator, " ")
-        generateExpression(generator, node.value)
-    }
-    writeLine(generator, ";")
-    generator
-}
-
-micro generateExpression(generator, node) {
-    if !node || !node.type {
-        console.error("Invalid node passed to generateExpression:", node)
-        write(generator, "{}")
-        generator
-    } else if node.type == "AssignmentExpression" {
-        generateAssignmentExpression(generator, node)
-    } else if node.type == "BinaryExpression" {
-        generateBinaryExpression(generator, node)
-    } else if node.type == "UnaryExpression" {
-        generateUnaryExpression(generator, node)
-    } else if node.type == "CallExpression" {
-        generateCallExpression(generator, node)
-    } else if node.type == "MemberExpression" {
-        generateMemberExpression(generator, node)
-    } else if node.type == "Identifier" {
-        generateIdentifier(generator, node)
-    } else if node.type == "NumberLiteral" {
-        generateNumberLiteral(generator, node)
-    } else if node.type == "StringLiteral" {
-        generateStringLiteral(generator, node)
-    } else if node.type == "BooleanLiteral" {
-        generateBooleanLiteral(generator, node)
-    } else if node.type == "ObjectLiteral" {
-        generateObjectLiteral(generator, node)
-    } else if node.type == "ArrayLiteral" {
-        generateArrayLiteral(generator, node)
-    } else if node.type == "IfExpression" {
-        generateIfExpressionAsExpression(generator, node)
-    } else {
-        write(generator, "{}")
-    }
-    generator
-}
-
-micro generateAssignmentExpression(generator, node) {
-    generateExpression(generator, node.left)
-    write(generator, " = ")
-    generateExpression(generator, node.right)
-    generator
-}
-
-let operatorMap = {
-    "+" = "+", "-" = "-", "*" = "*", "/" = "/", "%" = "%",
-    "==" = "==", "!=" = "!=", "<" = "<", "<=" = "<=", ">" = ">", ">=" = ">=",
-    "&&" = "&&", "||" = "||", "!" = "!", "=" = "=",
-    "PLUS" = "+", "MINUS" = "-", "MULTIPLY" = "*", "DIVIDE" = "/", "MODULO" = "%",
-    "EQUAL" = "==", "NOT_EQUAL" = "!=", "LESS" = "<", "GREATER" = ">",
-    "LESS_EQUAL" = "<=", "GREATER_EQUAL" = ">=", "AND" = "&&", "OR" = "||",
-    "NOT" = "!", "ASSIGN" = "="
-}
-
-micro getOperatorSymbol(operator) {
-    if operatorMap[operator] {
-        return operatorMap[operator]
-    } else {
-        return operator
-    }
-}
-
-micro generateBinaryExpression(generator, node) {
-    write(generator, "(")
-    generateExpression(generator, node.left)
-    let opSymbol = getOperatorSymbol(node.operator)
-    write(generator, " " + opSymbol + " ")
-    generateExpression(generator, node.right)
-    write(generator, ")")
-    generator
-}
-
-micro generateUnaryExpression(generator, node) {
-    let opSymbol = getOperatorSymbol(node.operator)
-    write(generator, opSymbol)
-    generateExpression(generator, node.operand)
-    generator
-}
-
-micro generateCallExpression(generator, node) {
-    generateExpression(generator, node.callee)
-    write(generator, "(")
-    let i = 0
-    while i < node.arguments.length {
-        if i > 0 {
-            write(generator, ", ")
+    
+    if node.type == "IfStatement" {
+        let condition = generateExpression(node.condition);
+        let thenBranch = generateStatement(node.thenBranch);
+        let result = "if (" + condition + ") " + thenBranch;
+        
+        if node.elseBranch && node.elseBranch.type {
+            let elseBranch = generateStatement(node.elseBranch);
+            result = result + " else " + elseBranch;
         }
-        generateExpression(generator, node.arguments[i])
-        i = i + 1
+        
+        return result;
     }
-    write(generator, ")")
-    generator
-}
-
-micro generateMemberExpression(generator, node) {
-    generateExpression(generator, node.object)
-    if node.computed {
-        write(generator, "[")
-        generateExpression(generator, node.property)
-        write(generator, "]")
-    } else {
-        write(generator, ".")
-        generateExpression(generator, node.property)
+    
+    if node.type == "WhileStatement" {
+        let condition = generateExpression(node.condition);
+        let body = generateStatement(node.body);
+        return "while (" + condition + ") " + body;
     }
-    generator
-}
-
-micro generateIdentifier(generator, node) {
-    write(generator, node.name)
-    generator
-}
-
-micro generateNumberLiteral(generator, node) {
-    write(generator, node.value)
-    generator
-}
-
-micro generateStringLiteral(generator, node) {
-    if node.value == "\n" {
-        write(generator, "\"\\n\"")
-    } else if node.value == "\\" {
-        write(generator, "\"\\\\\"")
-    } else if node.value == "\"" {
-        write(generator, "\"\\\"\"")
-    } else {
-        # 对于普通字符串，需要转义特殊字符
-        let value = node.value
-        # 先转义反斜杠
-        let i = 0
-        let result = ""
-        while i < value.length {
-            let char = value[i]
-            if char == "\\" {
-                result = result + "\\\\"
-            } else if char == "\"" {
-                result = result + "\\\""
-            } else if char == "\n" {
-                result = result + "\\n"
-            } else if char == "\t" {
-                result = result + "\\t"
-            } else if char == "\r" {
-                result = result + "\\r"
-            } else {
-                result = result + char
+    
+    if node.type == "ReturnStatement" {
+        if node.value && node.value.type {
+            let value = generateExpression(node.value);
+            return "return " + value + ";";
+        } else {
+            return "return;";
+        }
+    }
+    
+    if node.type == "Block" {
+        let statements = "";
+        let i = 0;
+        while i < node.statements.length {
+            let stmt = generateStatement(node.statements[i]);
+            if i > 0 {
+                statements = statements + "\n";
             }
-            i = i + 1
+            statements = statements + stmt;
+            i = i + 1;
         }
-        write(generator, "\"" + result + "\"")
+        return "{\n" + statements + "\n}";
     }
-    return generator
+    
+    if node.type == "ExpressionStatement" {
+        return generateExpression(node.expression) + ";";
+    }
+    
+    // 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
+    return "/* Unknown statement: " + node.type + " */";
 }
 
-micro generateBooleanLiteral(generator, node) {
-    if node.value {
-        write(generator, "true")
-    } else {
-        write(generator, "false")
-    }
-    generator
-}
-
-micro generateObjectLiteral(generator, node) {
-    write(generator, "{")
-    let i = 0
-    while i < node.properties.length {
-        if i > 0 {
-            write(generator, ", ")
+fn generate(ast) {
+    if ast.type == "Program" {
+        let result = "";
+        let i = 0;
+        while i < ast.statements.length {
+            let stmt = ast.statements[i];
+            result = result + generateStatement(stmt) + "\n";
+            i = i + 1;
         }
-        let property = node.properties[i]
-        write(generator, "\"" + property.key + "\"")
-        write(generator, ": ")
-        generateExpression(generator, property.value)
-        i = i + 1
+        
+        return result;
     }
-    write(generator, "}")
-    generator
-}
-
-micro generateArrayLiteral(generator, node) {
-    write(generator, "[")
-    let i = 0
-    while i < node.elements.length {
-        if i > 0 {
-            write(generator, ", ")
-        }
-        generateExpression(generator, node.elements[i])
-        i = i + 1
+    
+    if ast.type == "ParseError" {
+        return "// Parse Error: " + ast.message + " at line " + ast.line + ", column " + ast.column;
     }
-    write(generator, "]")
-    generator
+    
+    return generateStatement(ast);
 }
-
-micro generate(ast) {
-    let generator = initCodeGenerator()
-    generateProgram(generator, ast)
-    generator.output
-}
-
-export {generate}

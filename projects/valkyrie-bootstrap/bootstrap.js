@@ -20,16 +20,16 @@ const PATHS = {
 };
 
 // 日志函数
-function log(message) {
+export function log(message) {
     console.log(`[Valkyrie Bootstrap] ${message}`);
 }
 
-function error(message) {
+export function error(message) {
     console.error(`[Valkyrie Bootstrap] ERROR: ${message}`);
 }
 
 // 确保目录存在
-function ensureDir(dirPath) {
+export function ensureDir(dirPath) {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
         log(`Created directory: ${dirPath}`);
@@ -37,7 +37,7 @@ function ensureDir(dirPath) {
 }
 
 // 清理目录
-function cleanDir(dirPath) {
+export function cleanDir(dirPath) {
     if (fs.existsSync(dirPath)) {
         fs.rmSync(dirPath, { recursive: true, force: true });
         log(`Cleaned directory: ${dirPath}`);
@@ -45,7 +45,7 @@ function cleanDir(dirPath) {
 }
 
 // 复制目录
-function copyDir(src, dest) {
+export function copyDir(src, dest) {
     ensureDir(dest);
     const entries = fs.readdirSync(src, { withFileTypes: true });
     for (const entry of entries) {
@@ -61,18 +61,17 @@ function copyDir(src, dest) {
 
 // --- Compiler Logic ---
 
-function compileSource(source, compilerParts) {
+export function compileSource(source, compilerParts) {
     const { lexer, parser, codegen } = compilerParts;
     try {
         let tokens;
+        
         if (typeof lexer.initLexer === 'function') {
             // API for handwritten bootstrap/lexer.js
             const lexerInstance = lexer.initLexer(source);
             tokens = lexer.tokenize(lexerInstance);
         } else {
-            // API for compiled lexer.js
-            const lexerInstance = lexer.initLexer(source);
-            tokens = lexer.tokenize(lexerInstance);
+            throw new Error('initLexer function not found in lexer module');
         }
 
         if (tokens.length === 0) {
@@ -80,18 +79,42 @@ function compileSource(source, compilerParts) {
             if (source.trim() === '') return { success: true, code: '' };
             return { success: false, error: "Lexical analysis failed: No tokens produced." };
         }
-        const ast = parser.parse(tokens);
+        
+        let ast;
+        if (typeof parser.parse === 'function') {
+            ast = parser.parse(tokens);
+        } else {
+            throw new Error('parse function not found in parser module');
+        }
+        
+        // 检查解析是否产生了错误
         if (!ast || !ast.type) {
+            // Handle empty files gracefully
+            if (source.trim() === '') return { success: true, code: '' };
             return { success: false, error: "Syntax analysis failed: Invalid AST produced." };
         }
-        const code = codegen.generate(ast);
+        
+        // 检查 AST 是否包含解析错误
+        const parseError = findFirstParseError(ast);
+        if (parseError) {
+            const { message, line, column } = parseError;
+            return { success: false, error: `Parse error: ${message} at line ${line}, column ${column}` };
+        }
+        
+        let code;
+        if (typeof codegen.generate === 'function') {
+            code = codegen.generate(ast);
+        } else {
+            throw new Error('generate function not found in codegen module');
+        }
+        
         return { success: true, code };
     } catch (err) {
         return { success: false, error: `Exception during compilation: ${err.message}\n${err.stack}` };
     }
 }
 
-function compileFile(inputPath, outputPath, compilerParts) {
+export function compileFile(inputPath, outputPath, compilerParts) {
     try {
         log(`Compiling file: ${path.relative(__dirname, inputPath)}`);
         const source = fs.readFileSync(inputPath, 'utf8');
@@ -110,36 +133,27 @@ function compileFile(inputPath, outputPath, compilerParts) {
     }
 }
 
-function compileDirectory(inputDir, outputDir, compilerParts) {
+export function compileDirectory(inputDir, outputDir, compilerParts) {
     log(`Compiling directory: ${path.relative(__dirname, inputDir)} -> ${path.relative(__dirname, outputDir)}`);
     ensureDir(outputDir);
 
     const files = fs.readdirSync(inputDir).filter(f => f.endsWith('.valkyrie'));
-    let successCount = 0;
-    let errorCount = 0;
-
     for (const file of files) {
         const inputPath = path.join(inputDir, file);
         const outputPath = path.join(outputDir, file.replace('.valkyrie', '.js'));
-        if (compileFile(inputPath, outputPath, compilerParts)) {
-            successCount++;
-        } else {
-            errorCount++;
+        if (!compileFile(inputPath, outputPath, compilerParts)) {
+            error(`Failed to compile directory ${path.relative(__dirname, inputDir)}. Compilation stopped at ${file}.`);
+            return false;
         }
     }
 
-    if (errorCount === 0) {
-        log(`Compilation completed: ${successCount}/${files.length} files successful`);
-        return true;
-    }
-
-    error(`Failed to compile directory ${path.relative(__dirname, inputDir)}. ${errorCount} of ${files.length} files failed.`);
-    return false;
+    log(`Compilation completed: ${files.length}/${files.length} files successful`);
+    return true;
 }
 
 // --- Comparison Logic ---
 
-function generateDetailedDiff(content1, content2, filename) {
+export function generateDetailedDiff(content1, content2, filename) {
     const lines1 = content1.split('\n');
     const lines2 = content2.split('\n');
     const maxLines = Math.max(lines1.length, lines2.length);
@@ -204,7 +218,7 @@ function generateDetailedDiff(content1, content2, filename) {
     return diffReport.join('\n');
 }
 
-function findCharacterDifferences(str1, str2) {
+export function findCharacterDifferences(str1, str2) {
     const maxLen = Math.max(str1.length, str2.length);
     let differences = [];
     
@@ -220,7 +234,7 @@ function findCharacterDifferences(str1, str2) {
     return differences.slice(0, 5).join(', ') + (differences.length > 5 ? '...' : '');
 }
 
-function compareDirectories(dir1, dir2) {
+export function compareDirectories(dir1, dir2) {
     log(`Comparing directories: ${path.relative(__dirname, dir1)} vs ${path.relative(__dirname, dir2)}`);
     
     if (!fs.existsSync(dir1) || !fs.existsSync(dir2)) {
@@ -285,7 +299,12 @@ async function loadBootstrapCompiler() {
     const bootstrapParser = await import(pathToFileURL(path.join(PATHS.bootstrap, 'parser.js')).href);
     const bootstrapCodegen = await import(pathToFileURL(path.join(PATHS.bootstrap, 'codegen.js')).href);
     log('Bootstrap compiler components loaded.');
-    return { lexer: bootstrapLexer, parser: bootstrapParser, codegen: bootstrapCodegen };
+    
+    return { 
+        lexer: bootstrapLexer, 
+        parser: bootstrapParser, 
+        codegen: bootstrapCodegen 
+    };
 }
 
 async function bootstrap() {
@@ -313,7 +332,11 @@ async function bootstrap() {
         const stage0Lexer = await import(pathToFileURL(path.join(PATHS.stage0, 'lexer.js')).href);
         const stage0Parser = await import(pathToFileURL(path.join(PATHS.stage0, 'parser.js')).href);
         const stage0Codegen = await import(pathToFileURL(path.join(PATHS.stage0, 'codegen.js')).href);
-        const stage0CompilerParts = { lexer: stage0Lexer, parser: stage0Parser, codegen: stage0Codegen };
+        const stage0CompilerParts = { 
+            lexer: stage0Lexer, 
+            parser: stage0Parser, 
+            codegen: stage0Codegen 
+        };
         log('Stage-0 compiler components loaded.');
 
         if (!compileDirectory(PATHS.library, PATHS.stage1, stage0CompilerParts)) {
@@ -348,7 +371,34 @@ async function bootstrap() {
     }
 }
 
-function findParseErrors(node) {
+export function findFirstParseError(node) {
+    if (!node || typeof node !== 'object') {
+        return null;
+    }
+
+    if (node.type === 'ParseError') {
+        return node;
+    }
+
+    for (const key in node) {
+        if (Object.prototype.hasOwnProperty.call(node, key)) {
+            const child = node[key];
+            if (Array.isArray(child)) {
+                for (const item of child) {
+                    const error = findFirstParseError(item);
+                    if (error) return error;
+                }
+            } else if (child && typeof child === 'object') {
+                const error = findFirstParseError(child);
+                if (error) return error;
+            }
+        }
+    }
+
+    return null;
+}
+
+export function findParseErrors(node) {
     if (!node || typeof node !== 'object') {
         return;
     }
@@ -370,43 +420,10 @@ function findParseErrors(node) {
 }
 
 
-async function compileTest() {
-    log("Starting Valkyrie test compilation...");
-    try {
-        const { lexer, parser, codegen } = await loadBootstrapCompiler();
-        const testFile = path.join(PATHS.root, 'debug_parser.valkyrie');
-        log(`Compiling file: ${path.basename(testFile)}`);
-        const source = fs.readFileSync(testFile, 'utf-8');
-
-        const lexerInstance = lexer.initLexer(source);
-        const tokens = lexer.tokenize(lexerInstance);
-
-        console.log('--- TOKENS ---');
-        console.log(tokens.map(t => `[${t.line}:${t.column}] ${t.type}: '${t.value}'`).join('\n'));
-        console.log('--------------');
-
-        const ast = parser.parse(tokens);
-
-        console.log('[Valkyrie Debug] AST generated. Checking for parse errors...');
-        console.log('[Valkyrie Debug] AST structure:', JSON.stringify(ast, null, 2));
-        findParseErrors(ast);
-
-        const compiled = codegen.generate(ast);
-        const outputFile = path.join(PATHS.dist, 'test.js');
-        fs.writeFileSync(outputFile, compiled);
-        log(`Test compilation successful. Output at: ${outputFile}`);
-        return true;
-    } catch (e) {
-        error(`Test compilation failed: ${e.message}`);
-        console.error(e.stack);
-        return false;
-    }
-}
-
 
 // --- Command-Line Interface ---
 
-function showHelp() {
+export function showHelp() {
     console.log(`
 Valkyrie Language Bootstrap Compiler
 
@@ -415,13 +432,33 @@ Usage:
 
 Commands:
   bootstrap, boot    Run the complete bootstrap process.
-  compile-test       Compile library/parser.valkyrie with the bootstrap compiler for debugging.
   help, -h, --help   Show this help message.
 
 Examples:
   node bootstrap.js bootstrap
   node bootstrap.js compile-test
 `);
+}
+
+async function compileTest() {
+    log("Compiling parser.valkyrie for testing...");
+    try {
+        const bootstrapCompilerParts = await loadBootstrapCompiler();
+        const inputPath = path.join(PATHS.library, 'parser.valkyrie');
+        const outputPath = path.join(PATHS.dist, 'parser.test.js');
+        
+        if (compileFile(inputPath, outputPath, bootstrapCompilerParts)) {
+            log(`✅ Test compilation successful: ${path.relative(__dirname, outputPath)}`);
+            return true;
+        } else {
+            error("❌ Test compilation failed");
+            return false;
+        }
+    } catch (err) {
+        error(`Test compilation failed: ${err.message}`);
+        console.error(err.stack);
+        return false;
+    }
 }
 
 async function main() {
@@ -434,12 +471,10 @@ async function main() {
             const success = await bootstrap();
             process.exit(success ? 0 : 1);
             break;
-            
         case 'compile-test':
             const testSuccess = await compileTest();
             process.exit(testSuccess ? 0 : 1);
             break;
-
         case 'help':
         case '-h':
         case '--help':
