@@ -1,149 +1,171 @@
-// Bootstrap Code Generator - 手写的 JavaScript 版本
+export function replaceAll(str, search, replace) {
+    let result = "";
+    let i = 0;
+    while ((i < str.length)) {
+        if ((str[i] == search)) {
+            result = (result + replace);
+        } else {
+            result = (result + str[i]);
+        }
+        i = (i + 1);
+    }
+    return result;
+}
 
 export function generateExpression(node) {
-    if (node.type === "Number") {
+    if ((node.type == "Number")) {
         return node.value;
     }
-
-    if (node.type === "String") {
-        const escaped = node.value
-            .replace(/\\/g, '\\\\')
-            .replace(/"/g, '\\"')
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t');
-        return `"${escaped}"`;
+    if ((node.type == "String")) {
+        let escaped = node.value;
+        escaped = replaceAll(escaped, "\\", "\\\\");
+        escaped = replaceAll(escaped, "\"", "\\\"");
+        escaped = replaceAll(escaped, "\n", "\\n");
+        escaped = replaceAll(escaped, "\r", "\\r");
+        escaped = replaceAll(escaped, "\t", "\\t");
+        return (("\"" + escaped) + "\"");
     }
-
-    if (node.type === "Boolean") {
+    if ((node.type == "Boolean")) {
         return node.value;
     }
-
-    if (node.type === "Identifier") {
+    if ((node.type == "Identifier")) {
         return node.name;
     }
-
-    if (node.type === "BinaryOp") {
-        const left = generateExpression(node.left);
-        const right = generateExpression(node.right);
-        return `(${left} ${node.operator} ${right})`;
-    }
-
-    if (node.type === "Assignment") {
-        const left = generateExpression(node.left);
-        const right = generateExpression(node.right);
-        return left + " = " + right;
-    }
-
-    if (node.type === "FunctionCall") {
-        const callee = generateExpression(node.callee);
-        const args = [];
-        for (let i = 0; i < node.arguments.length; i++) {
-            args.push(generateExpression(node.arguments[i]));
-        }
-        return callee + "(" + args.join(", ") + ")";
-    }
-
-    if (node.type === "PropertyAccess") {
-        const obj = typeof node.object === "string" ? node.object : generateExpression(node.object);
-        return obj + "." + node.property;
-    }
-
-    if (node.type === "ArrayAccess") {
-        const obj = typeof node.object === "string" ? node.object : generateExpression(node.object);
-        const index = generateExpression(node.index);
-        return obj + "[" + index + "]";
-    }
-
-    if (node.type === "ObjectLiteral") {
-        return "{}";
-    }
-
-    if (node.type === "ArrayLiteral") {
-        return "[]";
-    }
-
-    if (node.type === "UnaryOp") {
-        const operand = generateExpression(node.operand);
-        return node.operator + operand;
-    }
-
-    return "/* Unknown expression: " + node.type + " */";
-}
-
-export function generateStatement(node, isTopLevel = false) {
-    if (node.type === "LetStatement") {
-        const value = generateExpression(node.value);
-        return "let " + node.name + " = " + value + ";";
-    }
-
-    if (node.type === "FunctionDeclaration") {
-        const params = node.parameters.join(", ");
-        const body = generateStatement(node.body, false);
-        return "export function " + node.name + "(" + params + ") " + body;
-    }
-
-    if (node.type === "IfStatement") {
-        const condition = generateExpression(node.condition);
-        const thenBranch = generateStatement(node.thenBranch, false);
-        let result = "if (" + condition + ") " + thenBranch;
-
-        if (node.elseBranch && node.elseBranch.type) {
-            const elseBranch = generateStatement(node.elseBranch, false);
-            result = result + " else " + elseBranch;
-        }
-
+    if ((node.type == "BinaryOp")) {
+        let left = generateExpression(node.left);
+        let right = generateExpression(node.right);
+        let result = "(";
+        result = (result + left);
+        result = (result + " ");
+        result = (result + node.operator);
+        result = (result + " ");
+        result = (result + right);
+        result = (result + ")");
         return result;
     }
-
-    if (node.type === "WhileStatement") {
-        const condition = generateExpression(node.condition);
-        const body = generateStatement(node.body, false);
-        return "while (" + condition + ") " + body;
+    if ((node.type == "Assignment")) {
+        let left = generateExpression(node.left);
+        let right = generateExpression(node.right);
+        return ((left + " = ") + right);
     }
-
-    if (node.type === "ReturnStatement") {
-        if (node.value && node.value.type) {
-            const value = generateExpression(node.value);
-            return "return " + value + ";";
+    if ((node.type == "FunctionCall")) {
+        let callee = generateExpression(node.callee);
+        let args = "";
+        let i = 0;
+        while ((i < node.arguments.length)) {
+            let arg = generateExpression(node.arguments[i]);
+            args = (args + arg);
+            if ((i < (node.arguments.length - 1))) {
+                args = (args + ", ");
+            }
+            i = (i + 1);
         }
-        return "return;";
+        return (((callee + "(") + args) + ")");
     }
-
-    if (node.type === "Block") {
-        const statements = [];
-        for (let i = 0; i < node.statements.length; i++) {
-            statements.push(generateStatement(node.statements[i], false));
+    if ((node.type == "PropertyAccess")) {
+        if (node.object.type) {
+            let obj = generateExpression(node.object);
+            return ((obj + ".") + node.property);
+        } else {
+            return ((node.object + ".") + node.property);
         }
-        return "{\n" + statements.join("\n") + "\n}";
     }
-
-    if (node.type === "ExpressionStatement") {
-        return generateExpression(node.expression) + ";";
+    if ((node.type == "ArrayAccess")) {
+        let obj = "";
+        if (node.object.type) {
+            obj = generateExpression(node.object);
+        } else {
+            obj = node.object;
+        }
+        let index = generateExpression(node.index);
+        return (((obj + "[") + index) + "]");
     }
-
-    return "/* Unknown statement: " + node.type + " */";
+    if ((node.type == "ObjectLiteral")) {
+        return "{}";
+    }
+    if ((node.type == "ArrayLiteral")) {
+        return "[]";
+    }
+    if ((node.type == "UnaryOp")) {
+        let operand = generateExpression(node.operand);
+        return (node.operator + operand);
+    }
+    return (("/* Unknown expression: " + node.type) + " */");
 }
 
-export function generateProgram(node) {
-    const statements = [];
-
-    for (let i = 0; i < node.statements.length; i++) {
-        const statementNode = node.statements[i];
-        statements.push(generateStatement(statementNode, true));
+export function generateStatement(node) {
+    if ((node.type == "LetStatement")) {
+        let value = generateExpression(node.value);
+        return (((("let " + node.name) + " = ") + value) + ";");
     }
-
-    return statements.join("\n");
+    if ((node.type == "FunctionDeclaration")) {
+        let params = "";
+        let i = 0;
+        while ((i < node.parameters.length)) {
+            if ((i > 0)) {
+                params = (params + ", ");
+            }
+            params = (params + node.parameters[i]);
+            i = (i + 1);
+        }
+        let body = generateStatement(node.body);
+        return ((((("export function " + node.name) + "(") + params) + ") ") + body);
+    }
+    if ((node.type == "IfStatement")) {
+        let condition = generateExpression(node.condition);
+        let thenBranch = generateStatement(node.thenBranch);
+        let result = ((("if (" + condition) + ") ") + thenBranch);
+        if ((node.elseBranch && node.elseBranch.type)) {
+            let elseBranch = generateStatement(node.elseBranch);
+            result = ((result + " else ") + elseBranch);
+        }
+        return result;
+    }
+    if ((node.type == "WhileStatement")) {
+        let condition = generateExpression(node.condition);
+        let body = generateStatement(node.body);
+        return ((("while (" + condition) + ") ") + body);
+    }
+    if ((node.type == "ReturnStatement")) {
+        if ((node.value && node.value.type)) {
+            let value = generateExpression(node.value);
+            return (("return " + value) + ";");
+        } else {
+            return "return;";
+        }
+    }
+    if ((node.type == "Block")) {
+        let statements = "";
+        let i = 0;
+        while ((i < node.statements.length)) {
+            let stmt = generateStatement(node.statements[i]);
+            if ((i > 0)) {
+                statements = (statements + "\n");
+            }
+            statements = (statements + stmt);
+            i = (i + 1);
+        }
+        return (("{\n" + statements) + "\n}");
+    }
+    if ((node.type == "ExpressionStatement")) {
+        return (generateExpression(node.expression) + ";");
+    }
+    return (("/* Unknown statement: " + node.type) + " */");
 }
 
 export function generate(ast) {
-    if (ast.type === "Program") {
-        return generateProgram(ast);
+    if ((ast.type == "Program")) {
+        let result = "";
+        let i = 0;
+        while ((i < ast.statements.length)) {
+            let stmt = ast.statements[i];
+            result = ((result + generateStatement(stmt)) + "\n");
+            i = (i + 1);
+        }
+        return result;
     }
-
-    if (ast.type === "ParseError") {
-        return "// Parse Error: " + ast.message + " at line " + ast.line + ", column " + ast.column;
+    if ((ast.type == "ParseError")) {
+        return ((((("// Parse Error: " + ast.message) + " at line ") + ast.line) + ", column ") + ast.column);
     }
-
-    return "/* Unknown AST node: " + ast.type + " */";
+    return generateStatement(ast);
 }
