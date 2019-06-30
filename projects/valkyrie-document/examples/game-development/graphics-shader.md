@@ -57,14 +57,14 @@ micro compute_main(id: ComputeInput) {
 
 ```valkyrie
 # 顶点输入结构
-struct VertexInput {
+structure VertexInput {
     @location(0) position: Vec3,
     @location(1) color: Vec3,
     @location(2) uv: Vec2
 }
 
 # 顶点输出结构
-struct VertexOutput {
+structure VertexOutput {
     @builtin(position) clip_position: Vec4,
     @location(0) color: Vec3,
     @location(1) uv: Vec2
@@ -72,7 +72,7 @@ struct VertexOutput {
 
 # Uniform 缓冲区
 @group(0) @binding(0)
-struct CameraUniform {
+structure CameraUniform {
     view_proj: Mat4
 }
 
@@ -90,13 +90,13 @@ micro vertex_main(vertex: VertexInput, camera: CameraUniform) -> VertexOutput {
 
 ```valkyrie
 # 片段输入（来自顶点着色器）
-struct FragmentInput {
+structure FragmentInput {
     @location(0) color: Vec3,
     @location(1) uv: Vec2
 }
 
 # 片段输出
-struct FragmentOutput {
+structure FragmentOutput {
     @location(0) color: Vec4
 }
 
@@ -123,14 +123,14 @@ micro fragment_main(input: FragmentInput) -> FragmentOutput {
 
 ```valkyrie
 # 光照数据结构
-struct Light {
+structure Light {
     position: Vec3,
     color: Vec3,
     intensity: f32
 }
 
 # 材质属性
-struct Material {
+structure Material {
     albedo: Vec3,
     metallic: f32,
     roughness: f32,
@@ -283,7 +283,7 @@ micro apply_vignette(color: Vec4, uv: Vec2) -> Vec4 {
 
 ```valkyrie
 # 粒子数据结构
-struct Particle {
+structure Particle {
     position: Vec3,
     velocity: Vec3,
     life: f32,
@@ -295,7 +295,7 @@ struct Particle {
 let particles: storage<array<Particle>, read_write>
 
 @group(0) @binding(1)
-struct SimulationParams {
+structure SimulationParams {
     delta_time: f32,
     gravity: Vec3,
     damping: f32
@@ -395,7 +395,7 @@ micro edge_detection(id: ComputeInput) {
 
 ```valkyrie
 # wgpu 设备和队列
-struct GraphicsContext {
+structure GraphicsContext {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface,
@@ -524,7 +524,7 @@ class TextureManager {
 
 ```valkyrie
 # G-Buffer 结构
-struct GBuffer {
+structure GBuffer {
     albedo: wgpu::Texture,      # RGB: 反照率, A: 金属度
     normal: wgpu::Texture,      # RGB: 世界空间法线
     material: wgpu::Texture,    # R: 粗糙度, G: AO, B: 自发光
@@ -716,7 +716,7 @@ class GPUProfiler {
 
 ```valkyrie
 # 实例化渲染数据
-struct InstanceData {
+structure InstanceData {
     model_matrix: Mat4,
     color: Vec4
 }

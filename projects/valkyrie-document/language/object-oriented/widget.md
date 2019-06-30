@@ -507,7 +507,7 @@ widget VirtualList<T> {
         self.container_height = container_height
         self.scroll_top = 0.0
         self.render_item = { |item, index| 
-            Box::new(Text::new(format!("Item {}", index)))
+            Box::new(Text::new(@format("Item {}", index)))
         }
     }
     

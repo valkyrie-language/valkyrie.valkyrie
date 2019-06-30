@@ -281,11 +281,11 @@ log = "0.4"
 tokio-test = "0.4"
 
 # 在代码中使用外部依赖
-using serde.{Serialize, Deserialize}
+using serde.{Encode, Decode}
 using tokio.runtime.Runtime
 using log.{info, warn, error}
 
-↯derive(Serialize, Deserialize)
+↯derive(Encode, Decode)
 class Config {
     host: String,
     port: u16,

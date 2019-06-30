@@ -41,14 +41,14 @@ Valkyrie 在所有领域都提供编译时类型检查，确保代码的正确�
 
 ```valkyrie
 # 游戏开发中的类型安全
-struct Player {
+structure Player {
     position: Vec3<f32>,
     health: Health<100>,  # 编译时范围检查
     inventory: Inventory<32>  # 固定大小容器
 }
 
 # 嵌入式开发中的硬件抽象
-struct GpioPin<const PIN: u8, const PORT: char> {
+structure GpioPin<const PIN: u8, const PORT: char> {
     _phantom: PhantomData<(PIN, PORT)>
 }
 

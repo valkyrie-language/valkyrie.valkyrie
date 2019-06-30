@@ -34,40 +34,40 @@ imply WebServer {
         }
     }
     
-    route(&mut self, method: HttpMethod, path: &str, handler: imply Handler + 'static) {
+    route(&mut self, method: HttpMethod, path: &str, handler: imply Handler) {
         self.router.add_route(method, path, Box::new(handler))
     }
     
-    get(&mut self, path: &str, handler: imply Handler + 'static) {
+    get(&mut self, path: &str, handler: imply Handler) {
         self.route(HttpMethod::GET, path, handler)
     }
     
-    post(&mut self, path: &str, handler: imply Handler + 'static) {
+    post(&mut self, path: &str, handler: imply Handler) {
         self.route(HttpMethod::POST, path, handler)
     }
     
-    put(&mut self, path: &str, handler: imply Handler + 'static) {
+    put(&mut self, path: &str, handler: imply Handler) {
         self.route(HttpMethod::PUT, path, handler)
     }
     
-    delete(&mut self, path: &str, handler: imply Handler + 'static) {
+    delete(&mut self, path: &str, handler: imply Handler) {
         self.route(HttpMethod::DELETE, path, handler)
     }
     
-    use_middleware(&mut self, middleware: imply Middleware + 'static) {
+    use_middleware(&mut self, middleware: imply Middleware) {
         self.middleware_stack.push(Box::new(middleware))
     }
     
     serve_static(&mut self, path: &str, dir: &str) {
         let static_handler = StaticFileHandler::new(dir)
-        self.get(&format!("{}/*", path), static_handler)
+        self.get(&@format("{}/*", path), static_handler)
     }
     
     async micro listen(&self) -> Result<(), ServerError> {
-        let addr = format!("{}:{}", self.config.host, self.config.port)
+        let addr = @format("{}:{}", self.config.host, self.config.port)
         let listener = TcpListener::bind(&addr).await?
         
-        println!("Server listening on http://{}", addr)
+        @println("Server listening on http://{}", addr)
         
         loop {
             let (stream, _) = listener.accept().await?
@@ -76,7 +76,7 @@ imply WebServer {
             
             self.thread_pool.spawn(async move {
                 if let Err(e) = handle_connection(stream, router, middleware).await {
-                    eprintln!("Error handling connection: {}", e)
+                    @eprintln("Error handling connection: {}", e)
                 }
             })
         }
@@ -345,7 +345,7 @@ imply HttpRequest {
         self.query_params.get(name)
     }
     
-    json<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+    json<T: DeEncodeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_slice(&self.body)
     }
     
@@ -414,7 +414,7 @@ imply HttpResponse {
         self
     }
     
-    with_json<T: Serialize>(mut self, data: &T) -> Result<Self, serde_json::Error> {
+    with_json<T: Encode>(mut self, data: &T) -> Result<Self, serde_json::Error> {
         let json_str = serde_json::to_string(data)?
         self.body = json_str.into_bytes()
         self.headers.insert("Content-Type", "application/json")
@@ -438,7 +438,7 @@ imply HttpResponse {
     }
     
     to_bytes(&self) -> Vector<u8> {
-        let mut response = format!(
+        let mut response = @format(
             "HTTP/1.1 {} {}\r\n",
             self.status_code,
             self.status_text
@@ -446,11 +446,11 @@ imply HttpResponse {
         
         # 添加头部
         for (key, value) in &self.headers {
-            response.push_str(&format!("{}:{}\r\n", key, value))
+            response.push_str(&@format("{}:{}\r\n", key, value))
         }
         
         # 添加 Content-Length
-        response.push_str(&format!("Content-Length: {}\r\n", self.body.len()))
+        response.push_str(&@format("Content-Length: {}\r\n", self.body.len()))
         response.push_str("\r\n")
         
         let mut bytes = response.into_bytes()
@@ -512,7 +512,7 @@ imply Middleware for LoggingMiddleware {
         let start_time = std::time::Instant::now()
         
         # 记录请求开始
-        println!("[{}] {} {}", 
+        @println("[{}] {} {}", 
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"),
             context.request.method.as_str(),
             context.request.path
@@ -687,7 +687,7 @@ imply TemplateEngine {
     }
     
     load_template(&mut self, name: &str) -> Result<(), TemplateError> {
-        let path = format!("{}/{}.html", self.template_dir, name)
+        let path = @format("{}/{}.html", self.template_dir, name)
         let content = std::fs::read_to_string(&path)
             .map_err(|_| TemplateError::TemplateNotFound(name))?;
         
@@ -1093,7 +1093,7 @@ imply WebSocketServer {
         }
     }
     
-    on_message<H: MessageHandler + 'static>(&mut self, message_type: &str, handler: H) {
+    on_message<H: MessageHandler>(&mut self, message_type: &str, handler: H) {
         self.message_handlers.insert(message_type, Box::new(handler))
     }
     
@@ -1141,7 +1141,7 @@ imply WebSocketServer {
                     self.handle_message(connection_id, ws_message).await?
                 },
                 Some(Err(e)) => {
-                    eprintln!("WebSocket error: {}", e)
+                    @eprintln("WebSocket error: {}", e)
                     break
                 },
                 None => {
@@ -1283,7 +1283,7 @@ async micro main() -> Result<(), Box<dyn std::error::Error>> {
     server.get("/api/auth/profile", auth_profile)
     
     # 启动服务器
-    println!("Starting blog server on http://127.0.0.1:8080")
+    @println("Starting blog server on http://127.0.0.1:8080")
     server.listen().await
 }
 
@@ -1333,7 +1333,7 @@ async micro api_posts(request: &HttpRequest) -> Result<HttpResponse, HandlerErro
     
     let posts = get_posts_paginated(page, limit).await?
     
-    let response_data = serde_json::json!({
+    let response_data = serde_json::@json({
         "posts": posts,
         "page": page,
         "limit": limit
@@ -1360,7 +1360,7 @@ async micro api_create_post(request: &HttpRequest) -> Result<HttpResponse, Handl
 }
 
 # 数据模型
-↯[derive(Serialize, Deserialize)]
+↯[derive(Encode, DeEncode)]
 class Post {
     id: u32
     title: String
@@ -1370,7 +1370,7 @@ class Post {
     updated_at: chrono::DateTime<chrono::Utc>
 }
 
-↯[derive(Deserialize)]
+↯[derive(DeEncode)]
 class CreatePostRequest {
     title: String
     content: String

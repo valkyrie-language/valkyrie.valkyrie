@@ -324,12 +324,12 @@ micro check_memory_usage() {
     let cpu_arrays = ArrayND::get_cpu_memory_usage()
     let gpu_arrays = ArrayND::get_gpu_memory_usage()
     
-    println!("CPU 内存使用: {:.2} MB", cpu_arrays as f64 / 1024.0 / 1024.0)
-    println!("GPU 内存使用: {:.2} MB", gpu_arrays as f64 / 1024.0 / 1024.0)
+    @println("CPU 内存使用: {:.2} MB", cpu_arrays as f64 / 1024.0 / 1024.0)
+    @println("GPU 内存使用: {:.2} MB", gpu_arrays as f64 / 1024.0 / 1024.0)
     
     # 内存不足时的处理
     if gpu_arrays > 8 * 1024 * 1024 * 1024 {  # 8GB
-        println!("GPU 内存不足，建议使用 CPU 或减少批次大小")
+        @println("GPU 内存不足，建议使用 CPU 或减少批次大小")
     }
 }
 
@@ -355,7 +355,7 @@ where F: FnOnce() {
     f()
     let duration = start.elapsed()
     
-    println!("{} 耗时: {:.2}ms", name, duration.as_millis())
+    @println("{} 耗时: {:.2}ms", name, duration.as_millis())
     duration
 }
 
@@ -374,5 +374,5 @@ micro compare_devices() {
         let result = data_gpu.matmul(&data_gpu)
     })
     
-    println!("GPU 加速比: {:.2}x", cpu_time.as_millis() as f64 / gpu_time.as_millis() as f64)
+    @println("GPU 加速比: {:.2}x", cpu_time.as_millis() as f64 / gpu_time.as_millis() as f64)
 }```

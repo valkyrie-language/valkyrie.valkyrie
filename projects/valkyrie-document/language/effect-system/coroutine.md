@@ -359,7 +359,7 @@ async micro test_async_generator() {
     let gen = async_data_processor()
     
     let first_result = gen.next().await?
-    assert!(first_result.is_some())
+    @assert(first_result.is_some())
     
     let final_result = gen.collect_all().await?
     @assert_equal(final_result.len(), 5)

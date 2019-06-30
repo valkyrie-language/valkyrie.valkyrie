@@ -88,7 +88,7 @@ let numbers = @vec_of(1, 2, 3, 4, 5)
 **过程宏**:
 ```valkyrie
 # 自定义派生宏
-↯derive(Serialize, Deserialize, Debug)
+↯derive(Encode, Decode, Debug)
 class User {
     id: u64,
     name: String,
@@ -157,9 +157,9 @@ class Config {
 }
 
 # 编译时生成的代码
-imply Serialize for Config {
-    serialize(self) -> SerializedData {
-        let mut data = SerializedData::new()
+imply Encode for Config {
+    serialize(self) -> EncodedData {
+        let mut data = EncodedData::new()
         data.insert("database_url", self.database_url)
         data.insert("port", self.port)
         data.insert("debug", self.debug)
@@ -299,7 +299,7 @@ macro hygienic_macro(var) {
 ```valkyrie
 # 生成代码缓存配置
 ↯code_generation(cache: true, cache_key: "struct_hash")
-↯derive(Serialize)
+↯derive(Encode)
 class CachedStruct {
     # 结构体定义
 }

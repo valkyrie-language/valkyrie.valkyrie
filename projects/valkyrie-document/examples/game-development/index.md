@@ -158,7 +158,7 @@ imply EntityManager {
         id
     }
     
-    add_component<T: Component + 'static>(&mut self, entity_id: EntityId, component: T) {
+    add_component<T: Component>(&mut self, entity_id: EntityId, component: T) {
         let type_id = T::type_id()
         
         # 添加组件到存储

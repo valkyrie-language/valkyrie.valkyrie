@@ -6,7 +6,7 @@ hero:
   text: "现代函数式编程语言"
   tagline: 融合代数效应与强类型系统的下一代编程语言
   image:
-    src: /logo.svg
+    src: /valkyrie-logo.svg
     alt: Valkyrie
   actions:
     - theme: brand

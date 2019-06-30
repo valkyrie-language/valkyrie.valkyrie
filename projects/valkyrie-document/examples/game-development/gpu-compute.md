@@ -50,7 +50,7 @@ let input_data: storage<array<f32>, read>
 let output_data: storage<array<f32>, read_write>
 
 # 结构化数据
-struct ParticleData {
+structure ParticleData {
     position: Vec3,
     velocity: Vec3,
     mass: f32,
@@ -62,7 +62,7 @@ let particles: storage<array<ParticleData>, read_write>
 
 # Uniform 缓冲区（常量数据）
 @group(1) @binding(0)
-struct ComputeParams {
+structure ComputeParams {
     delta_time: f32,
     particle_count: u32,
     gravity: Vec3,
@@ -121,7 +121,7 @@ class ParallelReduction {
     staging_buffer: wgpu::Buffer
     
     new(device: wgpu::Device, queue: wgpu::Queue) -> ParallelReduction {
-        let shader = compile_valkyrie_shader(include_str!("parallel_sum.val"))
+        let shader = compile_valkyrie_shader(@include_str("parallel_sum.val"))
         let compute_pipeline = create_compute_pipeline(device, shader)
         
         ParallelReduction {
@@ -335,7 +335,7 @@ micro radix_sort_count(id: ComputeInput, params: RadixSortParams) {
 
 ```valkyrie
 # N-Body 重力模拟
-struct Body {
+structure Body {
     position: Vec3,
     velocity: Vec3,
     mass: f32,
@@ -346,7 +346,7 @@ struct Body {
 let bodies: storage<array<Body>, read_write>
 
 @group(0) @binding(1)
-struct NBodyParams {
+structure NBodyParams {
     body_count: u32,
     delta_time: f32,
     softening: f32,  # 软化参数避免奇点
@@ -445,7 +445,7 @@ micro n_body_optimized(id: ComputeInput, params: NBodyParams) {
 
 ```valkyrie
 # 光滑粒子流体动力学 (Smoothed Particle Hydrodynamics)
-struct FluidParticle {
+structure FluidParticle {
     position: Vec3,
     velocity: Vec3,
     density: f32,
@@ -458,7 +458,7 @@ struct FluidParticle {
 let particles: storage<array<FluidParticle>, read_write>
 
 @group(0) @binding(1)
-struct SPHParams {
+structure SPHParams {
     particle_count: u32,
     rest_density: f32,
     gas_constant: f32,
@@ -996,7 +996,7 @@ micro bandwidth_optimization(id: ComputeInput) {
 @group(2) @binding(0)
 let debug_buffer: storage<array<DebugInfo>, write>
 
-struct DebugInfo {
+structure DebugInfo {
     thread_id: u32,
     value: f32,
     iteration: u32,

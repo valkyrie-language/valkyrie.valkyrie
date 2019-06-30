@@ -335,7 +335,7 @@ namespace myapp.config {
 
 ```rust
 # Rust 代码
-struct User {
+structure User {
     name: String,
     internal_id: u64,
     private_field: String,

@@ -12,7 +12,7 @@ Universe Type : Type₁
 Universe Prop : Type₀
 
 # 恒等类型（路径类型）
-struct Path<A: Type, x: A, y: A> : Type {
+structure Path<A: Type, x: A, y: A> : Type {
     # 路径归纳原理
     refl(x: A) -> Path<A, x, x>
 }
@@ -42,7 +42,7 @@ axiom univalence<A: Type, B: Type>(
 
 ```valkyrie
 # 模态算子
-struct Modal<M: Modality, A: Type> : Type
+structure Modal<M: Modality, A: Type> : Type
 
 # 模态系统基础
 trait Modality {
@@ -53,34 +53,34 @@ trait Modality {
 }
 
 # 内置模态实现
-struct Necessity : Modality {
+structure Necessity : Modality {
     axioms: S4Axioms,  # □p → p, □p → □□p
     transitions: NecessityRules
 }
 
-struct Possibility : Modality {
+structure Possibility : Modality {
     axioms: S5Axioms,  # ◇p ↔ ¬□¬p
     transitions: PossibilityRules
 }
 
-struct Temporal<T: TimePoint> : Modality {
+structure Temporal<T: TimePoint> : Modality {
     axioms: TemporalAxioms<T>,
     transitions: TemporalRules<T>
 }
 
-struct Epistemic<A: Agent> : Modality {
+structure Epistemic<A: Agent> : Modality {
     axioms: EpistemicAxioms<A>,
     transitions: KnowledgeRules<A>
 }
 
 # 用户可扩展的模态定义
-struct CustomModal<Axioms: ModalAxioms, Rules: ModalTransitions> : Modality {
+structure CustomModal<Axioms: ModalAxioms, Rules: ModalTransitions> : Modality {
     axioms: Axioms,
     transitions: Rules
 }
 
 # 模态组合器
-struct ComposedModal<M1: Modality, M2: Modality> : Modality {
+structure ComposedModal<M1: Modality, M2: Modality> : Modality {
     axioms: CombinedAxioms<M1.axioms, M2.axioms>,
     transitions: CombinedRules<M1.transitions, M2.transitions>
 }
@@ -119,7 +119,7 @@ axiom modal_4<M: Modality, A: Type>(
 
 ```valkyrie
 # 圆周类型
-struct Circle : Type {
+structure Circle : Type {
     base: Circle,
     loop: Path<Circle, base, base>
 }
@@ -137,21 +137,21 @@ micro circle_ind<P: Circle -> Type>(
 ) -> (c: Circle) -> P(c)
 
 # 球面类型
-struct Sphere(n: Nat) : Type {
+structure Sphere(n: Nat) : Type {
     base: Sphere(n),
     # n维球面的生成元
     generator: Path^n<Sphere(n), base, base>
 }
 
 # 悬垂构造
-struct Suspension<A: Type> : Type {
+structure Suspension<A: Type> : Type {
     north: Suspension<A>,
     south: Suspension<A>,
     merid: (a: A) -> Path<Suspension<A>, north, south>
 }
 
 # 推出构造
-struct Pushout<A: Type, B: Type, C: Type>(
+structure Pushout<A: Type, B: Type, C: Type>(
     f: A -> B, 
     g: A -> C
 ) : Type {
@@ -227,7 +227,7 @@ theorem add_assoc(a: Nat, b: Nat, c: Nat) -> Path<Nat, (a + b) + c, a + (b + c)>
 
 ```valkyrie
 # 群的定义
-struct Group {
+structure Group {
     carrier: Type,
     op: carrier -> carrier -> carrier,
     identity: carrier,
@@ -251,7 +251,7 @@ struct Group {
 }
 
 # 群同态
-struct GroupHom(G: Group, H: Group) {
+structure GroupHom(G: Group, H: Group) {
     map: G.carrier -> H.carrier,
     
     preserve_op: (a: G.carrier, b: G.carrier) -> 
@@ -321,7 +321,7 @@ theorem first_isomorphism_theorem<G: Group, H: Group>(
 
 ```valkyrie
 # 拓扑空间
-struct TopologicalSpace {
+structure TopologicalSpace {
     carrier: Type,
     open_sets: Subset(PowerSet(carrier)),
     
@@ -337,7 +337,7 @@ struct TopologicalSpace {
 }
 
 # 连续映射
-struct ContinuousMap(X: TopologicalSpace, Y: TopologicalSpace) {
+structure ContinuousMap(X: TopologicalSpace, Y: TopologicalSpace) {
     map: X.carrier -> Y.carrier,
     
     continuous: (V: Subset(Y.carrier)) -> 
@@ -346,7 +346,7 @@ struct ContinuousMap(X: TopologicalSpace, Y: TopologicalSpace) {
 }
 
 # 同胚
-struct Homeomorphism(X: TopologicalSpace, Y: TopologicalSpace) {
+structure Homeomorphism(X: TopologicalSpace, Y: TopologicalSpace) {
     forward: ContinuousMap(X, Y),
     backward: ContinuousMap(Y, X),
     
@@ -358,7 +358,7 @@ struct Homeomorphism(X: TopologicalSpace, Y: TopologicalSpace) {
 }
 
 # 基本群
-struct FundamentalGroup(X: TopologicalSpace, x₀: X.carrier) {
+structure FundamentalGroup(X: TopologicalSpace, x₀: X.carrier) {
     carrier: LoopSpace(X, x₀) / Homotopy,
     op: (α: carrier, β: carrier) -> α * β,  # 路径连接
     identity: constant_loop(x₀),
@@ -366,7 +366,7 @@ struct FundamentalGroup(X: TopologicalSpace, x₀: X.carrier) {
 }
 
 # 范畴论中的函子
-struct Functor(C: Category, D: Category) {
+structure Functor(C: Category, D: Category) {
     object_map: C.Object -> D.Object,
     morphism_map: (A: C.Object, B: C.Object) -> 
                   C.Hom(A, B) -> D.Hom(object_map(A), object_map(B)),
@@ -391,7 +391,7 @@ struct Functor(C: Category, D: Category) {
 
 ```valkyrie
 # 认知算子
-struct Knowledge<Agent: Type, Prop: Type> {
+structure Knowledge<Agent: Type, Prop: Type> {
     knows: Agent -> Prop -> Type,
     
     # 知识公理
@@ -406,7 +406,7 @@ struct Knowledge<Agent: Type, Prop: Type> {
 }
 
 # 共同知识
-struct CommonKnowledge<Agents: Type, Prop: Type> {
+structure CommonKnowledge<Agents: Type, Prop: Type> {
     everyone_knows: (p: Prop) -> 
                    (∀ a: Agents. Knowledge.knows(a, p)) -> Type,
     
@@ -455,7 +455,7 @@ theorem byzantine_generals_impossibility(
 
 ```valkyrie
 # 线性时态逻辑 (LTL)
-struct LTL<Prop: Type> {
+structure LTL<Prop: Type> {
     # 时态算子
     ○: Prop -> Prop,           # 下一个状态
     ◇: Prop -> Prop,           # 最终
@@ -477,7 +477,7 @@ struct LTL<Prop: Type> {
 }
 
 # 计算树逻辑 (CTL)
-struct CTL<Prop: Type> {
+structure CTL<Prop: Type> {
     # 路径量词
     𝒜: (Prop -> Prop) -> Prop,    # 所有路径
     ℰ: (Prop -> Prop) -> Prop,    # 存在路径
@@ -531,7 +531,7 @@ theorem model_checking_decidable<M: KripkeStructure, φ: CTL.Formula>() ->
 
 ```valkyrie
 # 依赖类型的向量
-struct Vec<A: Type, n: Nat> : Type {
+structure Vec<A: Type, n: Nat> : Type {
     data: Array<A>,
     length_proof: Path<Nat, data.length, n>
 }
@@ -580,7 +580,7 @@ micro matrix_multiply<A: Ring, m: Nat, n: Nat, p: Nat>(
 
 ```valkyrie
 # 霍尔逻辑 {P} C {Q}
-struct HoareTriple<State: Type> {
+structure HoareTriple<State: Type> {
     𝒫: State -> Prop,  # 前置条件
     𝒞: State -> State,  # 程序
     𝒬: State -> Prop,  # 后置条件
@@ -620,7 +620,7 @@ theorem quicksort_correctness<A: TotalOrder>(
 }
 
 # 并发程序验证
-struct ConcurrentProgram<State: Type> {
+structure ConcurrentProgram<State: Type> {
     processes: List<Process<State>>,
     shared_state: SharedState<State>,
     

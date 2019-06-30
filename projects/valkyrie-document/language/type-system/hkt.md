@@ -458,7 +458,7 @@ imply QueryBuilder<NoTable, NoWhere> {
 
 impl<W> QueryBuilder<NoTable, W> {
     from<T>(mut self, table: String) -> QueryBuilder<HasTable<T>, W> {
-        self.query.push_str(&format!(" FROM {}", table))
+        self.query.push_str(&@format(" FROM {}", table))
         QueryBuilder {
             query: self.query,
             _phantom: PhantomData,
@@ -468,7 +468,7 @@ impl<W> QueryBuilder<NoTable, W> {
 
 impl<T> QueryBuilder<HasTable<T>, NoWhere> {
     where_clause(mut self, condition: String) -> QueryBuilder<HasTable<T>, HasWhere> {
-        self.query.push_str(&format!(" WHERE {}", condition))
+        self.query.push_str(&@format(" WHERE {}", condition))
         QueryBuilder {
             query: self.query,
             _phantom: PhantomData,

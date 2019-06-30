@@ -47,7 +47,7 @@ micro test_addition() {
 }
 
 # 序列化注解
-↯derive(Serialize, Deserialize)
+↯derive(Encode, Decode)
 class User {
     name: String,
     email: String,
@@ -155,7 +155,7 @@ class Point {
     y: f64,
 }
 
-↯derive(Serialize, Deserialize)
+↯derive(Encode, Decode)
 class Config {
     database_url: String,
     port: u16,
@@ -202,9 +202,9 @@ macro vec_of {
 ```valkyrie
 @macro
 micro debug_print(args: TokenStream) -> TokenStream {
-    if cfg!(debug_assertions) {
+    if @cfg(debug_assertions) {
         quote! {
-            println!(#args)
+            @println(#args)
         }
     } else {
         quote! {}

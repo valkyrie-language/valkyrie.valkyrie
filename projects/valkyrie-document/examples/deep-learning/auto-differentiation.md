@@ -21,7 +21,7 @@ let grad = z.backward()
 let dx = grad.get(x)  # dz/dx
 let dy = grad.get(y)  # dz/dy
 
-println!("dz/dx = {}, dz/dy = {}", dx, dy)
+@println("dz/dx = {}, dz/dy = {}", dx, dy)
 ```
 
 ### 计算图
@@ -97,7 +97,7 @@ let x = ForwardDual::variable(2.0)
 let y = ForwardDual::constant(3.0)
 let result = x * x + x * y  # f(x) = x² + 3x
 
-println!("f(2) = {}, f'(2) = {}", result.value, result.derivative)
+@println("f(2) = {}, f'(2) = {}", result.value, result.derivative)
 ```
 
 ## 反向模式自动微分
@@ -184,9 +184,9 @@ let d2y_dx2 = dy_dx.grad(x)
 # 三阶导数
 let d3y_dx3 = d2y_dx2.grad(x)
 
-println!("f'(x) = {}", dy_dx.eval_at(x, 2.0))
-println!("f''(x) = {}", d2y_dx2.eval_at(x, 2.0))
-println!("f'''(x) = {}", d3y_dx3.eval_at(x, 2.0))
+@println("f'(x) = {}", dy_dx.eval_at(x, 2.0))
+@println("f''(x) = {}", d2y_dx2.eval_at(x, 2.0))
+@println("f'''(x) = {}", d3y_dx3.eval_at(x, 2.0))
 ```
 
 ## 向量化自动微分
@@ -427,7 +427,7 @@ micro train_model(model: &mut MLP,
             total_loss += loss.value()
         }
         
-        println!("Epoch {}: Loss = {}", epoch, total_loss / train_data.len() as f64)
+        @println("Epoch {}: Loss = {}", epoch, total_loss / train_data.len() as f64)
     }
 }
 ```

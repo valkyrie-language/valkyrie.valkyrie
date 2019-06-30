@@ -87,7 +87,7 @@ let bfs_levels = graph.bfs_levels(start_node)
 
 # 自定义遍历
 let custom_traversal = graph.traverse(start_node, |node, depth| {
-    println!("Visiting node {} at depth {}", node, depth)
+    @println("Visiting node {} at depth {}", node, depth)
     depth < 5  # 限制遍历深度
 })
 ```
@@ -109,8 +109,8 @@ let all_pairs_shortest = graph.floyd_warshall()
 # Bellman-Ford算法（处理负权重）
 let bellman_ford_result = graph.bellman_ford(start_node)
 match bellman_ford_result {
-    Ok(distances) => println!("Shortest distances: {:?}", distances),
-    Err(NegativeCycle) => println!("Graph contains negative cycle")
+    Ok(distances) => @println("Shortest distances: {:?}", distances),
+    Err(NegativeCycle) => @println("Graph contains negative cycle")
 }
 ```
 

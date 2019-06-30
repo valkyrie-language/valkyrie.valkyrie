@@ -267,7 +267,7 @@ imply System for EventHandlerSystem {
         
         # 处理玩家死亡事件
         for event in world.read_events::<PlayerDeathEvent>() {
-            println!("Player died: {}", event.cause)
+            @println("Player died: {}", event.cause)
             world.despawn(event.player)
         }
     }

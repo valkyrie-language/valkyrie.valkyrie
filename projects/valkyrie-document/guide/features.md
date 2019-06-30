@@ -624,11 +624,11 @@ case Fail { error }: print(f"Error: {error}")
 # 简单宏定义
 macro debug_print($expr) {
     ↯cfg(debug_assertions)
-    println("DEBUG: {} = {}", stringify!($expr), $expr)
+    println("DEBUG: {} = {}", @stringify($expr), $expr)
 }
 
 # 使用宏
-debug_print!(x + y)
+@debug_print(x + y)
 # 展开为: println("DEBUG: x + y = {}", x + y)
 
 # 复杂宏
@@ -645,7 +645,7 @@ macro create_class($name, $($field:$type),*) {
 }
 
 # 使用复杂宏
-create_class!(Person, name: String, age: i32)
+@create_class(Person, name: String, age: i32)
 ```
 
 #### 编译时计算

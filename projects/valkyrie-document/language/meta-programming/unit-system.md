@@ -270,7 +270,7 @@ macro_rules! define_unit {
         class $name;
         
         imply Unit for $name {
-            const SYMBOL: &'static str = $symbol;
+            const SYMBOL: str = $symbol;
             type Dimension = $dimension;
         }
         
@@ -279,9 +279,9 @@ macro_rules! define_unit {
 }
 
 # 使用宏定义新单位
-define_unit!(Pixel, "px", Length);  # 像素作为长度单位
-define_unit!(Byte, "B", Information);  # 字节作为信息单位
-define_unit!(Bit, "bit", Information);
+@define_unit(Pixel, "px", Length);  # 像素作为长度单位
+@define_unit(Byte, "B", Information);  # 字节作为信息单位
+@define_unit(Bit, "bit", Information);
 
 # 信息单位计算
 let file_size = 1024Byte
@@ -307,9 +307,9 @@ macro_rules! compound_unit {
 }
 
 # 使用复合单位宏
-compound_unit!(Density = Mass^1 Length^-3);  # kg/m³
-compound_unit!(Pressure = Mass^1 Length^-1 Time^-2);  # Pa = kg/(m·s²)
-compound_unit!(ElectricField = Mass^1 Length^1 Time^-3 Current^-1);  # V/m
+@compound_unit(Density = Mass^1 Length^-3);  # kg/m³
+@compound_unit(Pressure = Mass^1 Length^-1 Time^-2);  # Pa = kg/(m·s²)
+@compound_unit(ElectricField = Mass^1 Length^1 Time^-3 Current^-1);  # V/m
 ```
 
 ## 单位制应用示例
@@ -505,8 +505,8 @@ micro internal_calculation(distances: &[Length]) -> Length {
 ```valkyrie
 # 单位不匹配的错误处理
 enum UnitError {
-    IncompatibleUnits { expected: &'static str, found: &'static str },
-    ConversionNotFound { from: &'static str, to: &'static str },
+    IncompatibleUnits { expected: str, found: str },
+    ConversionNotFound { from: str, to: str },
     InvalidValue(f64),
 }
 

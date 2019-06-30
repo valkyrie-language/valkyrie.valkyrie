@@ -287,7 +287,7 @@ union ValidationResult<T> {
     
     # 便利方法
     is_valid(self) -> bool {
-        matches!(self, Valid { .. })
+        @matches(self, Valid { .. })
     }
     
     get_errors(self) -> [String] {

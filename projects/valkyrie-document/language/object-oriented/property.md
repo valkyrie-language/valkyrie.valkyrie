@@ -176,7 +176,7 @@ class DataProcessor {
         if let Some(ref data) = self.processed_data {
             data
         } else {
-            unreachable!()
+            @unreachable()
         }
     }
     

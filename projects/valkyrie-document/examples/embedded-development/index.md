@@ -11,7 +11,7 @@ Valkyrie 提供了完整的嵌入式开发解决方案，支持 WebAssembly (WAS
 type FixedBuffer<T, const N: usize> = [T; N]
 
 # 无堆分配的向量实现
-struct HeaplessVec<T, const N: usize> {
+structure HeaplessVec<T, const N: usize> {
     data: [MaybeUninit<T>; N],
     len: usize
 }
@@ -57,10 +57,10 @@ impl<T, const N: usize> HeaplessVec<T, N> {
 
 ```valkyrie
 # 实时任务调度
-struct RTOSTask {
+structure RTOSTask {
     priority: u8,
     stack_size: usize,
-    entry_point: fn(),
+    entry_point: micro(),
     state: TaskState
 }
 
@@ -83,7 +83,7 @@ class PriorityScheduler {
         }
     }
     
-    create_task(mut self, priority: u8, stack_size: usize, entry: fn()) -> Result<usize, ()> {
+    create_task(mut self, priority: u8, stack_size: usize, entry: micro()) -> Result<usize, ()> {
         let task = RTOSTask {
             priority,
             stack_size,
@@ -102,7 +102,7 @@ class PriorityScheduler {
         let mut selected_task = None
         
         for (i, task) in self.tasks.iter().enumerate() {
-            if matches!(task.state, TaskState::Ready) && task.priority > highest_priority {
+            if @matches(task.state, TaskState::Ready) && task.priority > highest_priority {
                 highest_priority = task.priority
                 selected_task = Some(i)
             }
@@ -146,13 +146,13 @@ micro process_buffer(ptr: *mut u8, len: usize) -> i32 {
 }
 
 # WASM 内存管理
-struct WasmAllocator {
+structure WasmAllocator {
     heap_start: *mut u8,
     heap_size: usize,
     free_blocks: HeaplessVec<MemoryBlock, 64>
 }
 
-struct MemoryBlock {
+structure MemoryBlock {
     ptr: *mut u8,
     size: usize
 }
@@ -226,7 +226,7 @@ mod wasi {
         fn random_get(buf: *mut u8, buf_len: usize) -> i32
     }
     
-    struct IoVec {
+    structure IoVec {
         buf: *const u8,
         buf_len: usize
     }
@@ -288,7 +288,7 @@ trait GpioPin {
 }
 
 # ARM Cortex-M GPIO 实现
-struct CortexMGpio {
+structure CortexMGpio {
     port: *mut u32,
     pin: u8
 }
@@ -326,7 +326,7 @@ imply GpioPin for CortexMGpio {
 }
 
 # LED 控制示例
-struct Led<P: GpioPin> {
+structure Led<P: GpioPin> {
     pin: P
 }
 
@@ -355,7 +355,7 @@ impl<P: GpioPin> Led<P> {
 ```valkyrie
 # 中断向量表
 @link_section = ".vector_table"
-static VECTOR_TABLE: [unsafe extern "C" fn(); 256] = [
+static VECTOR_TABLE: [unsafe extern "C" micro(); 256] = [
     reset_handler,
     nmi_handler,
     hard_fault_handler,
@@ -399,7 +399,7 @@ static BUTTON_PRESSED: AtomicBool = AtomicBool::new(false)
 
 ```valkyrie
 # SPI 通信
-struct SpiMaster {
+structure SpiMaster {
     base_addr: *mut u32,
     cs_pin: CortexMGpio
 }
@@ -446,7 +446,7 @@ imply SpiMaster {
 }
 
 # I2C 通信
-struct I2cMaster {
+structure I2cMaster {
     base_addr: *mut u32
 }
 
@@ -487,7 +487,7 @@ enum I2cError {
 
 ```valkyrie
 # ADC 接口
-struct AdcChannel {
+structure AdcChannel {
     channel: u8,
     resolution: u8  # 位数
 }
@@ -513,12 +513,12 @@ imply AdcChannel {
 }
 
 # 温度传感器
-struct TemperatureSensor {
+structure TemperatureSensor {
     adc: AdcChannel,
     calibration: TemperatureCalibration
 }
 
-struct TemperatureCalibration {
+structure TemperatureCalibration {
     offset: f32,
     scale: f32
 }
@@ -542,18 +542,18 @@ imply TemperatureSensor {
 
 ```valkyrie
 # IMU 传感器 (MPU6050)
-struct Mpu6050 {
+structure Mpu6050 {
     i2c: I2cMaster,
     address: u8
 }
 
-struct AccelData {
+structure AccelData {
     x: i16,
     y: i16,
     z: i16
 }
 
-struct GyroData {
+structure GyroData {
     x: i16,
     y: i16,
     z: i16
@@ -616,7 +616,7 @@ enum PowerMode {
     Standby
 }
 
-struct PowerManager {
+structure PowerManager {
     current_mode: PowerMode,
     wake_sources: u32
 }

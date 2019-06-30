@@ -12,7 +12,7 @@ using std::async::{Future, Stream}
 using std::time::Duration
 
 # HTTP 客户端配置
-struct CrawlerConfig {
+structure CrawlerConfig {
     max_concurrent: usize,      # 最大并发数 ∥
     request_delay: Duration,    # 请求间隔 Δt
     timeout: Duration,          # 超时时间 τ
@@ -94,7 +94,7 @@ using std::sync::{Arc, Mutex}
 using std::hash::{Hash, Hasher}
 
 # URL 优先级队列
-struct UrlQueue {
+structure UrlQueue {
     high_priority: VecDeque<CrawlTask>,
     normal_priority: VecDeque<CrawlTask>,
     low_priority: VecDeque<CrawlTask>,
@@ -102,7 +102,7 @@ struct UrlQueue {
     in_progress: HashSet<String>
 }
 
-struct CrawlTask {
+structure CrawlTask {
     url: String,
     depth: u32,
     priority: Priority,
@@ -115,7 +115,7 @@ enum Priority {
     Low = 1
 }
 
-struct TaskMetadata {
+structure TaskMetadata {
     referrer: Option<String>,
     created_at: SystemTime,
     retry_count: u32,
@@ -237,7 +237,7 @@ class CrawlerScheduler {
 }
 
 # 速率限制器
-struct RateLimiter {
+structure RateLimiter {
     interval: Duration,
     last_request: Option<SystemTime>
 }
@@ -271,7 +271,7 @@ using std::html::{Document, Element, Selector}
 using std::regex::Regex
 
 # HTML 解析器
-struct HtmlParser {
+structure HtmlParser {
     base_url: String
 }
 
@@ -344,18 +344,18 @@ imply HtmlParser {
         if href.starts_with("http://") || href.starts_with("https://") {
             Some(href)
         } else if href.starts_with("/") {
-            Some(format!("{}{}", self.base_url, href))
+            Some(@format("{}{}", self.base_url, href))
         } else if href.starts_with("./") {
-            Some(format!("{}/{}", self.base_url, &href[2..]))
+            Some(@format("{}/{}", self.base_url, &href[2..]))
         } else if !href.starts_with("#") && !href.starts_with("mailto:") && !href.starts_with("javascript:") {
-            Some(format!("{}/{}", self.base_url, href))
+            Some(@format("{}/{}", self.base_url, href))
         } else {
             None
         }
     }
 }
 
-struct StructuredData {
+structure StructuredData {
     title: Option<String>,
     meta: HashMap<String, String>,
     json_ld: Vec<serde_json::Value>,
@@ -395,7 +395,7 @@ trait DataStore {
 }
 
 # 爬取的数据结构
-struct CrawledData {
+structure CrawledData {
     url: String,
     title: Option<String>,
     content: String,
@@ -407,7 +407,7 @@ struct CrawledData {
 }
 
 # 数据库存储实现
-struct DatabaseStore {
+structure DatabaseStore {
     connection: Connection
 }
 
@@ -416,7 +416,7 @@ imply DataStore for DatabaseStore {
         let mut tx = self.connection.begin().await?
         
         # 保存页面数据
-        sqlx::query!(
+        sqlx::@query(
             "INSERT INTO pages (url, title, content, status_code, crawled_at, response_time) 
              VALUES ($1, $2, $3, $4, $5, $6) 
              ON CONFLICT (url) DO UPDATE SET 
@@ -435,7 +435,7 @@ imply DataStore for DatabaseStore {
         
         # 保存元数据
         for (key, value) in &data.metadata.meta {
-            sqlx::query!(
+            sqlx::@query(
                 "INSERT INTO page_metadata (url, key, value) VALUES ($1, $2, $3) 
                  ON CONFLICT (url, key) DO UPDATE SET value = EXCLUDED.value",
                 data.url, key, value
@@ -450,7 +450,7 @@ imply DataStore for DatabaseStore {
         let mut tx = self.connection.begin().await?
         
         for link in links {
-            sqlx::query!(
+            sqlx::@query(
                 "INSERT INTO links (parent_url, target_url, discovered_at) 
                  VALUES ($1, $2, $3) 
                  ON CONFLICT (parent_url, target_url) DO NOTHING",
@@ -463,7 +463,7 @@ imply DataStore for DatabaseStore {
     }
     
     async micro get_crawled_urls(self) -> Result<HashSet<String>, StoreError> {
-        let rows = sqlx::query!("SELECT url FROM pages")
+        let rows = sqlx::@query("SELECT url FROM pages")
             .fetch_all(&self.connection).await?
         
         Ok(rows.into_iter().map(|row| row.url).collect())
@@ -471,7 +471,7 @@ imply DataStore for DatabaseStore {
 }
 
 # JSON 文件存储实现
-struct JsonFileStore {
+structure JsonFileStore {
     file_path: String,
     writer: BufWriter<File>
 }
@@ -493,19 +493,19 @@ imply JsonFileStore {
 imply DataStore for JsonFileStore {
     async micro save_page(mut self, url: &str, data: &CrawledData) -> Result<(), StoreError> {
         let json_data = serde_json::to_string(data)?
-        writeln!(self.writer, "{}", json_data)?
+        @writeln(self.writer, "{}", json_data)?
         self.writer.flush()?
         Ok(())
     }
     
     async micro save_links(mut self, parent_url: &str, links: &[String]) -> Result<(), StoreError> {
-        let link_data = serde_json::json!({
+        let link_data = serde_json::@json({
             "parent_url": parent_url,
             "links": links,
             "discovered_at": SystemTime::now()
         })
         
-        writeln!(self.writer, "{}", link_data)?
+        @writeln(self.writer, "{}", link_data)?
         self.writer.flush()?
         Ok(())
     }
@@ -548,7 +548,7 @@ class WebCrawler<S: DataStore> {
     config: CrawlerEngineConfig
 }
 
-struct CrawlerEngineConfig {
+structure CrawlerEngineConfig {
     max_depth: u32,
     max_pages: Option<usize>,
     allowed_domains: Option<HashSet<String>>,
@@ -556,7 +556,7 @@ struct CrawlerEngineConfig {
     content_filters: Vec<ContentFilter>
 }
 
-struct ContentFilter {
+structure ContentFilter {
     selector: String,
     min_length: Option<usize>,
     required_keywords: Vec<String>
@@ -629,7 +629,7 @@ impl<S: DataStore> WebCrawler<S> {
                         scheduler.queue.lock().unwrap().mark_completed(&page_data.url)
                     },
                     Err(e) => {
-                        eprintln!("Failed to crawl {}: {:?}", task.url, e)
+                        @eprintln("Failed to crawl {}: {:?}", task.url, e)
                         scheduler.queue.lock().unwrap().mark_failed(&task.url)
                     }
                 }
@@ -747,13 +747,13 @@ impl<S: DataStore> WebCrawler<S> {
     }
 }
 
-struct CrawledPageData {
+structure CrawledPageData {
     url: String,
     links: Vec<String>,
     depth: u32
 }
 
-struct CrawlStats {
+structure CrawlStats {
     pages_crawled: usize,
     links_discovered: usize,
     errors: usize,
@@ -819,10 +819,10 @@ async micro basic_crawler_example() -> Result<(), Box<dyn std::error::Error>> {
     
     let stats = crawler.crawl(seed_urls).await?
     
-    println!("爬取完成:")
-    println!("  页面数: {}", stats.pages_crawled)
-    println!("  链接数: {}", stats.links_discovered)
-    println!("  错误数: {}", stats.errors)
+    @println("爬取完成:")
+    @println("  页面数: {}", stats.pages_crawled)
+    @println("  链接数: {}", stats.links_discovered)
+    @println("  错误数: {}", stats.errors)
     
     Ok(())
 }
@@ -831,7 +831,7 @@ async micro basic_crawler_example() -> Result<(), Box<dyn std::error::Error>> {
 ### 电商数据爬取
 
 ```valkyrie
-struct ProductData {
+structure ProductData {
     name: String,
     price: Option<f64>,
     description: String,
@@ -846,7 +846,7 @@ class EcommerceCrawler {
     product_selectors: ProductSelectors
 }
 
-struct ProductSelectors {
+structure ProductSelectors {
     name: String,
     price: String,
     description: String,
@@ -909,7 +909,7 @@ imply EcommerceCrawler {
 ### 新闻聚合爬虫
 
 ```valkyrie
-struct NewsArticle {
+structure NewsArticle {
     title: String,
     content: String,
     author: Option<String>,
@@ -925,7 +925,7 @@ class NewsCrawler {
     news_sources: Vec<NewsSource>
 }
 
-struct NewsSource {
+structure NewsSource {
     name: String,
     base_url: String,
     article_selector: String,
@@ -943,7 +943,7 @@ imply NewsCrawler {
         for source in &self.news_sources {
             match self.crawl_news_source(source).await {
                 Ok(mut source_articles) => articles.append(&mut source_articles),
-                Err(e) => eprintln!("Failed to crawl {}: {:?}", source.name, e)
+                Err(e) => @eprintln("Failed to crawl {}: {:?}", source.name, e)
             }
         }
         
@@ -1003,7 +1003,7 @@ imply DistributedCrawler {
                     },
                     Err(e) => {
                         # 错误处理和重试逻辑
-                        eprintln!("Task failed: {:?}", e)
+                        @eprintln("Task failed: {:?}", e)
                     }
                 }
             }
@@ -1038,12 +1038,12 @@ class AntiDetectionCrawler {
     session_manager: SessionManager
 }
 
-struct SessionManager {
+structure SessionManager {
     sessions: HashMap<String, CrawlSession>,
     max_requests_per_session: u32
 }
 
-struct CrawlSession {
+structure CrawlSession {
     cookies: HashMap<String, String>,
     headers: HashMap<String, String>,
     request_count: u32,
@@ -1071,7 +1071,7 @@ imply AntiDetectionCrawler {
         # 添加会话 cookies
         if !session.cookies.is_empty() {
             let cookie_header = session.cookies.iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| @format("{}={}", k, v))
                 .collect::<Vec<_>>()
                 .join("; ")
             request = request.header("Cookie", cookie_header)

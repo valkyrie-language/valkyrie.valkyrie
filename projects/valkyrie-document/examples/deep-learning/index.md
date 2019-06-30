@@ -192,7 +192,7 @@ micro train_model(model: &mut Sequential, train_loader: &DataLoader, epochs: usi
         }
         
         let avg_loss = total_loss / num_batches as f32
-        println!("Epoch {}: Average Loss = {:.4}", epoch + 1, avg_loss)
+        @println("Epoch {}: Average Loss = {:.4}", epoch + 1, avg_loss)
     }
 }
 ```

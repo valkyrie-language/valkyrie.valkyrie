@@ -448,10 +448,10 @@ micro test_timer_observable() {
     
     # 推进虚拟时间
     scheduler.advance_time_by(Duration::seconds(3))
-    assert_eq!(received_values.len(), 0)  # 还没到时间
+    @assert_eq(received_values.len(), 0)  # 还没到时间
     
     scheduler.advance_time_by(Duration::seconds(3))
-    assert_eq!(received_values.len(), 1)  # 定时器触发
+    @assert_eq(received_values.len(), 1)  # 定时器触发
 }
 ```
 

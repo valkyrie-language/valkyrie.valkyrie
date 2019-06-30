@@ -172,7 +172,7 @@ let y_test = y.index_select(test_indices, axis=0)
 
 通过这些示例，您可以了解如何利用 Valkyrie 的内置数组功能来构建机器学习应用。
 for (name, (mean, std)) in results {
-    println!("{}: {:.3} (+/- {:.3})", name, mean, std * 2)
+    @println("{}: {:.3} (+/- {:.3})", name, mean, std * 2)
 }
 ```
 

@@ -150,12 +150,12 @@ process_drawable(new circle { radius: 5.0 })
 ```valkyrie
 # 继承现有 trait 的匿名 trait
 micro handle_serializable(obj: ftrait(Display, Clone) {
-    serialize(self) -> String
+    Encode(self) -> String
 }) {
     println("Object: {}", obj.fmt())
     let cloned = obj.clone()
-    let serialized = obj.serialize()
-    println("Serialized: {}", serialized)
+    let Encoded = obj.Encode()
+    println("Encoded: {}", Encoded)
 }
 ```
 
@@ -265,7 +265,7 @@ let area = Calculator::circle_area(5.0)
 # 高阶 trait 边界
 micro map_closure<F, T, U>(items: Vector<T>, f: F) -> Vector<U>
 where
-    F: for<'a> Fn(&'a T) -> U,
+    F: Fn(&T) -> U,
 {
     items.iter().map(f).collect()
 }

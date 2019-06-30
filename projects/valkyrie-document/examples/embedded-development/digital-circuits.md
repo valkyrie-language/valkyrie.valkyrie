@@ -24,13 +24,13 @@ trait Bundle {
 }
 
 # 内存类型
-struct Mem<T, const DEPTH: usize> {
+structure Mem<T, const DEPTH: usize> {
     data: PhantomData<T>,
     depth: PhantomData<[(); DEPTH]>
 }
 
 # 寄存器类型
-struct Reg<T> {
+structure Reg<T> {
     data: T,
     clock: Clock,
     reset: Option<Reset>
@@ -49,11 +49,11 @@ trait Module {
 }
 
 # 简单的加法器模块
-struct Adder {
+structure Adder {
     width: usize
 }
 
-struct AdderIO {
+structure AdderIO {
     a: UInt<32>,
     b: UInt<32>,
     sum: UInt<33>
@@ -106,12 +106,12 @@ micro reg_with_reset<T>(init: T, clock: Clock, reset: Reset, reset_value: T) -> 
 }
 
 # 计数器模块
-struct Counter {
+structure Counter {
     width: usize,
     max_count: u64
 }
 
-struct CounterIO {
+structure CounterIO {
     enable: Bool,
     reset: Bool,
     count: UInt<32>,
@@ -242,11 +242,11 @@ enum AluOp {
 }
 
 # ALU 模块
-struct Alu {
+structure Alu {
     width: usize
 }
 
-struct AluIO {
+structure AluIO {
     a: UInt<32>,
     b: UInt<32>,
     op: UInt<4>,
@@ -335,11 +335,11 @@ imply Module for Alu {
 
 ```valkyrie
 # 单端口 RAM
-struct SinglePortRam<const WIDTH: usize, const DEPTH: usize> {
+structure SinglePortRam<const WIDTH: usize, const DEPTH: usize> {
     _phantom: PhantomData<(UInt<WIDTH>, [(); DEPTH])>
 }
 
-struct SinglePortRamIO<const WIDTH: usize, const ADDR_WIDTH: usize> {
+structure SinglePortRamIO<const WIDTH: usize, const ADDR_WIDTH: usize> {
     addr: UInt<ADDR_WIDTH>,
     data_in: UInt<WIDTH>,
     data_out: UInt<WIDTH>,
@@ -393,11 +393,11 @@ impl<const WIDTH: usize, const DEPTH: usize> Module for SinglePortRam<WIDTH, DEP
 
 ```valkyrie
 # 双端口 RAM
-struct DualPortRam<const WIDTH: usize, const DEPTH: usize> {
+structure DualPortRam<const WIDTH: usize, const DEPTH: usize> {
     _phantom: PhantomData<(UInt<WIDTH>, [(); DEPTH])>
 }
 
-struct DualPortRamIO<const WIDTH: usize, const ADDR_WIDTH: usize> {
+structure DualPortRamIO<const WIDTH: usize, const ADDR_WIDTH: usize> {
     # 端口 A
     addr_a: UInt<ADDR_WIDTH>,
     data_in_a: UInt<WIDTH>,
@@ -493,11 +493,11 @@ enum InstructionType {
 }
 
 # 指令解码器
-struct InstructionDecoder {
+structure InstructionDecoder {
     _phantom: PhantomData<()>
 }
 
-struct DecodedInstruction {
+structure DecodedInstruction {
     opcode: UInt<7>,
     rd: UInt<5>,
     rs1: UInt<5>,
@@ -516,7 +516,7 @@ imply Bundle for DecodedInstruction {
     }
 }
 
-struct InstructionDecoderIO {
+structure InstructionDecoderIO {
     instruction: UInt<32>,
     decoded: DecodedInstruction
 }
@@ -596,11 +596,11 @@ imply Module for InstructionDecoder {
 
 ```valkyrie
 # 32 个 32 位寄存器的寄存器文件
-struct RegisterFile {
+structure RegisterFile {
     _phantom: PhantomData<()>
 }
 
-struct RegisterFileIO {
+structure RegisterFileIO {
     # 读端口 1
     rs1_addr: UInt<5>,
     rs1_data: UInt<32>,
@@ -681,7 +681,7 @@ imply Module for RegisterFile {
 
 ```valkyrie
 # AXI4 写地址通道
-struct Axi4WriteAddress {
+structure Axi4WriteAddress {
     awid: UInt<4>,      # 写事务 ID
     awaddr: UInt<32>,   # 写地址
     awlen: UInt<8>,     # 突发长度
@@ -697,7 +697,7 @@ struct Axi4WriteAddress {
 }
 
 # AXI4 写数据通道
-struct Axi4WriteData {
+structure Axi4WriteData {
     wdata: UInt<32>,    # 写数据
     wstrb: UInt<4>,     # 写字节选通
     wlast: Bool,        # 写最后一个
@@ -706,7 +706,7 @@ struct Axi4WriteData {
 }
 
 # AXI4 写响应通道
-struct Axi4WriteResponse {
+structure Axi4WriteResponse {
     bid: UInt<4>,       # 响应 ID
     bresp: UInt<2>,     # 写响应
     bvalid: Bool,       # 写响应有效
@@ -714,7 +714,7 @@ struct Axi4WriteResponse {
 }
 
 # AXI4 读地址通道
-struct Axi4ReadAddress {
+structure Axi4ReadAddress {
     arid: UInt<4>,      # 读事务 ID
     araddr: UInt<32>,   # 读地址
     arlen: UInt<8>,     # 突发长度
@@ -730,7 +730,7 @@ struct Axi4ReadAddress {
 }
 
 # AXI4 读数据通道
-struct Axi4ReadData {
+structure Axi4ReadData {
     rid: UInt<4>,       # 读数据 ID
     rdata: UInt<32>,    # 读数据
     rresp: UInt<2>,     # 读响应
@@ -740,7 +740,7 @@ struct Axi4ReadData {
 }
 
 # 完整的 AXI4 接口
-struct Axi4Interface {
+structure Axi4Interface {
     write_address: Axi4WriteAddress,
     write_data: Axi4WriteData,
     write_response: Axi4WriteResponse,
@@ -773,11 +773,11 @@ imply Bundle for Axi4Interface {
 
 ```valkyrie
 # N 主设备到 M 从设备的交叉开关
-struct Crossbar<const N_MASTERS: usize, const M_SLAVES: usize> {
+structure Crossbar<const N_MASTERS: usize, const M_SLAVES: usize> {
     _phantom: PhantomData<([(); N_MASTERS], [(); M_SLAVES])>
 }
 
-struct CrossbarIO<const N_MASTERS: usize, const M_SLAVES: usize> {
+structure CrossbarIO<const N_MASTERS: usize, const M_SLAVES: usize> {
     master_ports: [Axi4Interface; N_MASTERS],
     slave_ports: [Axi4Interface; M_SLAVES]
 }
@@ -859,7 +859,7 @@ trait Testbench {
 }
 
 # 时钟生成器
-struct ClockGenerator {
+structure ClockGenerator {
     period: u64,
     duty_cycle: f32
 }
@@ -890,12 +890,12 @@ imply ClockGenerator {
 }
 
 # ALU 测试平台
-struct AluTestbench {
+structure AluTestbench {
     clock_gen: ClockGenerator,
     test_vectors: Vec<AluTestVector>
 }
 
-struct AluTestVector {
+structure AluTestVector {
     a: u32,
     b: u32,
     op: u8,
@@ -930,12 +930,12 @@ imply Testbench for AluTestbench {
             clock.tick(1)
             
             # 检查结果
-            assert_eq!(io.result.value(), test_vector.expected_result, "ALU result mismatch")
-            assert_eq!(io.zero.value(), test_vector.expected_zero, "ALU zero flag mismatch")
-            assert_eq!(io.overflow.value(), test_vector.expected_overflow, "ALU overflow flag mismatch")
+            @assert_eq(io.result.value(), test_vector.expected_result, "ALU result mismatch")
+            @assert_eq(io.zero.value(), test_vector.expected_zero, "ALU zero flag mismatch")
+            @assert_eq(io.overflow.value(), test_vector.expected_overflow, "ALU overflow flag mismatch")
         }
         
-        println!("ALU test passed with {} test vectors", self.test_vectors.len())
+        @println("ALU test passed with {} test vectors", self.test_vectors.len())
     }
     
     cleanup(self) {
@@ -955,7 +955,7 @@ trait FormalProperty {
 }
 
 # ALU 形式化验证
-struct AluFormalVerification {
+structure AluFormalVerification {
     dut: Alu
 }
 
@@ -1028,7 +1028,7 @@ imply AluFormalVerification {
 
 ```valkyrie
 # 时序约束
-struct TimingConstraints {
+structure TimingConstraints {
     clock_period: f32,      # 时钟周期 (ns)
     setup_time: f32,        # 建立时间 (ns)
     hold_time: f32,         # 保持时间 (ns)
@@ -1038,14 +1038,14 @@ struct TimingConstraints {
 }
 
 # 面积约束
-struct AreaConstraints {
+structure AreaConstraints {
     max_area: u32,          # 最大面积 (gate equivalent)
     max_memory: u32,        # 最大内存 (bits)
     max_dsp: u32            # 最大 DSP 块数量
 }
 
 # 功耗约束
-struct PowerConstraints {
+structure PowerConstraints {
     max_static_power: f32,  # 最大静态功耗 (mW)
     max_dynamic_power: f32, # 最大动态功耗 (mW)
     voltage: f32,           # 工作电压 (V)
@@ -1053,7 +1053,7 @@ struct PowerConstraints {
 }
 
 # 综合配置
-struct SynthesisConfig {
+structure SynthesisConfig {
     target_technology: String,
     optimization_goal: OptimizationGoal,
     timing_constraints: TimingConstraints,
@@ -1072,7 +1072,7 @@ enum OptimizationGoal {
 @synthesis(clock_gating = true)
 @synthesis(retiming = true)
 @synthesis(resource_sharing = true)
-struct OptimizedProcessor {
+structure OptimizedProcessor {
     config: SynthesisConfig
 }
 

@@ -27,7 +27,7 @@ fn use_c_functions() {
         }
         
         let result = sin(3.14159 / 2.0)
-        println!("sin(π/2) = {}", result)
+        @println("sin(π/2) = {}", result)
     }
 }
 ```
@@ -37,13 +37,13 @@ fn use_c_functions() {
 ```valkyrie
 # C 兼容的结构体
 ↯[repr(C)]
-struct Point {
+structure Point {
     x: f64,
     y: f64,
 }
 
 ↯[repr(C)]
-struct Rectangle {
+structure Rectangle {
     top_left: Point,
     bottom_right: Point,
 }
@@ -62,14 +62,14 @@ fn geometry_calculations() {
     
     unsafe {
         let distance = calculate_distance(&p1, &p2)
-        println!("Distance: {}", distance)
+        @println("Distance: {}", distance)
         
         let rect = Rectangle {
             top_left: new Point { x: 0.0, y: 10.0 },
             bottom_right: new Point { x: 5.0, y: 0.0 }
         }
         let area = rectangle_area(&rect)
-        println!("Area: {}", area)
+        @println("Area: {}", area)
     }
 }
 ```
@@ -89,7 +89,7 @@ extern "C" {
 }
 
 # Valkyrie 包装器
-struct Vector3D {
+structure Vector3D {
     ptr: *mut c_void,
 }
 
@@ -150,11 +150,11 @@ extern "Rust" {
 fn use_rust_library() {
     unsafe {
         let fib_10 = rust_fibonacci(10)
-        println!("Fibonacci(10) = {}", fib_10)
+        @println("Fibonacci(10) = {}", fib_10)
         
         let mut numbers = [5, 2, 8, 1, 9, 3]
         rust_sort_array(numbers.as_mut_ptr(), numbers.len())
-        println!("Sorted: {:?}", numbers)
+        @println("Sorted: {:?}", numbers)
     }
 }
 ```
@@ -187,7 +187,7 @@ extern "C" fn valkyrie_create_string(s: *const i8) -> *mut i8 {
     unsafe {
         let c_str = CStr::from_ptr(s)
         let rust_str = c_str.unwrap_or("")
-        let processed = format!("Processed: {}", rust_str)
+        let processed = @format("Processed: {}", rust_str)
         
         let c_string = CString::new(processed).unwrap()
         c_string.into_raw()
@@ -222,7 +222,7 @@ extern "C" {
 }
 
 # Python 解释器包装器
-struct PythonInterpreter {
+structure PythonInterpreter {
     initialized: bool,
 }
 
@@ -297,7 +297,7 @@ fn use_python() {
     
     # 调用 Python 函数
     let result = py.call_function("math", "sin", &[3.14159 / 2.0]).unwrap()
-    println!("Python sin(π/2) = {}", result)
+    @println("Python sin(π/2) = {}", result)
 }
 ```
 
@@ -342,7 +342,7 @@ fn matrix_multiply(a: Vec<Vec<f64>>, b: Vec<Vec<f64>>) -> PyResult<Vec<Vec<f64>>
 }
 
 ↯[pyclass]
-struct Calculator {
+structure Calculator {
     ↯[pyo3(get, set)]
     value: f64,
 }
@@ -371,8 +371,8 @@ imply Calculator {
 
 ↯[pymodule]
 fn valkyrie_math(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(fibonacci, m)?)?;
-    m.add_function(wrap_pyfunction!(matrix_multiply, m)?)?;
+    m.add_function(@wrap_pyfunction(fibonacci, m)?)?;
+    m.add_function(@wrap_pyfunction(matrix_multiply, m)?)?;
     m.add_class::<Calculator>()?;
     Ok(())
 }
@@ -400,11 +400,11 @@ extern "C" {
 
 # 定义宏简化日志
 macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*)))
+    ($($t:tt)*) => (log(&@format_args($($t)*)))
 }
 
 ↯[wasm_bindgen]
-struct GameEngine {
+structure GameEngine {
     width: u32,
     height: u32,
     entities: Vec<Entity>,
@@ -414,7 +414,7 @@ struct GameEngine {
 imply GameEngine {
     ↯[wasm_bindgen(constructor)]
     fn new(width: u32, height: u32) -> GameEngine {
-        console_log!("Creating game engine {}x{}", width, height)
+        @console_log("Creating game engine {}x{}", width, height)
         GameEngine {
             width,
             height,
@@ -456,7 +456,7 @@ imply GameEngine {
     }
 }
 
-struct Entity {
+structure Entity {
     x: f64,
     y: f64,
     vx: f64,
@@ -521,7 +521,7 @@ fn process_image(data: Buffer, width: u32, height: u32) -> Result<Buffer> {
 }
 
 ↯[napi]
-struct FileProcessor {
+structure FileProcessor {
     buffer_size: u32,
 }
 
@@ -536,20 +536,20 @@ imply FileProcessor {
     fn process_file(&self, path: String) -> Result<String> {
         # 文件处理逻辑
         let content = std::fs::read_to_string(&path)
-            .map_err(|e| Error::new(Status::GenericFailure, format!("Failed to read file: {}", e)))?;
+            .map_err(|e| Error::new(Status::GenericFailure, @format("Failed to read file: {}", e)))?;
         
         # 简单处理：统计行数和字符数
         let lines = content.lines().count()
         let chars = content.chars().count()
         
-        Ok(format!("File: {}, Lines: {}, Characters: {}", path, lines, chars))
+        Ok(@format("File: {}, Lines: {}, Characters: {}", path, lines, chars))
     }
     
     ↯[napi]
     fn process_file_async(&self, path: String) -> Result<String> {
         # 异步文件处理
         let content = tokio::fs::read_to_string(&path).await
-            .map_err(|e| Error::new(Status::GenericFailure, format!("Failed to read file: {}", e)))?;
+            .map_err(|e| Error::new(Status::GenericFailure, @format("Failed to read file: {}", e)))?;
         
         # 模拟耗时处理
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -568,7 +568,7 @@ imply FileProcessor {
 using libloading::{Library, Symbol};
 
 # 动态库管理器
-struct DynamicLibrary {
+structure DynamicLibrary {
     lib: Library,
 }
 
@@ -593,16 +593,16 @@ fn use_dynamic_library() -> Result<(), Box<dyn std::error::Error>> {
     let lib = DynamicLibrary::load("./libmath.so")?;
     
     # 获取函数指针
-    let add_func: Symbol<unsafe extern fn(i32, i32) -> i32> = lib.get_function(b"add")?;
-    let multiply_func: Symbol<unsafe extern fn(f64, f64) -> f64> = lib.get_function(b"multiply")?;
+    let add_func: Symbol<unsafe extern micro(i32, i32) -> i32> = lib.get_function(b"add")?;
+    let multiply_func: Symbol<unsafe extern micro(f64, f64) -> f64> = lib.get_function(b"multiply")?;
     
     # 调用动态加载的函数
     unsafe {
         let sum = add_func(5, 3)
         let product = multiply_func(2.5, 4.0)
         
-        println!("5 + 3 = {}", sum)
-        println!("2.5 * 4.0 = {}", product)
+        @println("5 + 3 = {}", sum)
+        @println("2.5 * 4.0 = {}", product)
     }
     
     Ok(())
@@ -622,7 +622,7 @@ trait Plugin {
 }
 
 # 插件管理器
-struct PluginManager {
+structure PluginManager {
     plugins: HashMap<String, Box<dyn Plugin>>,
     libraries: Vec<Library>,
 }
@@ -640,7 +640,7 @@ imply PluginManager {
             let lib = Library::new(path)?;
             
             # 获取插件创建函数
-            let create_plugin: Symbol<unsafe extern fn() -> *mut dyn Plugin> = 
+            let create_plugin: Symbol<unsafe extern micro() -> *mut dyn Plugin> = 
                 lib.get(b"create_plugin")?;
             
             let plugin_ptr = create_plugin()
@@ -657,7 +657,7 @@ imply PluginManager {
     fn execute_plugin(&self, name: &str, input: &str) -> Result<String, String> {
         match self.plugins.get(name) {
             case Some(plugin) => plugin.execute(input),
-            case None => Err(format!("Plugin '{}' not found", name))
+            case None => Err(@format("Plugin '{}' not found", name))
         }
     }
     
@@ -695,7 +695,7 @@ macro_rules! export_plugin {
 
 ```valkyrie
 # 安全的 C 字符串处理
-struct SafeCString {
+structure SafeCString {
     ptr: *mut i8,
 }
 
@@ -730,7 +730,7 @@ imply Drop for SafeCString {
 }
 
 # 安全的内存管理
-struct ManagedBuffer {
+structure ManagedBuffer {
     ptr: *mut u8,
     size: usize,
     capacity: usize,
@@ -741,7 +741,7 @@ imply ManagedBuffer {
         unsafe {
             let ptr = malloc(capacity)
             if ptr.is_null() {
-                panic!("Failed to allocate memory")
+                @panic("Failed to allocate memory")
             }
             ManagedBuffer {
                 ptr,
@@ -800,12 +800,12 @@ enum FFIError {
 imply std::fmt::Display for FFIError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            case FFIError::NullPointer => write!(f, "Null pointer encountered"),
-            case FFIError::InvalidUtf8(e) => write!(f, "Invalid UTF-8: {}", e),
-            case FFIError::LibraryLoadError(msg) => write!(f, "Library load error: {}", msg),
-            case FFIError::SymbolNotFound(name) => write!(f, "Symbol not found: {}", name),
-            case FFIError::FunctionCallFailed(code) => write!(f, "Function call failed with code: {}", code),
-            case FFIError::MemoryAllocationFailed => write!(f, "Memory allocation failed"),
+            case FFIError::NullPointer => @write(f, "Null pointer encountered"),
+            case FFIError::InvalidUtf8(e) => @write(f, "Invalid UTF-8: {}", e),
+            case FFIError::LibraryLoadError(msg) => @write(f, "Library load error: {}", msg),
+            case FFIError::SymbolNotFound(name) => @write(f, "Symbol not found: {}", name),
+            case FFIError::FunctionCallFailed(code) => @write(f, "Function call failed with code: {}", code),
+            case FFIError::MemoryAllocationFailed => @write(f, "Memory allocation failed"),
         }
     }
 }
@@ -829,8 +829,8 @@ where
 
 ```valkyrie
 # 使用 newtype 模式增强类型安全
-struct FileHandle(*mut c_void);
-struct DatabaseConnection(*mut c_void);
+structure FileHandle(*mut c_void);
+structure DatabaseConnection(*mut c_void);
 
 # 避免混淆不同类型的指针
 imply FileHandle {
@@ -852,13 +852,13 @@ imply FileHandle {
 
 ```valkyrie
 # RAII 模式确保资源释放
-struct ResourceGuard<T> {
+structure ResourceGuard<T> {
     resource: Option<T>,
-    cleanup: fn(T),
+    cleanup: micro(T),
 }
 
 impl<T> ResourceGuard<T> {
-    fn new(resource: T, cleanup: fn(T)) -> Self {
+    fn new(resource: T, cleanup: micro(T)) -> Self {
         ResourceGuard {
             resource: Some(resource),
             cleanup,
@@ -883,7 +883,7 @@ impl<T> Drop for ResourceGuard<T> {
 
 ```valkyrie
 # 版本检查
-struct LibraryVersion {
+structure LibraryVersion {
     major: u32,
     minor: u32,
     patch: u32,
