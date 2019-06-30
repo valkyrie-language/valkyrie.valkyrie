@@ -1,0 +1,22 @@
+[build]
+base = "."
+publish = "projects/valkyrie-document/.vitepress/dist"
+command = "cd projects/valkyrie-document && pnpm install --no-frozen-lockfile && pnpm run build"
+
+[build.environment]
+NODE_VERSION = "18.12.0"
+PNPM_VERSION = "10.17.0"
+
+[build.processing]
+skip_processing = false
+
+[build.processing.html]
+pretty_urls = true
+
+[build.processing.css]
+bundle = true
+minify = true
+
+[build.processing.js]
+bundle = true
+minify = true

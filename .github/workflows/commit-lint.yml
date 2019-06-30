@@ -2,9 +2,9 @@ name: Commit Lint
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ master, dev ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ master, dev ]
 
 jobs:
   commit-lint:
@@ -15,36 +15,37 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
-    
+        cache: 'pnpm'
+
     - name: Install dependencies
-      run: |
-        npm install
-        npm install -g commitizen @commitlint/cli
-    
+      run: pnpm install --no-frozen-lockfile
+
     - name: Validate commit messages
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           # 对于PR，检查所有提交的commit消息
-          npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+          npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose --config scripts/commit-lint.config.js
         else
           # 对于push，检查最近的commit
-          npx commitlint --from HEAD~1 --to HEAD --verbose
+          npx commitlint --from HEAD~1 --to HEAD --verbose --config scripts/commit-lint.config.js
         fi
-      env:
-        NODE_PATH: /usr/local/lib/node_modules
-    
+
     - name: Validate current commit
       if: always()
       run: |
         echo "Validating current commit message..."
-        git log -1 --pretty=format:"%s" | npx commitlint --verbose
-    
+        git log -1 --pretty=format:"%s" | npx commitlint --verbose --config scripts/commit-lint.config.js
+
     - name: Check emoji format
       run: |
         echo "Checking emoji format in commit messages..."

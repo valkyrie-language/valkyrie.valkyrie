@@ -1,155 +1,202 @@
-# Release Report Generator
+# Valkyrie 项目工具集
 
-一个基于 emoji commit 规范的自动化 release 报告生成工具。
+这是 Valkyrie 编程语言项目的开发工具集，为整个项目的开发、构建、发布提供完整的工具链支持。
 
-## 功能特点
+## 🎯 项目概述
 
-- 🎯 **智能分类**: 根据 emoji 类型自动分类提交记录
-- 📊 **优先级排序**: 按照 feature → experiment → fix → other 的顺序排列
-- 📝 **Markdown 格式**: 生成标准的 Markdown 格式报告
-- 🔗 **自动链接**: 自动生成 commit 链接
-- 📅 **日期自动**: 自动添加发布日期
-- **过滤机制**: 支持 priority: -1 的项目自动隐藏（如 release、tag、merge）
-- **作者信息**: 自动在提交记录后 @ 提及提交者 GitHub 用户名
-- **准确时间**: 使用 git tag 的创建时间而非当前时间
+Valkyrie 是一个多范式编程语言项目，包含：
 
-## Emoji 类型映射
+- **valkyrie-bootstrap**: Valkyrie 语言的自举编译器（JavaScript 实现）
+- **valkyrie-document**: Valkyrie 语言的官方文档站点（VitePress 构建）
+- **开发工具集**: 完整的开发工作流工具（当前目录）
 
-| Emoji | 类型         | 优先级 | 中文标签  | 说明 |
-|-------|------------|-----|-------|------|
-| ✨     | feature    | 1   | 新功能   | 高优先级显示 |
-| 🔮    | experiment | 2   | 实验性功能 | 高优先级显示 |
-| 🔧    | fix        | 3   | 修复    | 高优先级显示 |
-| ⚡️    | perf       | 4   | 性能优化 | 高优先级显示 |
-| 📝    | docs       | 5   | 文档    | 正常显示 |
-| 🎨    | style      | 9   | 样式    | 低优先级显示 |
-| ☢️    | refactor   | 9   | 重构    | 低优先级显示 |
-| 🧪    | test       | 9   | 测试    | 低优先级显示 |
-| 🔨    | config     | 9   | 配置    | 低优先级显示 |
-| 🚦    | ci         | 9   | CI/CD | 低优先级显示 |
-| 📦    | build      | 9   | 构建    | 低优先级显示 |
-| ⏪     | revert     | 9   | 回滚    | 低优先级显示 |
-| 💡    | idea       | 9   | 想法    | 低优先级显示 |
-| 🧨    | delete     | 9   | 删除    | 低优先级显示 |
-| ✅     | complete   | 9   | 完成    | 低优先级显示 |
-| 🔀    | branch     | -1  | 分支    | **不会显示** |
-| 🚀    | release    | -1  | 发布    | **不会显示** |
-| 🔖    | tag        | -1  | 标签    | **不会显示** |
+## 🛠️ 工具列表
 
-**注意**: priority 为 -1 的类型不会出现在报告中
+### 1. 发布报告生成器
 
-## 使用方法
+**文件**: `generate-release-report.js`
 
-### 基本用法
+基于 emoji commit 规范自动生成发布报告的 Node.js 工具。
+
+#### 功能特点
+
+- 🎯 智能解析 emoji 提交记录
+- 📊 按类型分组和优先级排序
+- 📝 生成 pnpm changeset 风格的 Markdown 报告
+- 👥 包含作者信息统计
+- 📅 支持时间段筛选
+
+#### 支持的 Emoji 类型
+
+| Emoji | 类型         | 优先级 | 标签                       |
+|-------|------------|-----|--------------------------|
+| ✨     | feature    | 1   | Stable Features          |
+| 🔮    | experiment | 2   | Experimental Features    |
+| ☢️    | breaking   | 3   | Breaking Changes         |
+| 🔧    | fix        | 4   | Bug Fixes                |
+| ⚡️    | perf       | 5   | Performance Improvements |
+| 📝    | docs       | 6   | Documentation Updates    |
+| 🧪    | test       | 7   | Tests                    |
+| 🚦    | ci         | 8   | CI/CD                    |
+| 🎨    | style      | 9   | Style Improvements       |
+
+#### 使用方式
 
 ```bash
-# 生成当前版本的 release 报告
+# 基本用法
 node scripts/generate-release-report.js
 
-# 指定版本号
-node scripts/generate-release-report.js v1.2.0
+# 生成变更日志
+npm run change-log
 
-# 通过 npm 脚本运行
-npm run release:report -- v1.2.0
+# 生成最新发布报告
+npm run release:latest
+
+# 指定版本和标签范围
+node scripts/generate-release-report.js v1.0.0 v1.1.0
 ```
 
-### 高级用法
+### 2. Emoji Commit 规范工具
+
+#### 配置文件
+
+- **commit-lint.config.js**: Commitlint 配置，定义 emoji 提交规范
+- **commit-msg**: Git 钩子脚本，强制 emoji 提交格式
+
+#### 设置脚本
+
+- **setup-emoji-commit.sh**: Unix/Linux/macOS 设置脚本
+- **setup-emoji-commit.bat**: Windows 设置脚本
+
+#### 功能特点
+
+- 🔒 强制所有提交以 emoji+空格 开头
+- 📏 消息长度限制（72字符）
+- 🎨 支持 18 种 emoji 类型
+- 🛠️ 交互式提交支持
+
+#### 快速设置
 
 ```bash
-# 指定起始 tag
-node scripts/generate-release-report.js v1.2.0 --from v1.1.0
+# Unix/Linux/macOS
+bash scripts/setup-emoji-commit.sh
 
-# 指定起始和结束 tag
-node scripts/generate-release-report.js v1.2.0 --from v1.1.0 --to v1.2.0
+# Windows
+scripts\setup-emoji-commit.bat
 
-# 自定义输出文件名
-node scripts/generate-release-report.js v1.2.0 --output my-release.md
-
-# 组合使用
-node scripts/generate-release-report.js v1.2.0 --from v1.1.0 --output releases/v1.2.0-release.md
+# 或使用 npm 脚本
+npm run setup-commit
 ```
 
-### 查看帮助
+#### 使用示例
 
 ```bash
-node scripts/generate-release-report.js --help
+# 交互式提交
+npm run commit
+
+# 直接提交
+git commit -m "✨ 添加新功能"
+git commit -m "🔧 修复首页加载问题"
+git commit -m "📝 更新API文档"
 ```
 
-## 输出示例
+### 3. 发布脚本
 
-生成的报告会按照以下格式组织：
+**文件**: `publish.sh`
 
-```markdown
-# 🚀 Release v1.2.0
+自动化发布脚本，用于发布 Rust crate 包。
 
-发布日期: 2025/9/21 20:53:07
+#### 功能
 
-## ✨ 新功能 (5- 添加用户登录功能 ([abc1234](../../commit/abc1234)) by @developer1
-- 实现搜索功能 ([def5678](../../commit/def5678)) by @developer2
-- 添加深色模式 ([ghi9012](../../commit/ghi9012)) by @developer1
+- 📦 发布 nyar-ast crate
+- 📦 发布 valkyrie-parser crate
+- 🔄 自动处理发布失败和版本升级
 
-## 🔮 实验性功能 (2)
-
-- 实验性 AI 推荐系统 ([jkl3456](../../commit/jkl3456)) by @developer3
-- 测试新的算法 ([mno7890](../../commit/mno7890)) by @developer2
-
-## 🔧 修复 (8)
-
-- 修复首页加载慢的问题 ([pqr1234](../../commit/pqr1234)) by @developer1
-- 解决移动端显示异常 ([stu5678](../../commit/stu5678)) by @developer3
-
-## 📝 文档 (3)
-
-- 更新 API 文档 ([vwx9012](../../commit/vwx9012)) by @developer2
-- 添加使用指南 ([yza3456](../../commit/yza3456)) by @developer1
-
-## 注意
-
-- 🚀 (release)、🔖 (tag)、🔀 (merge) 等 priority: -1 的类型不会显示
-- 每个提交都包含作者信息（@用户名）
-- 发布日期使用 git tag 的创建时间
-```
-
-## 集成到工作流
-
-### 在 package.json 中添加脚本
-
-```json
-{
-  "scripts": {
-    "release:report": "node scripts/generate-release-report.js",
-    "release:latest": "node scripts/generate-release-report.js $(date +v%Y.%m.%d)"
-  }
-}
-```
-
-### 自动化发布流程
+#### 使用
 
 ```bash
-# 1. 生成 release 报告
-npm run release:report -- v1.2.0 --from v1.1.0
-
-# 2. 查看生成的报告
-cat releases/RELEASE-2025-09-21.md
-
-# 3. 添加到 git
-git add releases/
-git commit -m "🚀 release: 添加 v1.2.0 release 报告"
+cd scripts
+./publish.sh
 ```
 
-## 注意事项
+## 🚀 快速开始
 
-1. **Commit 规范**: 确保所有 commit 都遵循 emoji + 空格 + 描述的格式
-2. **Tag 管理**: 使用 git tag 来标记版本，便于生成版本间的差异报告
-3. **文件路径**: 报告默认保存在 `releases/` 目录下
+### 1. 环境设置
 
-## 扩展功能
+```bash
+# 安装依赖
+npm install
 
-可以通过修改 `EMOJI_TYPES` 常量来添加新的 emoji 类型或调整优先级：
-
-```javascript
-const EMOJI_TYPES = {
-    '🌟': {name: 'highlight', priority: 1, label: '亮点功能'},
-    # 添加更多自定义类型...
-};
+# 设置 emoji commit 规范
+npm run setup-commit
 ```
+
+### 2. 开发工作流
+
+```bash
+# 启动自举编译器
+npm run boot
+
+# 运行测试
+npm test
+
+# 格式化代码
+npm run fmt
+
+# 生成发布报告
+npm run release:report
+```
+
+### 3. 发布流程
+
+```bash
+# 生成发布报告
+npm run release:latest
+
+# 发布 crate
+./scripts/publish.sh
+```
+
+## 📋 项目结构
+
+```
+valkyrie.valkyrie/
+├── scripts/                    # 开发工具集
+│   ├── generate-release-report.js
+│   ├── commit-lint.config.js
+│   ├── setup-emoji-commit.sh
+│   ├── setup-emoji-commit.bat
+│   ├── commit-msg
+│   └── publish.sh
+├── projects/
+│   ├── valkyrie-bootstrap/     # 自举编译器
+│   └── valkyrie-document/      # 官方文档
+├── package.json               # 根项目配置
+└── pnpm-workspace.yaml       # pnpm 工作区配置
+```
+
+## 🔧 技术栈
+
+- **Node.js**: 工具脚本运行环境
+- **JavaScript**: 工具脚本语言
+- **Git Hooks**: 提交规范强制
+- **Commitlint**: 提交消息检查
+- **Commitizen**: 交互式提交工具
+- **pnpm**: 包管理器和工作区管理
+
+## 📖 相关文档
+
+- [贡献指南](../CONTRIBUTING.md)
+- [Valkyrie 自举编译器](../projects/valkyrie-bootstrap/readme.md)
+- [Valkyrie 语言文档](../projects/valkyrie-document/readme.md)
+
+## 🤝 贡献
+
+1. 使用 emoji commit 规范进行提交
+2. 运行测试确保代码质量
+3. 生成发布报告记录变更
+4. 遵循项目的代码风格指南
+
+## 📄 许可证
+
+本项目采用与主项目相同的许可证。详见项目根目录的 LICENSE.md 文件。

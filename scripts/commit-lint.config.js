@@ -1,13 +1,38 @@
 module.exports = {
-    extends: ['@commitlint/config-conventional'],
+    parserPreset: {
+        parserOpts: {
+            headerPattern: /^(\u2728|\ud83d\udd27|\ud83d\udcdd|\ud83c\udfa8|\u2622\ufe0f|\ud83e\uddea|\ud83d\udd28|\u26a1\ufe0f|\ud83d\ude80|\ud83d\udd16|\ud83d\udea6|\ud83d\udce6|\u23ea|\ud83d\udca1|\ud83e\udde8|\u2705|\ud83d\udd00|\ud83d\udd2e)\s+(.+)$/,
+            headerCorrespondence: ['type', 'subject'],
+            noteKeywords: ['BREAKING CHANGE'],
+            revertPattern: /^(?:Revert|revert:)\s"?([\s\S]+?)"?\s*This reverts commit (\w+)\./i,
+            revertCorrespondence: ['header', 'hash']
+        }
+    },
     rules: {
+        // 自定义规则以适应纯emoji格式 - 允许emoji作为type
         'type-enum': [2, 'always', [
-            'feat', 'fix', 'docs', 'style', 'refactor', 'test', 'config', 'perf',
-            'release', 'tag', 'ci', 'build', 'revert', 'idea', 'delete', 'complete', 'branch', 'experiment'
+            '✨', // feat: 新功能
+            '🔧', // fix: 修复bug
+            '📝', // docs: 文档更新
+            '🎨', // style: 代码格式调整
+            '☢️', // refactor: 重构代码
+            '🧪', // test: 测试相关
+            '🔨', // config: 配置文件修改
+            '⚡️', // perf: 性能优化
+            '🚀', // release: 发布版本
+            '🔖', // tag: 标签相关
+            '🚦', // ci: CI/CD相关
+            '📦', // build: 构建相关
+            '⏪', // revert: 回滚操作
+            '💡', // idea: 新想法
+            '🧨', // delete: 删除文件
+            '✅', // complete: 完成任务
+            '🔀', // branch: 分支操作
+            '🔮'  // experiment: 实验性功能
         ]],
         'type-empty': [2, 'never'],
         'subject-empty': [2, 'never'],
-        'header-max-length': [2, 'always', 72]
+        'header-max-length': [2, 'always', 100]
     },
     prompt: {
         questions: {
