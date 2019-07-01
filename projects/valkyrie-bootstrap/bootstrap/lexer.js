@@ -135,6 +135,9 @@ export function getKeywordType(value) {
     if ((value == "false")) {
         return "BOOLEAN";
     }
+    if ((value == "namespace")) {
+        return "NAMESPACE";
+    }
     return "IDENTIFIER";
 }
 
@@ -199,6 +202,10 @@ export function nextToken(lexer) {
             return makeToken("COMMA", ch, line, column);
         }
         if ((ch == ":")) {
+            if (((lexer.position < lexer.source.length) && (lexer.source.charAt(lexer.position) == ":"))) {
+                advance(lexer);
+                return makeToken("DOUBLE_COLON", "::", line, column);
+            }
             return makeToken("COLON", ch, line, column);
         }
         if ((ch == "=")) {

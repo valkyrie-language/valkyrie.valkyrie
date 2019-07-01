@@ -98,6 +98,9 @@ export function generateStatement(node) {
         let value = generateExpression(node.value);
         return (((("let " + node.name) + " = ") + value) + ";");
     }
+    if ((node.type == "NamespaceStatement")) {
+        return "";
+    }
     if ((node.type == "FunctionDeclaration")) {
         let params = "";
         let i = 0;

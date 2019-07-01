@@ -132,6 +132,7 @@ fn getKeywordType(value) {
     if value == "return" { return "RETURN"; }
     if value == "true" { return "BOOLEAN"; }
     if value == "false" { return "BOOLEAN"; }
+    if value == "namespace" { return "NAMESPACE"; }
     return "IDENTIFIER";
 }
 
@@ -187,7 +188,13 @@ fn nextToken(lexer) {
         if ch == "]" { return makeToken("RBRACKET", ch, line, column); }
         if ch == ";" { return makeToken("SEMICOLON", ch, line, column); }
         if ch == "," { return makeToken("COMMA", ch, line, column); }
-        if ch == ":" { return makeToken("COLON", ch, line, column); }
+        if ch == ":" {
+            if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == ":" {
+                advance(lexer);
+                return makeToken("DOUBLE_COLON", "::", line, column);
+            }
+            return makeToken("COLON", ch, line, column);
+        }
         if ch == "=" {
             // 检查是否是 == 操作符
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {

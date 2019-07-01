@@ -259,6 +259,9 @@ export function parseStatement(parser) {
         error.column = parser.current_token.column;
         return error;
     }
+    if ((parser.current_token.type == "NAMESPACE")) {
+        return parseNamespaceStatement(parser);
+    }
     if ((parser.current_token.type == "LET")) {
         return parseLetStatement(parser);
     }
@@ -305,6 +308,31 @@ export function parseLetStatement(parser) {
     let node = makeNode("LetStatement");
     node.name = name.value;
     node.value = value;
+    return node;
+}
+
+export function parseNamespaceStatement(parser) {
+    advance(parser);
+    let path = [];
+    let identifier = expect(parser, "IDENTIFIER");
+    if ((identifier.type == "ParseError")) {
+        return identifier;
+    }
+    path.push(identifier.value);
+    while ((parser.current_token.type == "DOUBLE_COLON")) {
+        advance(parser);
+        identifier = expect(parser, "IDENTIFIER");
+        if ((identifier.type == "ParseError")) {
+            return identifier;
+        }
+        path.push(identifier.value);
+    }
+    let semicolon = expect(parser, "SEMICOLON");
+    if ((semicolon.type == "ParseError")) {
+        return semicolon;
+    }
+    let node = makeNode("NamespaceStatement");
+    node.path = path;
     return node;
 }
 
