@@ -1,3 +1,5 @@
+namespace package::parser;
+
 // Valkyrie 语法分析器 - 超简单版本
 
 fn makeParser(tokens) {

@@ -1,3 +1,5 @@
+namespace package::lexer;
+
 // Valkyrie 词法分析器 - 超简单版本
 
 fn initLexer(source) {

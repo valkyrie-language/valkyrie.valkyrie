@@ -1,3 +1,5 @@
+namespace package::compiler;
+
 // Valkyrie 编译器主模块
 // 使用 Valkyrie 语言实现
 

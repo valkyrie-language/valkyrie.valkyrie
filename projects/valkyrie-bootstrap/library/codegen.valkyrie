@@ -1,3 +1,5 @@
+namespace package::codegen;
+
 // Valkyrie 代码生成器 - 超简单版本
 
 fn replaceAll(str, search, replace) {
