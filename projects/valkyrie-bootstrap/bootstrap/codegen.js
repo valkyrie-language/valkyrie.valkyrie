@@ -101,6 +101,9 @@ export function generateStatement(node) {
     if ((node.type == "NamespaceStatement")) {
         return "";
     }
+    if ((node.type == "UsingStatement")) {
+        return "";
+    }
     if ((node.type == "FunctionDeclaration")) {
         let params = "";
         let i = 0;

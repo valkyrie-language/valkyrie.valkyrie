@@ -262,6 +262,9 @@ export function parseStatement(parser) {
     if ((parser.current_token.type == "NAMESPACE")) {
         return parseNamespaceStatement(parser);
     }
+    if ((parser.current_token.type == "USING")) {
+        return parseUsingStatement(parser);
+    }
     if ((parser.current_token.type == "LET")) {
         return parseLetStatement(parser);
     }
@@ -332,6 +335,31 @@ export function parseNamespaceStatement(parser) {
         return semicolon;
     }
     let node = makeNode("NamespaceStatement");
+    node.path = path;
+    return node;
+}
+
+export function parseUsingStatement(parser) {
+    advance(parser);
+    let path = [];
+    let identifier = expect(parser, "IDENTIFIER");
+    if ((identifier.type == "ParseError")) {
+        return identifier;
+    }
+    path.push(identifier.value);
+    while ((parser.current_token.type == "DOUBLE_COLON")) {
+        advance(parser);
+        identifier = expect(parser, "IDENTIFIER");
+        if ((identifier.type == "ParseError")) {
+            return identifier;
+        }
+        path.push(identifier.value);
+    }
+    let semicolon = expect(parser, "SEMICOLON");
+    if ((semicolon.type == "ParseError")) {
+        return semicolon;
+    }
+    let node = makeNode("UsingStatement");
     node.path = path;
     return node;
 }

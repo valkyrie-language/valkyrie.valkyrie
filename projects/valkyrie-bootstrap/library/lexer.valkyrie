@@ -135,6 +135,7 @@ fn getKeywordType(value) {
     if value == "true" { return "BOOLEAN"; }
     if value == "false" { return "BOOLEAN"; }
     if value == "namespace" { return "NAMESPACE"; }
+    if value == "using" { return "USING"; }
     return "IDENTIFIER";
 }
 

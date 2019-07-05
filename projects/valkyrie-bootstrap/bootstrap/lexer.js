@@ -138,6 +138,9 @@ export function getKeywordType(value) {
     if ((value == "namespace")) {
         return "NAMESPACE";
     }
+    if ((value == "using")) {
+        return "USING";
+    }
     return "IDENTIFIER";
 }
 

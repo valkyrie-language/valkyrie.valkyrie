@@ -124,9 +124,15 @@ fn generateStatement(node) {
     }
 
     if node.type == "NamespaceStatement" {
+        // TODO 处理 namespace 语句
         return "";
     }
-    
+
+    if node.type == "UsingStatement" {
+        // TODO 处理 using 语句
+        return "";
+    }
+
     if node.type == "FunctionDeclaration" {
         let params = "";
         let i = 0;
