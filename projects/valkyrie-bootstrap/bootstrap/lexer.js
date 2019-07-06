@@ -159,7 +159,7 @@ export function nextToken(lexer) {
             skipWhitespace(lexer);
             continue;
         }
-        if ((((lexer.current_char == "/") && ((lexer.position + 1) < lexer.source.length)) && (lexer.source.charAt((lexer.position + 1)) == "/"))) {
+        if ((lexer.current_char == "#")) {
             skipComment(lexer);
             continue;
         }
