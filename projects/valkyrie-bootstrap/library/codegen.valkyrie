@@ -1,6 +1,6 @@
 namespace package::codegen;
 
-// Valkyrie 代码生成器 - 超简单版本
+# Valkyrie 代码生成器 - 超简单版本
 
 fn replaceAll(str, search, replace) {
     let result = "";
@@ -22,17 +22,17 @@ fn generateExpression(node) {
     }
     
     if node.type == "String" {
-        // 处理字符串转义，确保与bootstrap/codegen.js一致
+        # 处理字符串转义，确保与bootstrap/codegen.js一致
         let escaped = node.value;
-        // 替换反斜杠
+        # 替换反斜杠
         escaped = replaceAll(escaped, "\\", "\\\\");
-        // 替换双引号
+        # 替换双引号
         escaped = replaceAll(escaped, "\"", "\\\"");
-        // 替换换行符
+        # 替换换行符
         escaped = replaceAll(escaped, "\n", "\\n");
-        // 替换回车符
+        # 替换回车符
         escaped = replaceAll(escaped, "\r", "\\r");
-        // 替换制表符
+        # 替换制表符
         escaped = replaceAll(escaped, "\t", "\\t");
         return "\"" + escaped + "\"";
     }
@@ -124,12 +124,12 @@ fn generateStatement(node) {
     }
 
     if node.type == "NamespaceStatement" {
-        // TODO 处理 namespace 语句
+        # TODO 处理 namespace 语句
         return "";
     }
 
     if node.type == "UsingStatement" {
-        // TODO 处理 using 语句
+        # TODO 处理 using 语句
         return "";
     }
 
@@ -194,7 +194,7 @@ fn generateStatement(node) {
         return generateExpression(node.expression) + ";";
     }
     
-    // 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
+    # 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
     return "/* Unknown statement: " + node.type + " */";
 }
 

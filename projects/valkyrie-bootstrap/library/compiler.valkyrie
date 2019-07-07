@@ -1,9 +1,9 @@
 namespace package::compiler;
 
-// Valkyrie 编译器主模块
-// 使用 Valkyrie 语言实现
+# Valkyrie 编译器主模块
+# 使用 Valkyrie 语言实现
 
-// 初始化编译器
+# 初始化编译器
 micro initCompiler(source) {
     let compiler = {}
     compiler.source = source
@@ -13,33 +13,33 @@ micro initCompiler(source) {
     return compiler
 }
 
-// 编译源代码
+# 编译源代码
 micro compile(compiler) {
-    // 词法分析阶段
+    # 词法分析阶段
     let lexer = initLexer(compiler.source)
     compiler.tokens = tokenize(lexer)
     
-    // 检查词法分析是否成功
+    # 检查词法分析是否成功
     if compiler.tokens.length == 0 {
         compiler.output = "Error: Lexical analysis failed"
         return compiler
     } else {
-        // 语法分析阶段
+        # 语法分析阶段
         compiler.ast = parse(compiler.tokens)
         
-        // 检查语法分析是否成功
+        # 检查语法分析是否成功
         if compiler.ast.type == "" {
             compiler.output = "Error: Syntax analysis failed"
             return compiler
         } else {
-            // 代码生成阶段
+            # 代码生成阶段
             compiler.output = generate(compiler.ast)
             return compiler
         }
     }
 }
 
-// 创建编译错误
+# 创建编译错误
 micro createError(message, line, column) {
     let error = {}
     error.message = message
@@ -48,46 +48,46 @@ micro createError(message, line, column) {
     return error
 }
 
-// 报告错误
+# 报告错误
 micro reportError(error) {
     let errorMessage = "Error at line " + error.line + ", column " + error.column + ": " + error.message
     return errorMessage
 }
 
-// 创建编译器选项
+# 创建编译器选项
 micro createCompilerOptions(outputFormat, optimize, debug) {
     let options = {}
-    // 输出格式：javascript, wasm 等
+    # 输出格式：javascript, wasm 等
     options.outputFormat = "javascript"
-    // 是否优化
+    # 是否优化
     options.optimize = optimize
-    // 是否包含调试信息
+    # 是否包含调试信息
     options.debug = debug
     return options
 }
 
-// 带选项的编译函数
+# 带选项的编译函数
 micro compileWithOptions(compiler, options) {
-    // 词法分析阶段
+    # 词法分析阶段
     let lexer = initLexer(compiler.source)
     compiler.tokens = tokenize(lexer)
     
-    // 检查词法分析是否成功
+    # 检查词法分析是否成功
     if compiler.tokens.length == 0 {
         let error = createCompilerError("Lexical analysis failed", 1, 1)
         compiler.output = reportError(error)
         return compiler
     } else {
-        // 语法分析阶段
+        # 语法分析阶段
         compiler.ast = parse(compiler.tokens)
         
-        // 检查语法分析是否成功
+        # 检查语法分析是否成功
         if compiler.ast.type == "" {
             let error = createCompilerError("Syntax analysis failed", 1, 1)
             compiler.output = reportError(error)
             return compiler
         } else {
-            // 代码生成阶段
+            # 代码生成阶段
             if options.outputFormat == "javascript" {
                 compiler.output = generate(compiler.ast)
             } else {
@@ -95,7 +95,7 @@ micro compileWithOptions(compiler, options) {
                 compiler.output = reportError(error)
             }
             
-            // 如果启用调试模式，添加调试信息
+            # 如果启用调试模式，添加调试信息
             if options.debug {
                 compiler.output = "// Debug mode enabled\n" + compiler.output
             }
@@ -105,7 +105,7 @@ micro compileWithOptions(compiler, options) {
     }
 }
 
-// 创建编译统计
+# 创建编译统计
 micro createStats() {
     let stats = {}
     stats.tokensCount = 0
@@ -115,7 +115,7 @@ micro createStats() {
     return stats
 }
 
-// 计算 AST 节点数量
+# 计算 AST 节点数量
 micro countASTNodes(node) {
     if node.type == "" {
         return 0
@@ -162,29 +162,29 @@ micro countASTNodes(node) {
         }
         return count
     } else {
-        return 1  // 叶子节点
+        return 1  # 叶子节点
     }
 }
 
-// 带统计信息的编译函数
+# 带统计信息的编译函数
 micro compileWithStats(compiler, options) {
     let stats = createCompilerStats()
     
-    // 记录开始时间（简化实现）
+    # 记录开始时间（简化实现）
     let startTime = 0
     
-    // 执行编译
+    # 执行编译
     compileWithOptions(compiler, options)
     
-    // 收集统计信息
+    # 收集统计信息
     stats.tokensCount = compiler.tokens.length
     stats.astNodesCount = countASTNodes(compiler.ast)
     stats.outputSize = compiler.output.length
-    stats.compileTime = 1  // 简化的编译时间
+    stats.compileTime = 1  # 简化的编译时间
     
-    // 将统计信息添加到输出（如果启用调试模式）
+    # 将统计信息添加到输出（如果启用调试模式）
     if options.debug {
-        let statsInfo = "\n// Compilation Statistics:\n"
+        let statsInfo = "\n# Compilation Statistics:\n"
         statsInfo = statsInfo + "// Tokens: " + stats.tokensCount + "\n"
         statsInfo = statsInfo + "// AST Nodes: " + stats.astNodesCount + "\n"
         statsInfo = statsInfo + "// Output Size: " + stats.outputSize + " characters\n"
@@ -195,14 +195,14 @@ micro compileWithStats(compiler, options) {
     return compiler
 }
 
-// 主编译函数 - 简单接口
+# 主编译函数 - 简单接口
 micro compileSource(source) {
     let compiler = initCompiler(source)
     compile(compiler)
     return compiler.output
 }
 
-// 主编译函数 - 完整接口
+# 主编译函数 - 完整接口
 micro compileSourceWithOptions(source, outputFormat, optimize, debug) {
     let compiler = initCompiler(source)
     let options = createCompilerOptions(outputFormat, optimize, debug)
@@ -210,11 +210,11 @@ micro compileSourceWithOptions(source, outputFormat, optimize, debug) {
     return compiler.output
 }
 
-// 验证源代码语法
+# 验证源代码语法
 micro validateSyntax(source) {
     let compiler = initCompiler(source)
     
-    // 只进行词法和语法分析
+    # 只进行词法和语法分析
     let lexer = initLexer(compiler.source)
     compiler.tokens = tokenize(lexer)
     

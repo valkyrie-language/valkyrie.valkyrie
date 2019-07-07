@@ -1,6 +1,6 @@
 namespace package::lexer;
 
-// Valkyrie 词法分析器 - 超简单版本
+# Valkyrie 词法分析器 - 超简单版本
 
 fn initLexer(source) {
     let lexer = {}
@@ -80,11 +80,11 @@ fn readNumber(lexer) {
 
 fn readString(lexer) {
     let result = "";
-    advance(lexer); // skip opening quote
+    advance(lexer); # skip opening quote
     
     while lexer.current_char != "" && lexer.current_char != "\"" {
         if lexer.current_char == "\\" {
-            advance(lexer); // consume '\'
+            advance(lexer); # consume '\'
             if lexer.current_char == "n" {
                 result = result + "\n";
             } else {
@@ -113,7 +113,7 @@ fn readString(lexer) {
     }
     
     if lexer.current_char == "\"" {
-        advance(lexer); // skip closing quote
+        advance(lexer); # skip closing quote
     }
     
     return result;
@@ -179,7 +179,7 @@ fn nextToken(lexer) {
             return makeToken("STRING", value, line, column);
         }
         
-        // Single character tokens
+        # Single character tokens
         let ch = lexer.current_char;
         advance(lexer);
         
@@ -199,7 +199,7 @@ fn nextToken(lexer) {
             return makeToken("COLON", ch, line, column);
         }
         if ch == "=" {
-            // 检查是否是 == 操作符
+            # 检查是否是 == 操作符
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
                 advance(lexer);
                 return makeToken("EQ", "==", line, column);
@@ -211,48 +211,48 @@ fn nextToken(lexer) {
         if ch == "*" { return makeToken("MULTIPLY", ch, line, column); }
         if ch == "/" { return makeToken("DIVIDE", ch, line, column); }
         if ch == "&" { 
-            // 检查是否是 &&
+            # 检查是否是 &&
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "&" {
-                advance(lexer); // 跳过第二个 &
+                advance(lexer); # 跳过第二个 &
                 return makeToken("AND", "&&", line, column);
             }
             return makeToken("AMPERSAND", ch, line, column); 
         }
         if ch == "|" { 
-            // 检查是否是 ||
+            # 检查是否是 ||
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "|" {
-                advance(lexer); // 跳过第二个 |
+                advance(lexer); # 跳过第二个 |
                 return makeToken("OR", "||", line, column);
             }
             return makeToken("PIPE", ch, line, column); 
         }
         if ch == ">" { 
-            // 检查是否是 >=
+            # 检查是否是 >=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer); // 跳过 =
+                advance(lexer); # 跳过 =
                 return makeToken("GTE", ">=", line, column);
             }
             return makeToken("GT", ch, line, column); 
         }
         if ch == "<" { 
-            // 检查是否是 <=
+            # 检查是否是 <=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer); // 跳过 =
+                advance(lexer); # 跳过 =
                 return makeToken("LTE", "<=", line, column);
             }
             return makeToken("LT", ch, line, column); 
         }
         if ch == "!" { 
-            // 检查是否是 !=
+            # 检查是否是 !=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer); // 跳过 =
+                advance(lexer); # 跳过 =
                 return makeToken("NE", "!=", line, column);
             }
             return makeToken("NOT", ch, line, column); 
         }
         if ch == "." { return makeToken("DOT", ch, line, column); }
         
-        // Unknown character
+        # Unknown character
         return makeToken("ERROR", "Unknown character: " + ch, line, column);
     }
     

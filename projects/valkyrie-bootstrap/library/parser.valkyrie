@@ -1,6 +1,6 @@
 namespace package::parser;
 
-// Valkyrie 语法分析器 - 超简单版本
+# Valkyrie 语法分析器 - 超简单版本
 
 fn makeParser(tokens) {
     let parser = {};
@@ -49,7 +49,7 @@ fn parseAssignment(parser) {
     
     if parser.current_token.type == "ASSIGN" {
         advance(parser);
-        let right = parseAssignment(parser); // Right-associative for assignment
+        let right = parseAssignment(parser); # Right-associative for assignment
         let node = makeNode("Assignment");
         node.left = left;
         node.right = right;
@@ -243,19 +243,19 @@ fn parseFactor(parser) {
         return expr;
     }
     
-    // 支持数组字面量 []
+    # 支持数组字面量 []
     if parser.current_token.type == "LBRACKET" {
         advance(parser);
         let node = makeNode("ArrayLiteral");
         node.elements = [];
         
-        // 简单的空数组支持
+        # 简单的空数组支持
         if parser.current_token.type == "RBRACKET" {
             advance(parser);
             return node;
         }
         
-        // 跳过数组内容，直到找到 ]
+        # 跳过数组内容，直到找到 ]
         while parser.current_token.type != "RBRACKET" && parser.current_token.type != "EOF" {
             advance(parser);
         }
@@ -267,19 +267,19 @@ fn parseFactor(parser) {
         return node;
     }
     
-    // 支持对象字面量 {}
+    # 支持对象字面量 {}
     if parser.current_token.type == "LBRACE" {
         advance(parser);
         let node = makeNode("ObjectLiteral");
         node.properties = [];
         
-        // 简单的空对象支持
+        # 简单的空对象支持
         if parser.current_token.type == "RBRACE" {
             advance(parser);
             return node;
         }
         
-        // 跳过对象内容，直到找到 }
+        # 跳过对象内容，直到找到 }
         while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
             advance(parser);
         }
@@ -297,7 +297,7 @@ fn parseFactor(parser) {
 
 
 fn parseStatement(parser) {
-    // 检查 EOF
+    # 检查 EOF
     if parser.current_token.type == "EOF" {
         let error = {};
         error.type = "ParseError";
@@ -339,27 +339,27 @@ fn parseStatement(parser) {
         return parseBlock(parser);
     }
     
-    // 表达式语句
+    # 表达式语句
     let expr = parseExpression(parser);
     
-    // 检查表达式是否有错误
+    # 检查表达式是否有错误
     if expr.type == "ParseError" {
         return expr;
     }
     
     expect(parser, "SEMICOLON");
     
-    // 创建ExpressionStatement节点
+    # 创建ExpressionStatement节点
     let stmt = makeNode("ExpressionStatement");
     stmt.expression = expr;
     return stmt;
 }
 
 fn parseLetStatement(parser) {
-    advance(parser); // skip 'let'
+    advance(parser); # skip 'let'
     let name = expect(parser, "IDENTIFIER");
     
-    // 检查 expect 是否返回错误
+    # 检查 expect 是否返回错误
     if name && name.type == "ParseError" {
         return name;
     }
@@ -383,7 +383,7 @@ fn parseLetStatement(parser) {
 }
 
 fn parseNamespaceStatement(parser) {
-    advance(parser); // skip 'namespace'
+    advance(parser); # skip 'namespace'
     let path = [];
     
     let identifier = expect(parser, "IDENTIFIER");
@@ -406,7 +406,7 @@ fn parseNamespaceStatement(parser) {
 }
 
 fn parseUsingStatement(parser) {
-    advance(parser); // skip 'using'
+    advance(parser); # skip 'using'
     let path = [];
     
     let identifier = expect(parser, "IDENTIFIER");
@@ -429,7 +429,7 @@ fn parseUsingStatement(parser) {
 }
 
 fn parseFunctionDeclaration(parser) {
-    advance(parser); // skip 'fn'
+    advance(parser); # skip 'fn'
     let name = expect(parser, "IDENTIFIER");
     expect(parser, "LPAREN");
     
@@ -454,7 +454,7 @@ fn parseFunctionDeclaration(parser) {
 }
 
 fn parseIfStatement(parser) {
-    advance(parser); // skip 'if'
+    advance(parser); # skip 'if'
     let condition = parseExpression(parser);
     let thenBranch = parseStatement(parser);
     
@@ -472,7 +472,7 @@ fn parseIfStatement(parser) {
 }
 
 fn parseWhileStatement(parser) {
-    advance(parser); // skip 'while'
+    advance(parser); # skip 'while'
     let condition = parseExpression(parser);
     let body = parseBlock(parser);
     
@@ -483,7 +483,7 @@ fn parseWhileStatement(parser) {
 }
 
 fn parseReturnStatement(parser) {
-    advance(parser); // skip 'return'
+    advance(parser); # skip 'return'
     
     let node = makeNode("ReturnStatement");
     
