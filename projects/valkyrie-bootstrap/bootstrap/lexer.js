@@ -111,7 +111,7 @@ export function skipComment(lexer) {
 }
 
 export function getKeywordType(value) {
-    if ((value == "fn")) {
+    if ((value == "micro")) {
         return "FUNCTION";
     }
     if ((value == "let")) {

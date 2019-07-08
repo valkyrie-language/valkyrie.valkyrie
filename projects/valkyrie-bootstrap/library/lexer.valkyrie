@@ -126,7 +126,7 @@ fn skipComment(lexer) {
 }
 
 fn getKeywordType(value) {
-    if value == "fn" { return "FUNCTION"; }
+    if value == "micro" { return "FUNCTION"; }
     if value == "let" { return "LET"; }
     if value == "if" { return "IF"; }
     if value == "else" { return "ELSE"; }
