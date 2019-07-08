@@ -2,7 +2,7 @@ namespace package::codegen;
 
 # Valkyrie 代码生成器 - 超简单版本
 
-fn replaceAll(str, search, replace) {
+micro replaceAll(str, search, replace) {
     let result = "";
     let i = 0;
     while i < str.length {
@@ -16,7 +16,7 @@ fn replaceAll(str, search, replace) {
     return result;
 }
 
-fn generateExpression(node) {
+micro generateExpression(node) {
     if node.type == "Number" {
         return node.value;
     }
@@ -117,7 +117,7 @@ fn generateExpression(node) {
     return "/* Unknown expression: " + node.type + " */";
 }
 
-fn generateStatement(node) {
+micro generateStatement(node) {
     if node.type == "LetStatement" {
         let value = generateExpression(node.value);
         return "let " + node.name + " = " + value + ";";
@@ -198,7 +198,7 @@ fn generateStatement(node) {
     return "/* Unknown statement: " + node.type + " */";
 }
 
-fn generate(ast) {
+micro generate(ast) {
     if ast.type == "Program" {
         let result = "";
         let i = 0;

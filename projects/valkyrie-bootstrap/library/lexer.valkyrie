@@ -2,7 +2,7 @@ namespace package::lexer;
 
 # Valkyrie 词法分析器 - 超简单版本
 
-fn initLexer(source) {
+micro initLexer(source) {
     let lexer = {}
     lexer.source = source
     lexer.position = 0
@@ -17,7 +17,7 @@ fn initLexer(source) {
     return lexer
 }
 
-fn advance(lexer) {
+micro advance(lexer) {
     if lexer.current_char == "\n" {
         lexer.line = lexer.line + 1
         lexer.column = 1
@@ -34,29 +34,29 @@ fn advance(lexer) {
     }
 }
 
-fn skipWhitespace(lexer) {
+micro skipWhitespace(lexer) {
     while lexer.current_char != "" && isWhitespace(lexer.current_char) {
         advance(lexer)
     }
 }
 
-fn isWhitespace(ch) {
+micro isWhitespace(ch) {
     return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
 }
 
-fn isAlpha(ch) {
+micro isAlpha(ch) {
     return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
 }
 
-fn isDigit(ch) {
+micro isDigit(ch) {
     return ch >= "0" && ch <= "9";
 }
 
-fn isAlphaNumeric(ch) {
+micro isAlphaNumeric(ch) {
     return isAlpha(ch) || isDigit(ch);
 }
 
-fn readIdentifier(lexer) {
+micro readIdentifier(lexer) {
     let result = "";
     
     while lexer.current_char != "" && isAlphaNumeric(lexer.current_char) {
@@ -67,7 +67,7 @@ fn readIdentifier(lexer) {
     return result;
 }
 
-fn readNumber(lexer) {
+micro readNumber(lexer) {
     let result = "";
     
     while lexer.current_char != "" && isDigit(lexer.current_char) {
@@ -78,7 +78,7 @@ fn readNumber(lexer) {
     return result;
 }
 
-fn readString(lexer) {
+micro readString(lexer) {
     let result = "";
     advance(lexer); # skip opening quote
     
@@ -119,13 +119,13 @@ fn readString(lexer) {
     return result;
 }
 
-fn skipComment(lexer) {
+micro skipComment(lexer) {
     while lexer.current_char != "" && lexer.current_char != "\n" {
         advance(lexer);
     }
 }
 
-fn getKeywordType(value) {
+micro getKeywordType(value) {
     if value == "micro" { return "FUNCTION"; }
     if value == "let" { return "LET"; }
     if value == "if" { return "IF"; }
@@ -139,7 +139,7 @@ fn getKeywordType(value) {
     return "IDENTIFIER";
 }
 
-fn makeToken(type, value, line, column) {
+micro makeToken(type, value, line, column) {
     let token = {};
     token.type = type;
     token.value = value;
@@ -148,7 +148,7 @@ fn makeToken(type, value, line, column) {
     return token;
 }
 
-fn nextToken(lexer) {
+micro nextToken(lexer) {
     while lexer.current_char != "" {
         if isWhitespace(lexer.current_char) {
             skipWhitespace(lexer);
@@ -259,7 +259,7 @@ fn nextToken(lexer) {
     return makeToken("EOF", "", lexer.line, lexer.column);
 }
 
-fn tokenize(lexer) {
+micro tokenize(lexer) {
     let tokens = [];
     
     while true {
