@@ -179,7 +179,7 @@ export function parseCallMemberExpression(parser) {
                 }
             }
             expect(parser, "RPAREN");
-            let callNode = makeNode("FunctionCall");
+            let callNode = makeNode("MicroCall");
             callNode.callee = expr;
             callNode.arguments = args;
             expr = callNode;
@@ -212,6 +212,24 @@ export function parseFactor(parser) {
         let node = makeNode("UnaryOp");
         node.operator = "!";
         node.operand = operand;
+        return node;
+    }
+    if ((parser.current_token.type == "NEW")) {
+        advance(parser);
+        let className = expect(parser, "IDENTIFIER");
+        expect(parser, "LPAREN");
+        let args = [];
+        if ((parser.current_token.type != "RPAREN")) {
+            args.push(parseAssignment(parser));
+            while ((parser.current_token.type == "COMMA")) {
+                advance(parser);
+                args.push(parseAssignment(parser));
+            }
+        }
+        expect(parser, "RPAREN");
+        let node = makeNode("NewExpression");
+        node.className = className.value;
+        node.arguments = args;
         return node;
     }
     if ((parser.current_token.type == "LPAREN")) {
@@ -276,7 +294,7 @@ export function parseStatement(parser) {
     if ((parser.current_token.type == "LET")) {
         return parseLetStatement(parser);
     }
-    if ((parser.current_token.type == "FUNCTION")) {
+    if ((parser.current_token.type == "MICRO")) {
         return parseFunctionDeclaration(parser);
     }
     if ((parser.current_token.type == "IF")) {
@@ -445,7 +463,7 @@ export function parseClassMember(parser) {
         node.body = body;
         return node;
     }
-    if ((parser.current_token.type == "FUNCTION")) {
+    if ((parser.current_token.type == "MICRO")) {
         advance(parser);
         let name = expect(parser, "IDENTIFIER");
         expect(parser, "LPAREN");
@@ -494,7 +512,7 @@ export function parseFunctionDeclaration(parser) {
     }
     expect(parser, "RPAREN");
     let body = parseBlock(parser);
-    let node = makeNode("FunctionDeclaration");
+    let node = makeNode("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.body = body;

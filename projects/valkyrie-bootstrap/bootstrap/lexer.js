@@ -112,7 +112,7 @@ export function skipComment(lexer) {
 
 export function getKeywordType(value) {
     if ((value == "micro")) {
-        return "FUNCTION";
+        return "MICRO";
     }
     if ((value == "let")) {
         return "LET";
@@ -155,6 +155,9 @@ export function getKeywordType(value) {
     }
     if ((value == "implements")) {
         return "IMPLEMENTS";
+    }
+    if ((value == "new")) {
+        return "NEW";
     }
     return "IDENTIFIER";
 }

@@ -48,7 +48,7 @@ export function generateExpression(node) {
         let right = generateExpression(node.right);
         return ((left + " = ") + right);
     }
-    if ((node.type == "FunctionCall")) {
+    if ((node.type == "MicroCall")) {
         let callee = generateExpression(node.callee);
         let args = "";
         let i = 0;
@@ -61,6 +61,19 @@ export function generateExpression(node) {
             i = (i + 1);
         }
         return (((callee + "(") + args) + ")");
+    }
+    if ((node.type == "NewExpression")) {
+        let args = "";
+        let i = 0;
+        while ((i < node.arguments.length)) {
+            let arg = generateExpression(node.arguments[i]);
+            args = (args + arg);
+            if ((i < (node.arguments.length - 1))) {
+                args = (args + ", ");
+            }
+            i = (i + 1);
+        }
+        return (((("new " + node.className) + "(") + args) + ")");
     }
     if ((node.type == "PropertyAccess")) {
         if (node.object.type) {
@@ -107,7 +120,7 @@ export function generateStatement(node) {
     if ((node.type == "UsingStatement")) {
         return "";
     }
-    if ((node.type == "FunctionDeclaration")) {
+    if ((node.type == "MicroDeclaration")) {
         let params = "";
         let i = 0;
         while ((i < node.parameters.length)) {

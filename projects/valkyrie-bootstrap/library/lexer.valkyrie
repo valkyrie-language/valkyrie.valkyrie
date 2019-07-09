@@ -126,7 +126,7 @@ micro skipComment(lexer) {
 }
 
 micro getKeywordType(value) {
-    if value == "micro" { return "FUNCTION"; }
+    if value == "micro" { return "MICRO"; }
     if value == "let" { return "LET"; }
     if value == "if" { return "IF"; }
     if value == "else" { return "ELSE"; }
@@ -141,6 +141,7 @@ micro getKeywordType(value) {
     if value == "self" { return "SELF"; }
     if value == "extends" { return "EXTENDS"; }
     if value == "implements" { return "IMPLEMENTS"; }
+    if value == "new" { return "NEW"; }
     return "IDENTIFIER";
 }
 

@@ -64,7 +64,7 @@ micro generateExpression(node) {
         return left + " = " + right;
     }
     
-    if node.type == "FunctionCall" {
+    if node.type == "MicroCall" {
         let callee = generateExpression(node.callee);
         let args = "";
         
@@ -79,6 +79,22 @@ micro generateExpression(node) {
         }
         
         return callee + "(" + args + ")";
+    }
+    
+    if node.type == "NewExpression" {
+        let args = "";
+        
+        let i = 0;
+        while i < node.arguments.length {
+            let arg = generateExpression(node.arguments[i]);
+            args = args + arg;
+            if i < node.arguments.length - 1 {
+                args = args + ", ";
+            }
+            i = i + 1;
+        }
+        
+        return "new " + node.className + "(" + args + ")";
     }
     
     if node.type == "PropertyAccess" {
@@ -137,7 +153,7 @@ micro generateStatement(node) {
         return "";
     }
 
-    if node.type == "FunctionDeclaration" {
+    if node.type == "MicroDeclaration" {
         let params = "";
         let i = 0;
         while i < node.parameters.length {
