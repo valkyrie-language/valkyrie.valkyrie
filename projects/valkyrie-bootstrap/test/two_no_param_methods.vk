@@ -1,0 +1,4 @@
+class C {
+    micro a(){}
+    micro b(){}
+}

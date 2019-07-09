@@ -1,0 +1,7 @@
+class C {
+    field = 42;
+    micro a(){}
+    micro b(self){}
+}
+
+let c = new C();

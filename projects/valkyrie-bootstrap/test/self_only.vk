@@ -1,0 +1,5 @@
+class C {
+    micro b(self){
+        let x = 1;
+    }
+}
