@@ -90,6 +90,9 @@ export function generateExpression(node) {
         let operand = generateExpression(node.operand);
         return (node.operator + operand);
     }
+    if ((node.type == "ThisExpression")) {
+        return "self";
+    }
     return (("/* Unknown expression: " + node.type) + " */");
 }
 
@@ -116,6 +119,19 @@ export function generateStatement(node) {
         }
         let body = generateStatement(node.body);
         return ((((("export function " + node.name) + "(") + params) + ") ") + body);
+    }
+    if ((node.type == "MemberStatement")) {
+        let params = "";
+        let i = 0;
+        while ((i < node.parameters.length)) {
+            if ((i > 0)) {
+                params = (params + ", ");
+            }
+            params = (params + node.parameters[i]);
+            i = (i + 1);
+        }
+        let body = generateStatement(node.body);
+        return ((((("function " + node.name) + "(") + params) + ") ") + body);
     }
     if ((node.type == "IfStatement")) {
         let condition = generateExpression(node.condition);

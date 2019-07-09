@@ -141,6 +141,21 @@ export function getKeywordType(value) {
     if ((value == "using")) {
         return "USING";
     }
+    if ((value == "class")) {
+        return "CLASS";
+    }
+    if ((value == "constructor")) {
+        return "CONSTRUCTOR";
+    }
+    if ((value == "self")) {
+        return "SELF";
+    }
+    if ((value == "extends")) {
+        return "EXTENDS";
+    }
+    if ((value == "implements")) {
+        return "IMPLEMENTS";
+    }
     return "IDENTIFIER";
 }
 

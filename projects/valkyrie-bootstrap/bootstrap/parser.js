@@ -157,6 +157,11 @@ export function parsePrimary(parser) {
         node.name = name;
         return node;
     }
+    if ((parser.current_token.type == "SELF")) {
+        advance(parser);
+        let node = makeNode("ThisExpression");
+        return node;
+    }
     return parseCallMemberExpression(parser);
 }
 
@@ -265,6 +270,9 @@ export function parseStatement(parser) {
     if ((parser.current_token.type == "USING")) {
         return parseUsingStatement(parser);
     }
+    if ((parser.current_token.type == "CLASS")) {
+        return parseClassDeclaration(parser);
+    }
     if ((parser.current_token.type == "LET")) {
         return parseLetStatement(parser);
     }
@@ -361,6 +369,114 @@ export function parseUsingStatement(parser) {
     }
     let node = makeNode("UsingStatement");
     node.path = path;
+    return node;
+}
+
+export function parseClassDeclaration(parser) {
+    advance(parser);
+    let name = expect(parser, "IDENTIFIER");
+    let node = makeNode("ClassDeclaration");
+    node.name = name.value;
+    node.superClass = null;
+    node.members = [];
+    if ((parser.current_token.type == "EXTENDS")) {
+        advance(parser);
+        let superName = expect(parser, "IDENTIFIER");
+        node.superClass = superName.value;
+    }
+    expect(parser, "LBRACE");
+    while (((parser.current_token.type != "RBRACE") && (parser.current_token.type != "EOF"))) {
+        let member = parseClassMember(parser);
+        if ((member && (member.type != "ParseError"))) {
+            node.members.push(member);
+        } else if ((member && (member.type == "ParseError"))) {
+            return member;
+        }
+    }
+    expect(parser, "RBRACE");
+    return node;
+}
+
+export function parseClassMember(parser) {
+    let accessModifier = "public";
+    let isStatic = false;
+    if ((parser.current_token.type == "PUBLIC")) {
+        advance(parser);
+        accessModifier = "public";
+    } else if ((parser.current_token.type == "PRIVATE")) {
+        advance(parser);
+        accessModifier = "private";
+    } else if ((parser.current_token.type == "PROTECTED")) {
+        advance(parser);
+        accessModifier = "protected";
+    }
+    if ((parser.current_token.type == "STATIC")) {
+        advance(parser);
+        isStatic = true;
+        if ((parser.current_token.type == "PUBLIC")) {
+            advance(parser);
+            accessModifier = "public";
+        } else if ((parser.current_token.type == "PRIVATE")) {
+            advance(parser);
+            accessModifier = "private";
+        } else if ((parser.current_token.type == "PROTECTED")) {
+            advance(parser);
+            accessModifier = "protected";
+        }
+    }
+    let node = makeNode("ClassMember");
+    node.accessModifier = accessModifier;
+    node.isStatic = isStatic;
+    if ((parser.current_token.type == "CONSTRUCTOR")) {
+        advance(parser);
+        expect(parser, "LPAREN");
+        let params = [];
+        if ((parser.current_token.type != "RPAREN")) {
+            params.push(expect(parser, "IDENTIFIER").value);
+            while ((parser.current_token.type == "COMMA")) {
+                advance(parser);
+                params.push(expect(parser, "IDENTIFIER").value);
+            }
+        }
+        expect(parser, "RPAREN");
+        let body = parseBlock(parser);
+        node.type = "Constructor";
+        node.parameters = params;
+        node.body = body;
+        return node;
+    }
+    if ((parser.current_token.type == "FUNCTION")) {
+        advance(parser);
+        let name = expect(parser, "IDENTIFIER");
+        expect(parser, "LPAREN");
+        let params = [];
+        if ((parser.current_token.type != "RPAREN")) {
+            params.push(expect(parser, "IDENTIFIER").value);
+            while ((parser.current_token.type == "COMMA")) {
+                advance(parser);
+                params.push(expect(parser, "IDENTIFIER").value);
+            }
+        }
+        expect(parser, "RPAREN");
+        let body = parseBlock(parser);
+        let methodNode = makeNode("MemberStatement");
+        methodNode.name = name.value;
+        methodNode.parameters = params;
+        methodNode.body = body;
+        methodNode.accessModifier = accessModifier;
+        methodNode.isStatic = isStatic;
+        return methodNode;
+    }
+    let name = expect(parser, "IDENTIFIER");
+    let initValue = null;
+    if ((parser.current_token.type == "ASSIGN")) {
+        advance(parser);
+        initValue = parseExpression(parser);
+    }
+    expect(parser, "SEMICOLON");
+    node.type = "Property";
+    node.name = name.value;
+    node.initializer = initValue;
     return node;
 }
 
