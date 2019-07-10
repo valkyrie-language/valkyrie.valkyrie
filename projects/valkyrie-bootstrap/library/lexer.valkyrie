@@ -3,15 +3,15 @@ namespace package::lexer;
 # Valkyrie 词法分析器 - 超简单版本
 
 micro initLexer(source) {
-    let lexer = {}
-    lexer.source = source
-    lexer.position = 0
-    lexer.line = 1
-    lexer.column = 1
-    lexer.current_char = ""
+    let lexer = {};
+    lexer.source = source;
+    lexer.position = 0;
+    lexer.line = 1;
+    lexer.column = 1;
+    lexer.current_char = "";
     
     if source.length > 0 {
-        lexer.current_char = source.charAt(0)
+        lexer.current_char = source.charAt(0);
     }
     
     return lexer
@@ -19,24 +19,24 @@ micro initLexer(source) {
 
 micro advance(lexer) {
     if lexer.current_char == "\n" {
-        lexer.line = lexer.line + 1
-        lexer.column = 1
+        lexer.line = lexer.line + 1;
+        lexer.column = 1;
     } else {
-        lexer.column = lexer.column + 1
+        lexer.column = lexer.column + 1;
     }
     
-    lexer.position = lexer.position + 1
+    lexer.position = lexer.position + 1;
     
     if lexer.position >= lexer.source.length {
-        lexer.current_char = ""
+        lexer.current_char = "";
     } else {
-        lexer.current_char = lexer.source.charAt(lexer.position)
+        lexer.current_char = lexer.source.charAt(lexer.position);
     }
 }
 
 micro skipWhitespace(lexer) {
     while lexer.current_char != "" && isWhitespace(lexer.current_char) {
-        advance(lexer)
+        advance(lexer);
     }
 }
 
@@ -142,6 +142,7 @@ micro getKeywordType(value) {
     if value == "extends" { return "EXTENDS"; }
     if value == "implements" { return "IMPLEMENTS"; }
     if value == "new" { return "NEW"; }
+    if value == "default" { return "DEFAULT"; }
     return "IDENTIFIER";
 }
 

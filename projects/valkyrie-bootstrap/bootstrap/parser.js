@@ -128,45 +128,20 @@ export function parseTerm(parser) {
     return left;
 }
 
-export function parsePrimary(parser) {
-    if ((parser.current_token.type == "NUMBER")) {
-        let value = parser.current_token.value;
+export function parseFactor(parser) {
+    if ((parser.current_token.type == "NOT")) {
         advance(parser);
-        let node = makeNode("Number");
-        node.value = value;
-        return node;
-    }
-    if ((parser.current_token.type == "STRING")) {
-        let value = parser.current_token.value;
-        advance(parser);
-        let node = makeNode("String");
-        node.value = value;
-        return node;
-    }
-    if ((parser.current_token.type == "BOOLEAN")) {
-        let value = parser.current_token.value;
-        advance(parser);
-        let node = makeNode("Boolean");
-        node.value = value;
-        return node;
-    }
-    if ((parser.current_token.type == "IDENTIFIER")) {
-        let name = parser.current_token.value;
-        advance(parser);
-        let node = makeNode("Identifier");
-        node.name = name;
-        return node;
-    }
-    if ((parser.current_token.type == "SELF")) {
-        advance(parser);
-        let node = makeNode("ThisExpression");
+        let operand = parseFactor(parser);
+        let node = makeNode("UnaryOp");
+        node.operator = "!";
+        node.operand = operand;
         return node;
     }
     return parseCallMemberExpression(parser);
 }
 
 export function parseCallMemberExpression(parser) {
-    let expr = parsePrimary(parser);
+    let expr = parseAtomicExpression(parser);
     while (true) {
         if ((parser.current_token.type == "LPAREN")) {
             advance(parser);
@@ -205,13 +180,38 @@ export function parseCallMemberExpression(parser) {
     return expr;
 }
 
-export function parseFactor(parser) {
-    if ((parser.current_token.type == "NOT")) {
+export function parseAtomicExpression(parser) {
+    if ((parser.current_token.type == "NUMBER")) {
+        let value = parser.current_token.value;
         advance(parser);
-        let operand = parseFactor(parser);
-        let node = makeNode("UnaryOp");
-        node.operator = "!";
-        node.operand = operand;
+        let node = makeNode("Number");
+        node.value = value;
+        return node;
+    }
+    if ((parser.current_token.type == "STRING")) {
+        let value = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("String");
+        node.value = value;
+        return node;
+    }
+    if ((parser.current_token.type == "BOOLEAN")) {
+        let value = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("Boolean");
+        node.value = value;
+        return node;
+    }
+    if ((parser.current_token.type == "IDENTIFIER")) {
+        let name = parser.current_token.value;
+        advance(parser);
+        let node = makeNode("Identifier");
+        node.name = name;
+        return node;
+    }
+    if ((parser.current_token.type == "SELF")) {
+        advance(parser);
+        let node = makeNode("ThisExpression");
         return node;
     }
     if ((parser.current_token.type == "NEW")) {
@@ -242,35 +242,46 @@ export function parseFactor(parser) {
         advance(parser);
         let node = makeNode("ArrayLiteral");
         node.elements = [];
-        if ((parser.current_token.type == "RBRACKET")) {
-            advance(parser);
-            return node;
+        if ((parser.current_token.type != "RBRACKET")) {
+            node.elements.push(parseAssignment(parser));
+            while ((parser.current_token.type == "COMMA")) {
+                advance(parser);
+                node.elements.push(parseAssignment(parser));
+            }
         }
-        while (((parser.current_token.type != "RBRACKET") && (parser.current_token.type != "EOF"))) {
-            advance(parser);
-        }
-        if ((parser.current_token.type == "RBRACKET")) {
-            advance(parser);
-        }
+        expect(parser, "RBRACKET");
         return node;
     }
     if ((parser.current_token.type == "LBRACE")) {
         advance(parser);
         let node = makeNode("ObjectLiteral");
         node.properties = [];
-        if ((parser.current_token.type == "RBRACE")) {
-            advance(parser);
-            return node;
+        if ((parser.current_token.type != "RBRACE")) {
+            while (((parser.current_token.type == "IDENTIFIER") || (parser.current_token.type == "STRING"))) {
+                let key = parser.current_token.value;
+                advance(parser);
+                expect(parser, "COLON");
+                let value = parseAssignment(parser);
+                let propertyNode = makeNode("Property");
+                propertyNode.key = key;
+                propertyNode.value = value;
+                node.properties.push(propertyNode);
+                if ((parser.current_token.type == "COMMA")) {
+                    advance(parser);
+                } else {
+                    break;
+                }
+            }
         }
-        while (((parser.current_token.type != "RBRACE") && (parser.current_token.type != "EOF"))) {
-            advance(parser);
-        }
-        if ((parser.current_token.type == "RBRACE")) {
-            advance(parser);
-        }
+        expect(parser, "RBRACE");
         return node;
     }
-    return parseCallMemberExpression(parser);
+    let error = {};
+    error.type = "ParseError";
+    error.message = ("Unexpected token: " + parser.current_token.type);
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
 }
 
 export function parseStatement(parser) {
@@ -310,10 +321,13 @@ export function parseStatement(parser) {
         return parseBlock(parser);
     }
     let expr = parseExpression(parser);
-    if ((expr.type == "ParseError")) {
+    if ((expr && (expr.type == "ParseError"))) {
         return expr;
     }
-    expect(parser, "SEMICOLON");
+    let semicolon = expect(parser, "SEMICOLON");
+    if ((semicolon && (semicolon.type == "ParseError"))) {
+        return semicolon;
+    }
     let stmt = makeNode("ExpressionStatement");
     stmt.expression = expr;
     return stmt;
@@ -416,102 +430,166 @@ export function parseClassDeclaration(parser) {
 }
 
 export function parseClassMember(parser) {
-    let accessModifier = "public";
-    let isStatic = false;
-    if ((parser.current_token.type == "PUBLIC")) {
-        advance(parser);
-        accessModifier = "public";
-    } else if ((parser.current_token.type == "PRIVATE")) {
-        advance(parser);
-        accessModifier = "private";
-    } else if ((parser.current_token.type == "PROTECTED")) {
-        advance(parser);
-        accessModifier = "protected";
-    }
-    if ((parser.current_token.type == "STATIC")) {
-        advance(parser);
-        isStatic = true;
-        if ((parser.current_token.type == "PUBLIC")) {
-            advance(parser);
-            accessModifier = "public";
-        } else if ((parser.current_token.type == "PRIVATE")) {
-            advance(parser);
-            accessModifier = "private";
-        } else if ((parser.current_token.type == "PROTECTED")) {
-            advance(parser);
-            accessModifier = "protected";
-        }
-    }
-    let node = makeNode("ClassMember");
-    node.accessModifier = accessModifier;
-    node.isStatic = isStatic;
-    if ((parser.current_token.type == "CONSTRUCTOR")) {
-        advance(parser);
-        expect(parser, "LPAREN");
-        let params = [];
-        if ((parser.current_token.type != "RPAREN")) {
-            params.push(expect(parser, "IDENTIFIER").value);
-            while ((parser.current_token.type == "COMMA")) {
-                advance(parser);
-                params.push(expect(parser, "IDENTIFIER").value);
-            }
-        }
-        expect(parser, "RPAREN");
-        let body = parseBlock(parser);
-        node.type = "Constructor";
-        node.parameters = params;
-        node.body = body;
-        return node;
-    }
     if ((parser.current_token.type == "MICRO")) {
         advance(parser);
         let name = expect(parser, "IDENTIFIER");
-        expect(parser, "LPAREN");
+        if ((name && (name.type == "ParseError"))) {
+            return name;
+        }
+        let lparen = expect(parser, "LPAREN");
+        if ((lparen && (lparen.type == "ParseError"))) {
+            return lparen;
+        }
         let params = [];
         if ((parser.current_token.type != "RPAREN")) {
-            params.push(expect(parser, "IDENTIFIER").value);
+            let param = null;
+            if ((parser.current_token.type == "IDENTIFIER")) {
+                param = expect(parser, "IDENTIFIER");
+            } else if ((parser.current_token.type == "SELF")) {
+                param = expect(parser, "SELF");
+                param.value = "self";
+            } else {
+                let error = {};
+                error.type = "ParseError";
+                error.message = ("Expected parameter name but got " + parser.current_token.type);
+                error.line = parser.current_token.line;
+                error.column = parser.current_token.column;
+                return error;
+            }
+            if ((param && (param.type == "ParseError"))) {
+                return param;
+            }
+            params.push(param.value);
             while ((parser.current_token.type == "COMMA")) {
                 advance(parser);
-                params.push(expect(parser, "IDENTIFIER").value);
+                if ((parser.current_token.type == "IDENTIFIER")) {
+                    param = expect(parser, "IDENTIFIER");
+                } else if ((parser.current_token.type == "SELF")) {
+                    param = expect(parser, "SELF");
+                    param.value = "self";
+                } else {
+                    let error = {};
+                    error.type = "ParseError";
+                    error.message = ("Expected parameter name but got " + parser.current_token.type);
+                    error.line = parser.current_token.line;
+                    error.column = parser.current_token.column;
+                    return error;
+                }
+                if ((param && (param.type == "ParseError"))) {
+                    return param;
+                }
+                params.push(param.value);
             }
         }
-        expect(parser, "RPAREN");
+        let rparen = expect(parser, "RPAREN");
+        if ((rparen && (rparen.type == "ParseError"))) {
+            return rparen;
+        }
         let body = parseBlock(parser);
+        if ((body && (body.type == "ParseError"))) {
+            return body;
+        }
+        let isInstanceMethod = false;
+        if (((params.length > 0) && (params[0] == "self"))) {
+            isInstanceMethod = true;
+        }
         let methodNode = makeNode("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
         methodNode.body = body;
-        methodNode.accessModifier = accessModifier;
-        methodNode.isStatic = isStatic;
+        methodNode.isInstanceMethod = isInstanceMethod;
+        methodNode.isStatic = !isInstanceMethod;
         return methodNode;
     }
-    let name = expect(parser, "IDENTIFIER");
-    let initValue = null;
-    if ((parser.current_token.type == "ASSIGN")) {
-        advance(parser);
-        initValue = parseExpression(parser);
+    if ((parser.current_token.type == "IDENTIFIER")) {
+        let name = expect(parser, "IDENTIFIER");
+        if ((name && (name.type == "ParseError"))) {
+            return name;
+        }
+        let initValue = null;
+        if ((parser.current_token.type == "ASSIGN")) {
+            advance(parser);
+            initValue = parseExpression(parser);
+            if ((initValue && (initValue.type == "ParseError"))) {
+                return initValue;
+            }
+        }
+        let semicolon = expect(parser, "SEMICOLON");
+        if ((semicolon && (semicolon.type == "ParseError"))) {
+            return semicolon;
+        }
+        let node = makeNode("Property");
+        node.name = name.value;
+        node.initializer = initValue;
+        return node;
     }
-    expect(parser, "SEMICOLON");
-    node.type = "Property";
-    node.name = name.value;
-    node.initializer = initValue;
-    return node;
+    let error = {};
+    error.type = "ParseError";
+    error.message = ("Expected class member (field or method) but got " + parser.current_token.type);
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
 }
 
 export function parseFunctionDeclaration(parser) {
     advance(parser);
     let name = expect(parser, "IDENTIFIER");
-    expect(parser, "LPAREN");
+    if ((name && (name.type == "ParseError"))) {
+        return name;
+    }
+    let lparen = expect(parser, "LPAREN");
+    if ((lparen && (lparen.type == "ParseError"))) {
+        return lparen;
+    }
     let params = [];
     if ((parser.current_token.type != "RPAREN")) {
-        params.push(expect(parser, "IDENTIFIER").value);
+        let param = null;
+        if ((parser.current_token.type == "IDENTIFIER")) {
+            param = expect(parser, "IDENTIFIER");
+        } else if ((parser.current_token.type == "SELF")) {
+            param = expect(parser, "SELF");
+            param.value = "self";
+        } else {
+            let error = {};
+            error.type = "ParseError";
+            error.message = ("Expected parameter name but got " + parser.current_token.type);
+            error.line = parser.current_token.line;
+            error.column = parser.current_token.column;
+            return error;
+        }
+        if ((param && (param.type == "ParseError"))) {
+            return param;
+        }
+        params.push(param.value);
         while ((parser.current_token.type == "COMMA")) {
             advance(parser);
-            params.push(expect(parser, "IDENTIFIER").value);
+            if ((parser.current_token.type == "IDENTIFIER")) {
+                param = expect(parser, "IDENTIFIER");
+            } else if ((parser.current_token.type == "SELF")) {
+                param = expect(parser, "SELF");
+                param.value = "self";
+            } else {
+                let error = {};
+                error.type = "ParseError";
+                error.message = ("Expected parameter name but got " + parser.current_token.type);
+                error.line = parser.current_token.line;
+                error.column = parser.current_token.column;
+                return error;
+            }
+            if ((param && (param.type == "ParseError"))) {
+                return param;
+            }
+            params.push(param.value);
         }
     }
-    expect(parser, "RPAREN");
+    let rparen = expect(parser, "RPAREN");
+    if ((rparen && (rparen.type == "ParseError"))) {
+        return rparen;
+    }
     let body = parseBlock(parser);
+    if ((body && (body.type == "ParseError"))) {
+        return body;
+    }
     let node = makeNode("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
@@ -561,6 +639,9 @@ export function parseBlock(parser) {
     let statements = [];
     while (((parser.current_token.type != "RBRACE") && (parser.current_token.type != "EOF"))) {
         let stmt = parseStatement(parser);
+        if ((stmt && (stmt.type == "ParseError"))) {
+            return stmt;
+        }
         statements.push(stmt);
     }
     expect(parser, "RBRACE");
@@ -573,6 +654,9 @@ export function parseProgram(parser) {
     let statements = [];
     while ((parser.current_token.type != "EOF")) {
         let stmt = parseStatement(parser);
+        if ((stmt && (stmt.type == "ParseError"))) {
+            return stmt;
+        }
         statements.push(stmt);
     }
     let node = makeNode("Program");

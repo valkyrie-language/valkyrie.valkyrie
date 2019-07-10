@@ -67,7 +67,7 @@ export function compileWithOptions(compiler, options) {
                 compiler.output = reportError(error);
             }
             if (options.debug) {
-                compiler.output = ("// Debug mode enabled\n" + compiler.output);
+                compiler.output = ("// Debug mode enabled\\n" + compiler.output);
             }
             return compiler;
         }
@@ -142,11 +142,11 @@ export function compileWithStats(compiler, options) {
     stats.outputSize = compiler.output.length;
     stats.compileTime = 1;
     if (options.debug) {
-        let statsInfo = "\n# Compilation Statistics:\n";
-        statsInfo = (((statsInfo + "// Tokens: ") + stats.tokensCount) + "\n");
-        statsInfo = (((statsInfo + "// AST Nodes: ") + stats.astNodesCount) + "\n");
-        statsInfo = (((statsInfo + "// Output Size: ") + stats.outputSize) + " characters\n");
-        statsInfo = (((statsInfo + "// Compile Time: ") + stats.compileTime) + " ms\n");
+        let statsInfo = "\\n# Compilation Statistics:\\n";
+        statsInfo = (((statsInfo + "// Tokens: ") + stats.tokensCount) + "\\n");
+        statsInfo = (((statsInfo + "// AST Nodes: ") + stats.astNodesCount) + "\\n");
+        statsInfo = (((statsInfo + "// Output Size: ") + stats.outputSize) + " characters\\n");
+        statsInfo = (((statsInfo + "// Compile Time: ") + stats.compileTime) + " ms\\n");
         compiler.output = (compiler.output + statsInfo);
     }
     return compiler;

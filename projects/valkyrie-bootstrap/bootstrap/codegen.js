@@ -106,6 +106,9 @@ export function generateExpression(node) {
     if ((node.type == "ThisExpression")) {
         return "self";
     }
+    if ((node.type == "DefaultValue")) {
+        return "undefined";
+    }
     return (("/* Unknown expression: " + node.type) + " */");
 }
 
@@ -184,6 +187,42 @@ export function generateStatement(node) {
     }
     if ((node.type == "ExpressionStatement")) {
         return (generateExpression(node.expression) + ";");
+    }
+    if ((node.type == "ClassDeclaration")) {
+        let className = node.name;
+        let superClass = node.superClass;
+        let members = node.members;
+        let result = "";
+        if (superClass) {
+            result = (((result + "function ") + className) + "(args) {\n");
+            result = (((result + "  ") + superClass) + ".call(this, args);\n");
+            result = (result + "}\n");
+            result = ((((result + className) + ".prototype = Object.create(") + superClass) + ".prototype);\n");
+            result = ((((result + className) + ".prototype.constructor = ") + className) + ";\n");
+        } else {
+            result = (((result + "function ") + className) + "() {\n");
+            result = (result + "}\n");
+        }
+        let i = 0;
+        while ((i < members.length)) {
+            let member = members[i];
+            if ((member.type == "MemberStatement")) {
+                let methodName = member.name;
+                let params = "";
+                let j = 0;
+                while ((j < member.parameters.length)) {
+                    if ((j > 0)) {
+                        params = (params + ", ");
+                    }
+                    params = (params + member.parameters[j]);
+                    j = (j + 1);
+                }
+                let body = generateStatement(member.body);
+                result = ((((((((result + className) + ".prototype.") + methodName) + " = function(") + params) + ") ") + body) + "\n");
+            }
+            i = (i + 1);
+        }
+        return result;
     }
     return (("/* Unknown statement: " + node.type) + " */");
 }

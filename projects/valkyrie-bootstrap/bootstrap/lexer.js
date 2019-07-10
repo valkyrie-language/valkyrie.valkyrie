@@ -159,6 +159,9 @@ export function getKeywordType(value) {
     if ((value == "new")) {
         return "NEW";
     }
+    if ((value == "default")) {
+        return "DEFAULT";
+    }
     return "IDENTIFIER";
 }
 
