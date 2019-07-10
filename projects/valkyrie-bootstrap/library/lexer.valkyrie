@@ -14,7 +14,7 @@ micro initLexer(source) {
         lexer.current_char = source.charAt(0);
     }
     
-    return lexer
+    return lexer;
 }
 
 micro advance(lexer) {
