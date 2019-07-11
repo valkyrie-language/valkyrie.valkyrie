@@ -162,6 +162,9 @@ export function getKeywordType(value) {
     if ((value == "default")) {
         return "DEFAULT";
     }
+    if ((value == "await")) {
+        return "AWAIT";
+    }
     return "IDENTIFIER";
 }
 

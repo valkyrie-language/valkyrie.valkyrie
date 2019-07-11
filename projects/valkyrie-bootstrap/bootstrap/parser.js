@@ -180,14 +180,21 @@ export function parsePostfixExpression(parser) {
             expr = callNode;
         } else if ((parser.current_token.type == "DOT")) {
             advance(parser);
-            let property = expect(parser, "IDENTIFIER");
-            if ((property && (property.type == "ParseError"))) {
-                return property;
+            if ((parser.current_token.type == "AWAIT")) {
+                advance(parser);
+                let awaitNode = makeNode("AwaitExpression");
+                awaitNode.argument = expr;
+                expr = awaitNode;
+            } else {
+                let property = expect(parser, "IDENTIFIER");
+                if ((property && (property.type == "ParseError"))) {
+                    return property;
+                }
+                let accessNode = makeNode("PropertyAccess");
+                accessNode.object = expr;
+                accessNode.property = property.value;
+                expr = accessNode;
             }
-            let accessNode = makeNode("PropertyAccess");
-            accessNode.object = expr;
-            accessNode.property = property.value;
-            expr = accessNode;
         } else if ((parser.current_token.type == "LBRACKET")) {
             advance(parser);
             let index = parseExpression(parser);
@@ -359,14 +366,27 @@ export function parseAtomicExpression(parser) {
 export function parseTermParameters(parser) {
     let params = [];
     if ((parser.current_token.type != "RPAREN")) {
-        let param = expect(parser, "IDENTIFIER");
+        let param = null;
+        if ((parser.current_token.type == "IDENTIFIER")) {
+            param = expect(parser, "IDENTIFIER");
+        } else if ((parser.current_token.type == "SELF")) {
+            param = expect(parser, "SELF");
+        } else {
+            param = expect(parser, "IDENTIFIER");
+        }
         if ((param && (param.type == "ParseError"))) {
             return param;
         }
         params.push(param.value);
         while ((parser.current_token.type == "COMMA")) {
             advance(parser);
-            param = expect(parser, "IDENTIFIER");
+            if ((parser.current_token.type == "IDENTIFIER")) {
+                param = expect(parser, "IDENTIFIER");
+            } else if ((parser.current_token.type == "SELF")) {
+                param = expect(parser, "SELF");
+            } else {
+                param = expect(parser, "IDENTIFIER");
+            }
             if ((param && (param.type == "ParseError"))) {
                 return param;
             }
@@ -417,7 +437,7 @@ export function parseStatement(parser) {
         return parseReturnStatement(parser);
     }
     if ((parser.current_token.type == "LBRACE")) {
-        return parseBlock(parser);
+        return parseFunctionBlock(parser);
     }
     let expr = parseExpression(parser);
     if ((expr && (expr.type == "ParseError"))) {
@@ -524,7 +544,7 @@ export function parseMicroFunctionDeclaration(parser) {
     if ((rparen && (rparen.type == "ParseError"))) {
         return rparen;
     }
-    let body = parseBlock(parser);
+    let body = parseFunctionBlock(parser);
     if ((body && (body.type == "ParseError"))) {
         return body;
     }
@@ -591,7 +611,7 @@ export function parseClassMember(parser) {
         if ((rparen && (rparen.type == "ParseError"))) {
             return rparen;
         }
-        let body = parseBlock(parser);
+        let body = parseFunctionBlock(parser);
         if ((body && (body.type == "ParseError"))) {
             return body;
         }
@@ -666,7 +686,7 @@ export function parseFunctionDeclaration(parser) {
     if ((rparen && (rparen.type == "ParseError"))) {
         return rparen;
     }
-    let body = parseBlock(parser);
+    let body = parseFunctionBlock(parser);
     if ((body && (body.type == "ParseError"))) {
         return body;
     }
@@ -708,7 +728,7 @@ export function parseWhileStatement(parser) {
     if ((condition && (condition.type == "ParseError"))) {
         return condition;
     }
-    let body = parseBlock(parser);
+    let body = parseFunctionBlock(parser);
     if ((body && (body.type == "ParseError"))) {
         return body;
     }
@@ -737,7 +757,7 @@ export function parseReturnStatement(parser) {
     return node;
 }
 
-export function parseBlock(parser) {
+export function parseFunctionBlock(parser) {
     let lbrace = expect(parser, "LBRACE");
     if ((lbrace && (lbrace.type == "ParseError"))) {
         return lbrace;

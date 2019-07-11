@@ -143,6 +143,7 @@ micro getKeywordType(value) {
     if value == "implements" { return "IMPLEMENTS"; }
     if value == "new" { return "NEW"; }
     if value == "default" { return "DEFAULT"; }
+    if value == "await" { return "AWAIT"; }
     return "IDENTIFIER";
 }
 

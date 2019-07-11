@@ -1,0 +1,9 @@
+namespace test;
+
+let lexer = import("./lexer.js").await;
+let parser = import("./parser.js").await;
+let codegen = import("./codegen.js").await;
+
+micro testImport() {
+    return "Import test successful";
+}

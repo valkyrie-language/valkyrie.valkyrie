@@ -200,14 +200,21 @@ micro parsePostfixExpression(parser) {
             expr = callNode;
         } else if parser.current_token.type == "DOT" {
             advance(parser);
-            let property = expect(parser, "IDENTIFIER");
-            if property && property.type == "ParseError" {
-                return property;
+            if parser.current_token.type == "AWAIT" {
+                advance(parser);
+                let awaitNode = makeNode("AwaitExpression");
+                awaitNode.argument = expr;
+                expr = awaitNode;
+            } else {
+                let property = expect(parser, "IDENTIFIER");
+                if property && property.type == "ParseError" {
+                    return property;
+                }
+                let accessNode = makeNode("PropertyAccess");
+                accessNode.object = expr;
+                accessNode.property = property.value;
+                expr = accessNode;
             }
-            let accessNode = makeNode("PropertyAccess");
-            accessNode.object = expr;
-            accessNode.property = property.value;
-            expr = accessNode;
         } else if parser.current_token.type == "LBRACKET" {
             advance(parser);
             let index = parseExpression(parser);
@@ -408,7 +415,14 @@ micro parseTermParameters(parser) {
     let params = [];
 
     if parser.current_token.type != "RPAREN" {
-        let param = expect(parser, "IDENTIFIER");
+        let param = null;
+        if parser.current_token.type == "IDENTIFIER" {
+            param = expect(parser, "IDENTIFIER");
+        } else if parser.current_token.type == "SELF" {
+            param = expect(parser, "SELF");
+        } else {
+            param = expect(parser, "IDENTIFIER");
+        }
         if param && param.type == "ParseError" {
             return param;
         }
@@ -416,7 +430,13 @@ micro parseTermParameters(parser) {
 
         while parser.current_token.type == "COMMA" {
             advance(parser);
-            param = expect(parser, "IDENTIFIER");
+            if parser.current_token.type == "IDENTIFIER" {
+                param = expect(parser, "IDENTIFIER");
+            } else if parser.current_token.type == "SELF" {
+                param = expect(parser, "SELF");
+            } else {
+                param = expect(parser, "IDENTIFIER");
+            }
             if param && param.type == "ParseError" {
                 return param;
             }
@@ -481,7 +501,7 @@ micro parseStatement(parser) {
     }
 
     if parser.current_token.type == "LBRACE" {
-        return parseBlock(parser);
+        return parseFunctionBlock(parser);
     }
 
     # 表达式语句
@@ -600,7 +620,7 @@ micro parseMicroFunctionDeclaration(parser) {
         return rparen;
     }
 
-    let body = parseBlock(parser);
+    let body = parseFunctionBlock(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -681,7 +701,7 @@ micro parseClassMember(parser) {
             return rparen;
         }
 
-        let body = parseBlock(parser);
+        let body = parseFunctionBlock(parser);
         if body && body.type == "ParseError" {
             return body;
         }
@@ -771,7 +791,7 @@ micro parseFunctionDeclaration(parser) {
         return rparen;
     }
 
-    let body = parseBlock(parser);
+    let body = parseFunctionBlock(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -819,7 +839,7 @@ micro parseWhileStatement(parser) {
         return condition;
     }
 
-    let body = parseBlock(parser);
+    let body = parseFunctionBlock(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -853,7 +873,7 @@ micro parseReturnStatement(parser) {
     return node;
 }
 
-micro parseBlock(parser) {
+micro parseFunctionBlock(parser) {
     let lbrace = expect(parser, "LBRACE");
     if lbrace && lbrace.type == "ParseError" {
         return lbrace;

@@ -1,7 +1,14 @@
 class C {
     field = 42;
-    micro a(){}
-    micro b(self){}
+    micro a(){
+        return 0;
+    }
+    micro b(self){
+        return 1;
+    }
 }
 
 let c = new C();
+
+console.log(c.a());
+console.log(c.b());

@@ -75,6 +75,10 @@ export function generateExpression(node) {
         }
         return (((("new " + node.className) + "(") + args) + ")");
     }
+    if ((node.type == "AwaitExpression")) {
+        let argument = generateExpression(node.argument);
+        return ("await " + argument);
+    }
     if ((node.type == "PropertyAccess")) {
         if (node.object.type) {
             let obj = generateExpression(node.object);
@@ -193,17 +197,33 @@ export function generateStatement(node) {
         let superClass = node.superClass;
         let members = node.members;
         let result = "";
+        let fieldInits = "";
+        let i = 0;
+        while ((i < members.length)) {
+            let member = members[i];
+            if ((member.type == "Property")) {
+                if ((member.initializer && member.initializer.type)) {
+                    let initValue = generateExpression(member.initializer);
+                    fieldInits = (((((fieldInits + "  this.") + member.name) + " = ") + initValue) + ";\n");
+                } else {
+                    fieldInits = (((fieldInits + "  this.") + member.name) + " = undefined;\n");
+                }
+            }
+            i = (i + 1);
+        }
         if (superClass) {
             result = (((result + "function ") + className) + "(args) {\n");
             result = (((result + "  ") + superClass) + ".call(this, args);\n");
+            result = (result + fieldInits);
             result = (result + "}\n");
             result = ((((result + className) + ".prototype = Object.create(") + superClass) + ".prototype);\n");
             result = ((((result + className) + ".prototype.constructor = ") + className) + ";\n");
         } else {
             result = (((result + "function ") + className) + "() {\n");
+            result = (result + fieldInits);
             result = (result + "}\n");
         }
-        let i = 0;
+        i = 0;
         while ((i < members.length)) {
             let member = members[i];
             if ((member.type == "MemberStatement")) {
