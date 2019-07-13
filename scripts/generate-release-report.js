@@ -11,30 +11,30 @@
  * 4. 其他类型
  */
 
-const {execSync} = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const { execSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 
 // Emoji 类型映射和优先级
 const EMOJI_TYPES = {
-    '✨': {name: 'feature', priority: 1, label: 'Stable Features'},
-    '🔮': {name: 'experiment', priority: 2, label: 'Experimental Features'},
-    '☢️': {name: 'breaking', priority: 3, label: 'Breaking Changes'},
-    '🔧': {name: 'fix', priority: 4, label: 'Bug Fixes'},
-    '⚡️': {name: 'perf', priority: 5, label: 'Performance Improvements'},
-    '📝': {name: 'docs', priority: 6, label: 'Documentation Updates'},
-    '🎨': {name: 'style', priority: 9, label: 'Style Improvements'},
-    '🧪': {name: 'test', priority: 7, label: 'Tests'},
-    '🔨': {name: 'refactor', priority: 2, label: 'Refactoring'},
-    '🚦': {name: 'ci', priority: 8, label: 'CI/CD'},
-    '📦': {name: 'deps', priority: 3, label: 'Dependencies'},
-    '⏪': {name: 'revert', priority: 3, label: '回滚'},
-    '💡': {name: 'idea', priority: 9, label: '想法'},
-    '🧨': {name: 'delete', priority: 9, label: '删除'},
-    '✅': {name: 'done', priority: 9, label: '完成'},
-    '🔀': {name: 'merge', priority: -1, label: '合并'},
-    '🚀': {name: 'release', priority: -1, label: '发布'},
-    '🔖': {name: 'tag', priority: -1, label: '标签'},
+    "✨": { name: "feature", priority: 1, label: "Stable Features" },
+    "🔮": { name: "experiment", priority: 2, label: "Experimental Features" },
+    "☢️": { name: "breaking", priority: 3, label: "Breaking Changes" },
+    "🔧": { name: "fix", priority: 4, label: "Bug Fixes" },
+    "⚡️": { name: "perf", priority: 5, label: "Performance Improvements" },
+    "📝": { name: "docs", priority: 6, label: "Documentation Updates" },
+    "🎨": { name: "style", priority: 9, label: "Style Improvements" },
+    "🧪": { name: "test", priority: 7, label: "Tests" },
+    "🔨": { name: "refactor", priority: 2, label: "Refactoring" },
+    "🚦": { name: "ci", priority: 8, label: "CI/CD" },
+    "📦": { name: "deps", priority: 3, label: "Dependencies" },
+    "⏪": { name: "revert", priority: 3, label: "回滚" },
+    "💡": { name: "idea", priority: 9, label: "想法" },
+    "🧨": { name: "delete", priority: 9, label: "删除" },
+    "✅": { name: "done", priority: 9, label: "完成" },
+    "🔀": { name: "merge", priority: -1, label: "合并" },
+    "🚀": { name: "release", priority: -1, label: "发布" },
+    "🔖": { name: "tag", priority: -1, label: "标签" },
 };
 
 class ReleaseReportGenerator {
@@ -46,28 +46,33 @@ class ReleaseReportGenerator {
     /**
      * 获取两个 tag 之间的提交记录，包含作者信息
      */
-    getCommitsBetweenTags(fromTag, toTag = 'HEAD') {
+    getCommitsBetweenTags(fromTag, toTag = "HEAD") {
         try {
             // 先获取基本的提交信息
             const logCommand = fromTag
                 ? `git log ${fromTag}..${toTag} --oneline`
                 : `git log --oneline -20`;
-            
-            const logOutput = execSync(logCommand, {encoding: 'utf8'});
-            const commits = logOutput.trim().split('\n').filter(line => line.length > 0);
+
+            const logOutput = execSync(logCommand, { encoding: "utf8" });
+            const commits = logOutput
+                .trim()
+                .split("\n")
+                .filter((line) => line.length > 0);
 
             // 为每个提交获取作者信息
-            return commits.map(line => {
-                const hash = line.split(' ')[0];
+            return commits.map((line) => {
+                const hash = line.split(" ")[0];
                 try {
-                    const author = execSync(`git log -1 --format=%an ${hash}`, {encoding: 'utf8'}).trim();
+                    const author = execSync(`git log -1 --format=%an ${hash}`, {
+                        encoding: "utf8",
+                    }).trim();
                     return `${line}|${author}`;
                 } catch (error) {
                     return `${line}|Unknown`;
                 }
             });
         } catch (error) {
-            console.error('获取提交记录失败:', error.message);
+            console.error("获取提交记录失败:", error.message);
             return [];
         }
     }
@@ -77,22 +82,27 @@ class ReleaseReportGenerator {
      */
     getAllCommits() {
         try {
-            const logCommand = 'git log --oneline';
-            const logOutput = execSync(logCommand, {encoding: 'utf8'});
-            const commits = logOutput.trim().split('\n').filter(line => line.length > 0);
+            const logCommand = "git log --oneline";
+            const logOutput = execSync(logCommand, { encoding: "utf8" });
+            const commits = logOutput
+                .trim()
+                .split("\n")
+                .filter((line) => line.length > 0);
 
             // 为每个提交获取作者信息
-            return commits.map(line => {
-                const hash = line.split(' ')[0];
+            return commits.map((line) => {
+                const hash = line.split(" ")[0];
                 try {
-                    const author = execSync(`git log -1 --format=%an ${hash}`, {encoding: 'utf8'}).trim();
+                    const author = execSync(`git log -1 --format=%an ${hash}`, {
+                        encoding: "utf8",
+                    }).trim();
                     return `${line}|${author}`;
                 } catch (error) {
                     return `${line}|Unknown`;
                 }
             });
         } catch (error) {
-            console.error('获取所有提交记录失败:', error.message);
+            console.error("获取所有提交记录失败:", error.message);
             return [];
         }
     }
@@ -102,10 +112,12 @@ class ReleaseReportGenerator {
      */
     getTagDate(tag) {
         try {
-            if (!tag || tag === 'HEAD') {
+            if (!tag || tag === "HEAD") {
                 return new Date();
             }
-            const timestamp = execSync(`git log -1 --format=%ai ${tag}`, {encoding: 'utf8'}).trim();
+            const timestamp = execSync(`git log -1 --format=%ai ${tag}`, {
+                encoding: "utf8",
+            }).trim();
             return new Date(timestamp);
         } catch (error) {
             console.warn(`无法获取 tag ${tag} 的时间，使用当前时间`);
@@ -118,13 +130,13 @@ class ReleaseReportGenerator {
      */
     parseCommit(line) {
         // 格式: hash emoji message | author
-        const parts = line.split('|');
+        const parts = line.split("|");
         if (parts.length !== 2) {
             return null;
         }
 
         const [commitInfo, author] = parts;
-        
+
         // 提取 hash 和消息部分
         const commitMatch = commitInfo.match(/^([a-f0-9]+)\s+(.+)$/);
         if (!commitMatch) {
@@ -132,19 +144,25 @@ class ReleaseReportGenerator {
         }
 
         const [, hash, message] = commitMatch;
-        
+
         // 提取 emoji 和消息内容（只处理有 emoji 的提交）
-        const emojiMatch = message.match(/^(✨|🔧|📝|🎨|☢️|🧪|🔨|⚡️|🚀|🔖|🚦|📦|⏪|💡|🧨|✅|🔀|🔮)(?:\s+(.+))?$/);
-        
+        const emojiMatch = message.match(
+            /^(✨|🔧|📝|🎨|☢️|🧪|🔨|⚡️|🚀|🔖|🚦|📦|⏪|💡|🧨|✅|🔀|🔮)(?:\s+(.+))?$/
+        );
+
         if (!emojiMatch) {
             // 没有 emoji 的提交，直接过滤掉
             return null;
         }
-        
+
         // 有 emoji 的提交
         const emoji = emojiMatch[1];
-        const msgContent = emojiMatch[2] || '';  // 如果没有消息内容，使用空字符串
-        const type = EMOJI_TYPES[emoji] || {name: 'other', priority: 5, label: '其他'};
+        const msgContent = emojiMatch[2] || ""; // 如果没有消息内容，使用空字符串
+        const type = EMOJI_TYPES[emoji] || {
+            name: "other",
+            priority: 5,
+            label: "其他",
+        };
 
         return {
             hash: hash.slice(0, 7), // 只取前7位
@@ -153,7 +171,7 @@ class ReleaseReportGenerator {
             priority: type.priority,
             label: type.label,
             message: msgContent.trim(),
-            author: author.trim()
+            author: author.trim(),
         };
     }
 
@@ -163,7 +181,7 @@ class ReleaseReportGenerator {
     groupCommitsByType(commits) {
         const groups = {};
 
-        commits.forEach(commit => {
+        commits.forEach((commit) => {
             if (!commit) return;
 
             const type = commit.type;
@@ -179,23 +197,27 @@ class ReleaseReportGenerator {
     /**
      * 生成 pnpm changeset 风格的 Markdown 报告
      */
-    generateMarkdownReport(version, fromTag, toTag = 'HEAD') {
+    generateMarkdownReport(version, fromTag, toTag = "HEAD") {
         const commitLines = this.getCommitsBetweenTags(fromTag, toTag);
-        const parsedCommits = commitLines.map(line => this.parseCommit(line)).filter(Boolean);
+        const parsedCommits = commitLines
+            .map((line) => this.parseCommit(line))
+            .filter(Boolean);
 
         if (parsedCommits.length === 0) {
-            return '## Unreleased\n\n没有找到符合规范的提交记录。\n';
+            return "## Unreleased\n\n没有找到符合规范的提交记录。\n";
         }
 
         const groupedCommits = this.groupCommitsByType(parsedCommits);
 
         // 按优先级排序的类型，过滤掉 priority < 0 的类型
         const sortedTypes = Object.keys(groupedCommits)
-            .filter(type => {
+            .filter((type) => {
                 // 获取类型的优先级信息
-                const typeInfo = Object.values(EMOJI_TYPES).find(t => t.name === type);
-                
-                if (type === 'other') {
+                const typeInfo = Object.values(EMOJI_TYPES).find(
+                    (t) => t.name === type
+                );
+
+                if (type === "other") {
                     // other 类型需要检查其实际emoji的优先级
                     const commits = groupedCommits[type];
                     if (commits.length > 0) {
@@ -205,49 +227,57 @@ class ReleaseReportGenerator {
                     }
                     return false;
                 }
-                
+
                 if (!typeInfo) {
                     // 未知类型，排除
                     return false;
                 }
-                
+
                 return typeInfo.priority >= 0;
             })
             .sort((a, b) => {
                 // 获取类型的优先级用于排序
-                const typeInfoA = Object.values(EMOJI_TYPES).find(t => t.name === a);
-                const typeInfoB = Object.values(EMOJI_TYPES).find(t => t.name === b);
-                const priorityA = a === 'other' ? 5 : (typeInfoA ? typeInfoA.priority : 5);
-                const priorityB = b === 'other' ? 5 : (typeInfoB ? typeInfoB.priority : 5);
+                const typeInfoA = Object.values(EMOJI_TYPES).find(
+                    (t) => t.name === a
+                );
+                const typeInfoB = Object.values(EMOJI_TYPES).find(
+                    (t) => t.name === b
+                );
+                const priorityA =
+                    a === "other" ? 5 : typeInfoA ? typeInfoA.priority : 5;
+                const priorityB =
+                    b === "other" ? 5 : typeInfoB ? typeInfoB.priority : 5;
                 return priorityA - priorityB;
             });
 
         // 获取发布时间（使用 toTag 的时间）
         const releaseDate = this.getTagDate(toTag);
 
-        let report = '';
-        
+        let report = "";
+
         if (version) {
             report += `## ${version}\n\n`;
-            report += `发布日期: ${releaseDate.toLocaleString('zh-CN')}\n\n`;
+            report += `发布日期: ${releaseDate.toLocaleString("zh-CN")}\n\n`;
         } else {
-            report += '## Unreleased\n\n';
+            report += "## Unreleased\n\n";
         }
 
-        sortedTypes.forEach(type => {
+        sortedTypes.forEach((type) => {
             const commits = groupedCommits[type];
             console.log(`${type} 类型有 ${commits.length} 条提交`);
-            console.log(`${type} 类型的优先级: ${EMOJI_TYPES[commits[0]?.emoji]?.priority}`);
+            console.log(
+                `${type} 类型的优先级: ${EMOJI_TYPES[commits[0]?.emoji]?.priority}`
+            );
             if (commits.length === 0) return;
 
             const emoji = commits[0].emoji;
             const label = EMOJI_TYPES[emoji]?.label || type;
 
             report += `### ${label}\n\n`;
-            commits.forEach(commit => {
+            commits.forEach((commit) => {
                 report += `- ${commit.message} (${commit.hash}, @${commit.author})\n`;
             });
-            report += '\n';
+            report += "\n";
         });
 
         return report;
@@ -258,44 +288,54 @@ class ReleaseReportGenerator {
      */
     generateCompleteChangelog() {
         const commitLines = this.getAllCommits();
-        const parsedCommits = commitLines.map(line => this.parseCommit(line)).filter(Boolean);
+        const parsedCommits = commitLines
+            .map((line) => this.parseCommit(line))
+            .filter(Boolean);
 
         if (parsedCommits.length === 0) {
-            return '## Unreleased\n\n没有找到符合规范的提交记录。\n';
+            return "## Unreleased\n\n没有找到符合规范的提交记录。\n";
         }
 
         const groupedCommits = this.groupCommitsByType(parsedCommits);
 
         // 按优先级排序的类型，过滤掉 priority < 0 的类型
         const sortedTypes = Object.keys(groupedCommits)
-            .filter(type => {
+            .filter((type) => {
                 // 获取类型的优先级信息
-                const typeInfo = Object.values(EMOJI_TYPES).find(t => t.name === type);
-                
-                if (type === 'other') {
+                const typeInfo = Object.values(EMOJI_TYPES).find(
+                    (t) => t.name === type
+                );
+
+                if (type === "other") {
                     // other 类型默认优先级为 5，应该包含
                     return true;
                 }
-                
+
                 if (!typeInfo) {
                     // 未知类型，排除
                     return false;
                 }
-                
+
                 return typeInfo.priority >= 0;
             })
             .sort((a, b) => {
                 // 获取类型的优先级用于排序
-                const typeInfoA = Object.values(EMOJI_TYPES).find(t => t.name === a);
-                const typeInfoB = Object.values(EMOJI_TYPES).find(t => t.name === b);
-                const priorityA = a === 'other' ? 5 : (typeInfoA ? typeInfoA.priority : 5);
-                const priorityB = b === 'other' ? 5 : (typeInfoB ? typeInfoB.priority : 5);
+                const typeInfoA = Object.values(EMOJI_TYPES).find(
+                    (t) => t.name === a
+                );
+                const typeInfoB = Object.values(EMOJI_TYPES).find(
+                    (t) => t.name === b
+                );
+                const priorityA =
+                    a === "other" ? 5 : typeInfoA ? typeInfoA.priority : 5;
+                const priorityB =
+                    b === "other" ? 5 : typeInfoB ? typeInfoB.priority : 5;
                 return priorityA - priorityB;
             });
 
-        let report = '## Unreleased\n\n';
+        let report = "## Unreleased\n\n";
 
-        sortedTypes.forEach(type => {
+        sortedTypes.forEach((type) => {
             const commits = groupedCommits[type];
             if (commits.length === 0) return;
 
@@ -303,10 +343,10 @@ class ReleaseReportGenerator {
             const label = EMOJI_TYPES[emoji]?.label || type;
 
             report += `### ${label}\n\n`;
-            commits.forEach(commit => {
+            commits.forEach((commit) => {
                 report += `- ${commit.message} (${commit.hash}, @${commit.author})\n`;
             });
-            report += '\n';
+            report += "\n";
         });
 
         return report;
@@ -319,15 +359,15 @@ class ReleaseReportGenerator {
         const timestamp = new Date().toISOString().slice(0, 10);
         const defaultFilename = `RELEASE-${timestamp}.md`;
         const outputFile = filename || defaultFilename;
-        const outputPath = path.join(process.cwd(), 'releases', outputFile);
+        const outputPath = path.join(process.cwd(), "releases", outputFile);
 
         // 确保 releases 目录存在
         const releasesDir = path.dirname(outputPath);
         if (!fs.existsSync(releasesDir)) {
-            fs.mkdirSync(releasesDir, {recursive: true});
+            fs.mkdirSync(releasesDir, { recursive: true });
         }
 
-        fs.writeFileSync(outputPath, content, 'utf8');
+        fs.writeFileSync(outputPath, content, "utf8");
         return outputPath;
     }
 }
@@ -335,8 +375,8 @@ class ReleaseReportGenerator {
 // CLI 处理
 function main() {
     const args = process.argv.slice(2);
-    
-    if (args.includes('--help') || args.includes('-h')) {
+
+    if (args.includes("--help") || args.includes("-h")) {
         console.log(`
 🚀 Release Report Generator
 
@@ -365,21 +405,21 @@ function main() {
     // 解析参数
     let version = null;
     let fromTag = null;
-    let toTag = 'HEAD';
+    let toTag = "HEAD";
     let outputFile = null;
     let changelogMode = false;
 
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
-        if (arg === '--from') {
+        if (arg === "--from") {
             fromTag = args[++i];
-        } else if (arg === '--to') {
+        } else if (arg === "--to") {
             toTag = args[++i];
-        } else if (arg === '--output') {
+        } else if (arg === "--output") {
             outputFile = args[++i];
-        } else if (arg === '--changelog') {
+        } else if (arg === "--changelog") {
             changelogMode = true;
-        } else if (!arg.startsWith('--') && !version) {
+        } else if (!arg.startsWith("--") && !version) {
             version = arg;
         }
     }
@@ -396,9 +436,9 @@ function main() {
             // 生成完整的 changelog
             console.log(`📋 生成完整 changelog...`);
             report = generator.generateCompleteChangelog();
-            
+
             if (!outputFile) {
-                outputFile = 'CHANGELOG.md';
+                outputFile = "CHANGELOG.md";
             }
             outputPath = generator.saveReport(report, outputFile);
         } else {
@@ -410,21 +450,21 @@ function main() {
             console.log(`📋 版本: ${version}`);
             if (fromTag) console.log(`📍 起始: ${fromTag}`);
             console.log(`📍 结束: ${toTag}`);
-            console.log('');
+            console.log("");
 
             report = generator.generateMarkdownReport(version, fromTag, toTag);
             outputPath = generator.saveReport(report, outputFile);
         }
 
-        console.log('✅ Release 报告生成成功!');
+        console.log("✅ Release 报告生成成功!");
         console.log(`📄 文件路径: ${outputPath}`);
-        console.log('\n📊 报告预览:');
-        console.log(report.split('\n').slice(0, 20).join('\n'));
-        if (report.split('\n').length > 20) {
-            console.log('...');
+        console.log("\n📊 报告预览:");
+        console.log(report.split("\n").slice(0, 20).join("\n"));
+        if (report.split("\n").length > 20) {
+            console.log("...");
         }
     } catch (error) {
-        console.error('❌ 生成报告失败:', error.message);
+        console.error("❌ 生成报告失败:", error.message);
         process.exit(1);
     }
 }

@@ -1,6 +1,2 @@
-function C() {
-}
-C.prototype.a = function() {
-
-}
-
+function C() {}
+C.prototype.a = function () {};

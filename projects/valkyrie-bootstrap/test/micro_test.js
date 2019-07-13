@@ -1,9 +1,7 @@
-function C() {
-}
-C.prototype.a = function() {
+function C() {}
+C.prototype.a = function () {
     console.log("a");
-}
-
+};
 
 let c = new C();
 c.a();

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.git/
+.idea/
+.vscode/
+*.min.js
+*.bundle.js
+pnpm-lock.yaml
+package-lock.json
+cache/
+yarn.lock

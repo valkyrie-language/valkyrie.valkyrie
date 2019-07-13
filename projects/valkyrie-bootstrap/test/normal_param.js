@@ -1,3 +1,1 @@
-export function test(x) {
-
-}
+export function test(x) {}

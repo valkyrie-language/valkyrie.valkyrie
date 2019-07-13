@@ -4,6 +4,10 @@
 *.iml
 time-travel.*
 
+# AI Agent
+.trae/
+AGENT.md
+
 # Valkyrie
 
 # Node
