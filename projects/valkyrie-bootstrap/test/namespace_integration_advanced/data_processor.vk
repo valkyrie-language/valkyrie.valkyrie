@@ -1,0 +1,13 @@
+namespace data::processor;
+
+using math::utils::add;
+
+micro process(value1, value2) {
+    # 使用主空间的 add 函数
+    let sum = add(value1, value2);
+    return sum * 2;
+}
+
+micro transform(data) {
+    return data + 100;
+}

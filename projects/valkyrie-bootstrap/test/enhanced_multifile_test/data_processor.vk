@@ -1,0 +1,119 @@
+# 数据处理器模块
+# 提供数据收集和统计分析功能
+
+namespace data::processor;
+
+using utils::logger;
+using math::calculator;
+
+# 数据处理器类
+class DataProcessor {
+    # 构造函数
+    constructor() {
+        this.data = [];
+        this.count = 0;
+        log("DataProcessor initialized");
+    }
+    
+    # 添加数据
+    micro addData(value) {
+        this.data.push(value);
+        this.count = this.count + 1;
+        log("Added data: " + value + " (total count: " + this.count + ")");
+    }
+    
+    # 获取数据总数
+    micro getCount() {
+        return this.count;
+    }
+    
+    # 获取所有数据
+    micro getAllData() {
+        return this.data;
+    }
+    
+    # 计算平均值
+    micro getAverage() {
+        if this.count == 0 {
+            logError("Cannot calculate average of empty dataset");
+            return 0;
+        }
+        
+        let sum = 0;
+        let i = 0;
+        while i < this.data.length {
+            sum = add(sum, this.data[i]);
+            i = i + 1;
+        }
+        
+        let average = divide(sum, this.count);
+        log("Calculated average: " + average);
+        return average;
+    }
+    
+    # 获取最大值
+    micro getMax() {
+        if this.count == 0 {
+            logError("Cannot find max of empty dataset");
+            return 0;
+        }
+        
+        let max = this.data[0];
+        let i = 1;
+        while i < this.data.length {
+            if this.data[i] > max {
+                max = this.data[i];
+            }
+            i = i + 1;
+        }
+        
+        log("Found maximum value: " + max);
+        return max;
+    }
+    
+    # 获取最小值
+    micro getMin() {
+        if this.count == 0 {
+            logError("Cannot find min of empty dataset");
+            return 0;
+        }
+        
+        let min = this.data[0];
+        let i = 1;
+        while i < this.data.length {
+            if this.data[i] < min {
+                min = this.data[i];
+            }
+            i = i + 1;
+        }
+        
+        log("Found minimum value: " + min);
+        return min;
+    }
+    
+    # 清空数据
+    micro clear() {
+        this.data = [];
+        this.count = 0;
+        log("DataProcessor cleared");
+    }
+    
+    # 获取数据统计摘要
+    micro getSummary() {
+        if this.count == 0 {
+            return "No data available";
+        }
+        
+        let avg = this.getAverage();
+        let max = this.getMax();
+        let min = this.getMin();
+        
+        let summary = "Data Summary - Count: " + this.count + 
+                     ", Average: " + avg + 
+                     ", Max: " + max + 
+                     ", Min: " + min;
+        
+        log(summary);
+        return summary;
+    }
+}

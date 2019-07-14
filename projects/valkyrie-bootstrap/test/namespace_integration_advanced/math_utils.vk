@@ -1,0 +1,20 @@
+namespace math::utils;
+
+# 主空间中的函数，全局可用
+micro add(a, b) {
+    return a + b;
+}
+
+micro subtract(a, b) {
+    return a - b;
+}
+
+class Calculator {
+    micro compute(self, x, y) {
+        return add(x, y);
+    }
+    
+    micro computeAdvanced(self, x, y, z) {
+        return add(add(x, y), z);
+    }
+}

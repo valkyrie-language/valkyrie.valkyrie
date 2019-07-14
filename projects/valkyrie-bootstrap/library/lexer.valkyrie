@@ -9,12 +9,35 @@ micro initLexer(source) {
     lexer.line = 1;
     lexer.column = 1;
     lexer.current_char = "";
-    
+
     if source.length > 0 {
         lexer.current_char = source.charAt(0);
     }
-    
     return lexer;
+}
+
+
+class ValkyrieLexer {
+    constructor(source) {
+        self.source = source;
+        self.position = 0;
+        self.line = 1;
+        self.column = 1;
+        self.current_char = "";
+
+        if source.length > 0 {
+            self.current_char = source.charAt(0);
+        }
+    }
+}
+
+class Token {
+    constructor(type, value, line, column) {
+        self.type = type;
+        self.value = value;
+        self.line = line;
+        self.column = column;
+    }
 }
 
 micro advance(lexer) {
@@ -147,14 +170,7 @@ micro getKeywordType(value) {
     return "IDENTIFIER";
 }
 
-micro makeToken(type, value, line, column) {
-    let token = {};
-    token.type = type;
-    token.value = value;
-    token.line = line;
-    token.column = column;
-    return token;
-}
+
 
 micro nextToken(lexer) {
     while lexer.current_char != "" {
@@ -174,97 +190,99 @@ micro nextToken(lexer) {
         if isAlpha(lexer.current_char) {
             let value = readIdentifier(lexer);
             let tokenType = getKeywordType(value);
-            return makeToken(tokenType, value, line, column);
+            return new Token(tokenType, value, line, column);
         }
         
         if isDigit(lexer.current_char) {
             let value = readNumber(lexer);
-            return makeToken("NUMBER", value, line, column);
+            return new Token("NUMBER", value, line, column);
         }
         
         if lexer.current_char == "\"" {
             let value = readString(lexer);
-            return makeToken("STRING", value, line, column);
+            return new Token("STRING", value, line, column);
         }
         
         # Single character tokens
         let ch = lexer.current_char;
         advance(lexer);
         
-        if ch == "{" { return makeToken("LBRACE", ch, line, column); }
-        if ch == "}" { return makeToken("RBRACE", ch, line, column); }
-        if ch == "(" { return makeToken("LPAREN", ch, line, column); }
-        if ch == ")" { return makeToken("RPAREN", ch, line, column); }
-        if ch == "[" { return makeToken("LBRACKET", ch, line, column); }
-        if ch == "]" { return makeToken("RBRACKET", ch, line, column); }
-        if ch == ";" { return makeToken("SEMICOLON", ch, line, column); }
-        if ch == "," { return makeToken("COMMA", ch, line, column); }
+        if ch == "{" { return new Token("LBRACE", ch, line, column); }
+        if ch == "}" { return new Token("RBRACE", ch, line, column); }
+        if ch == "(" { return new Token("LPAREN", ch, line, column); }
+        if ch == ")" { return new Token("RPAREN", ch, line, column); }
+        if ch == "[" { return new Token("LBRACKET", ch, line, column); }
+        if ch == "]" { return new Token("RBRACKET", ch, line, column); }
+        if ch == ";" { return new Token("SEMICOLON", ch, line, column); }
+        if ch == "," { return new Token("COMMA", ch, line, column); }
         if ch == ":" {
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == ":" {
                 advance(lexer);
-                return makeToken("DOUBLE_COLON", "::", line, column);
+                return new Token("DOUBLE_COLON", "::", line, column);
             }
-            return makeToken("COLON", ch, line, column);
+            return new Token("COLON", ch, line, column);
         }
         if ch == "=" {
             # 检查是否是 == 操作符
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
                 advance(lexer);
-                return makeToken("EQ", "==", line, column);
+                return new Token("EQ", "==", line, column);
             }
-            return makeToken("ASSIGN", ch, line, column);
+            return new Token("ASSIGN", ch, line, column);
         }
-        if ch == "+" { return makeToken("PLUS", ch, line, column); }
-        if ch == "-" { return makeToken("MINUS", ch, line, column); }
-        if ch == "*" { return makeToken("MULTIPLY", ch, line, column); }
-        if ch == "/" { return makeToken("DIVIDE", ch, line, column); }
+        if ch == "+" { return new Token("PLUS", ch, line, column); }
+        if ch == "-" { return new Token("MINUS", ch, line, column); }
+        if ch == "*" { return new Token("MULTIPLY", ch, line, column); }
+        if ch == "/" { return new Token("DIVIDE", ch, line, column); }
+        if ch == "%" { return new Token("MODULO", ch, line, column); }
         if ch == "&" { 
             # 检查是否是 &&
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "&" {
                 advance(lexer); # 跳过第二个 &
-                return makeToken("AND", "&&", line, column);
+                return new Token("AND", "&&", line, column);
             }
-            return makeToken("AMPERSAND", ch, line, column); 
+            return new Token("AMPERSAND", ch, line, column);
         }
         if ch == "|" { 
             # 检查是否是 ||
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "|" {
                 advance(lexer); # 跳过第二个 |
-                return makeToken("OR", "||", line, column);
+                return new Token("OR", "||", line, column);
             }
-            return makeToken("PIPE", ch, line, column); 
+            return new Token("PIPE", ch, line, column);
         }
         if ch == ">" { 
             # 检查是否是 >=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
                 advance(lexer); # 跳过 =
-                return makeToken("GTE", ">=", line, column);
+                return new Token("GTE", ">=", line, column);
             }
-            return makeToken("GT", ch, line, column); 
+            return new Token("GT", ch, line, column);
         }
         if ch == "<" { 
             # 检查是否是 <=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
                 advance(lexer); # 跳过 =
-                return makeToken("LTE", "<=", line, column);
+                return new Token("LTE", "<=", line, column);
             }
-            return makeToken("LT", ch, line, column); 
+            return new Token("LT", ch, line, column);
         }
         if ch == "!" { 
             # 检查是否是 !=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
                 advance(lexer); # 跳过 =
-                return makeToken("NE", "!=", line, column);
+                return new Token("NE", "!=", line, column);
             }
-            return makeToken("NOT", ch, line, column); 
+            return new Token("BANG", ch, line, column);
         }
-        if ch == "." { return makeToken("DOT", ch, line, column); }
+        if ch == "." { return new Token("DOT", ch, line, column); }
+        if ch == "↯" { return new Token("ATTRIBUTE", ch, line, column); }
         
         # Unknown character
-        return makeToken("ERROR", "Unknown character: " + ch, line, column);
+        return new Token("ERROR", "Unknown character: " + ch, line, column);
     }
     
-    return makeToken("EOF", "", lexer.line, lexer.column);
+    return new Token("EOF", "", lexer.line, lexer.column);
 }
 
 micro tokenize(lexer) {

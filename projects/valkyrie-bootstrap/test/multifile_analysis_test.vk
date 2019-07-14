@@ -1,0 +1,26 @@
+namespace test::multifile;
+
+# 简化的多文件分析测试
+micro testBasicMultifileFeatures() {
+    console.log("Testing basic multifile features...");
+    
+    # 测试基本功能
+    let result = 42;
+    console.log("Basic test result: " + result);
+    
+    return result;
+}
+
+# 测试符号解析
+micro testSymbolResolution() {
+    console.log("Testing symbol resolution...");
+    return true;
+}
+
+# 运行测试
+let testResult = test__multifile_testBasicMultifileFeatures();
+let symbolTest = test__multifile_testSymbolResolution();
+
+console.log("Multifile analysis test completed");
+console.log("Test result: " + testResult);
+console.log("Symbol test: " + symbolTest);

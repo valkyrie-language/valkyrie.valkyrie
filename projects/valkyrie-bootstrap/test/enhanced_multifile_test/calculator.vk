@@ -1,0 +1,52 @@
+# 数学计算器模块
+# 提供基本的数学运算功能
+
+namespace math::calculator;
+
+using utils::logger;
+
+# 加法运算
+micro add(a, b) {
+    let result = a + b;
+    log("Addition: " + a + " + " + b + " = " + result);
+    return result;
+}
+
+# 乘法运算
+micro multiply(a, b) {
+    let result = a * b;
+    log("Multiplication: " + a + " * " + b + " = " + result);
+    return result;
+}
+
+# 除法运算
+micro divide(a, b) {
+    if b == 0 {
+        log("Error: Division by zero!");
+        return 0;
+    }
+    
+    let result = a / b;
+    log("Division: " + a + " / " + b + " = " + result);
+    return result;
+}
+
+# 减法运算
+micro subtract(a, b) {
+    let result = a - b;
+    log("Subtraction: " + a + " - " + b + " = " + result);
+    return result;
+}
+
+# 幂运算
+micro power(base, exponent) {
+    let result = 1;
+    let i = 0;
+    while i < exponent {
+        result = result * base;
+        i = i + 1;
+    }
+    
+    log("Power: " + base + "^" + exponent + " = " + result);
+    return result;
+}

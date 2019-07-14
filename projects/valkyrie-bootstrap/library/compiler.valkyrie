@@ -1,227 +1,1272 @@
-namespace package::compiler;
+# Valkyrie 编译器核心模块
+# 提供词法分析、语法分析、代码生成和多文件编译功能
 
-# Valkyrie 编译器主模块
-# 使用 Valkyrie 语言实现
+# 导入必要的模块
+let lexerNS = import("./lexer.js").await;
+let parserNS = import("./parser.js").await;
+let codegenNS = import("./codegen.js").await;
 
-# 初始化编译器
-micro initCompiler(source) {
-    let compiler = {};
-    compiler.source = source;
-    compiler.tokens = [];
-    compiler.ast = {};
-    compiler.output = "";
-    return compiler;
-}
-
-# 编译源代码
+# 编译器主函数
 micro compile(compiler) {
-    # 词法分析阶段
-    let lexer = initLexer(compiler.source);
-    compiler.tokens = tokenize(lexer);
+    let lexer = lexerNS.initLexer(compiler.source);
+    let tokens = lexerNS.tokenize(lexer);
     
-    # 检查词法分析是否成功
-    if compiler.tokens.length == 0 {
-        compiler.output = "Error: Lexical analysis failed";
-        return compiler;
-    } else {
-        # 语法分析阶段
-        compiler.ast = parse(compiler.tokens);
-        
-        # 检查语法分析是否成功
-        if compiler.ast.type == "" {
-            compiler.output = "Error: Syntax analysis failed";
-            return compiler;
-        } else {
-            # 代码生成阶段
-            compiler.output = generate(compiler.ast);
-            return compiler;
+    if tokens.length == 0 {
+        if compiler.source == "" {
+            return "";
         }
+        return "Error: Lexical analysis failed";
     }
+    
+    let ast = parserNS.parse(tokens);
+    if ast.type == "" || ast.type == "ParseError" {
+        return "Error: Syntax analysis failed";
+    }
+    
+    # 如果是多文件模式，使用命名空间解析
+    if compiler.multiFile {
+        let resolvedAst = resolveMultipleNamespaces(ast);
+        return codegenNS.generate(resolvedAst);
+    }
+    
+    return codegenNS.generate(ast);
 }
 
-# 创建编译错误
+# 创建编译器错误对象
 micro createError(message, line, column) {
-    let error = {};
-    error.message = message;
-    error.line = line;
-    error.column = column;
-    return error;
+    return {
+        "type": "CompilerError",
+        "message": message,
+        "line": line,
+        "column": column
+    };
 }
 
-# 报告错误
+# 报告编译器错误
 micro reportError(error) {
-    let errorMessage = "Error at line " + error.line + ", column " + error.column + ": " + error.message;
-    return errorMessage;
+    console.log("Compiler Error: " + error.message + " at line " + error.line + ", column " + error.column);
 }
 
 # 创建编译器选项
 micro createCompilerOptions(outputFormat, optimize, debug) {
-    let options = {};
-    # 输出格式：javascript, wasm 等
-    options.outputFormat = "javascript";
-    # 是否优化
-    options.optimize = optimize;
-    # 是否包含调试信息
-    options.debug = debug;
-    return options;
+    return {
+        "outputFormat": outputFormat || "js",
+        "optimize": optimize || false,
+        "debug": debug || false
+    };
 }
 
-# 带选项的编译函数
+# 使用选项编译
 micro compileWithOptions(compiler, options) {
-    # 词法分析阶段
-    let lexer = initLexer(compiler.source);
-    compiler.tokens = tokenize(lexer);
+    compiler.options = options;
     
-    # 检查词法分析是否成功
-    if compiler.tokens.length == 0 {
-        let error = createCompilerError("Lexical analysis failed", 1, 1);
-        compiler.output = reportError(error);
-        return compiler;
-    } else {
-        # 语法分析阶段
-        compiler.ast = parse(compiler.tokens);
-        
-        # 检查语法分析是否成功
-        if compiler.ast.type == "" {
-            let error = createCompilerError("Syntax analysis failed", 1, 1);
-            compiler.output = reportError(error);
-            return compiler;
-        } else {
-            # 代码生成阶段
-            if options.outputFormat == "javascript" {
-                compiler.output = generate(compiler.ast);
-            } else {
-                let error = createCompilerError("Unsupported output format: " + options.outputFormat, 1, 1);
-                compiler.output = reportError(error);
-            }
-            
-            # 如果启用调试模式，添加调试信息
-            if options.debug {
-                compiler.output = "// Debug mode enabled\\n" + compiler.output;
-            }
-            
-            return compiler;
-        }
-    }
-}
-
-# 创建编译统计
-micro createStats() {
-    let stats = {};
-    stats.tokensCount = 0;
-    stats.astNodesCount = 0;
-    stats.outputSize = 0;
-    stats.compileTime = 0;
-    return stats;
-}
-
-# 计算 AST 节点数量
-micro countASTNodes(node) {
-    if node.type == "" {
-        return 0;
-    } else if node.type == "Program" {
-        let count = 1;
-        let i = 0;
-        while i < node.statements.length {
-            count = count + countASTNodes(node.statements[i]);
-            i = i + 1;
-        }
-        return count;
-    } else if node.type == "BlockStatement" {
-        let count = 1;
-        let i = 0;
-        while i < node.statements.length {
-            count = count + countASTNodes(node.statements[i]);
-            i = i + 1;
-        }
-        return count;
-    } else if node.type == "IfStatement" {
-        let count = 1;
-        count = count + countASTNodes(node.condition);
-        count = count + countASTNodes(node.thenBranch);
-        if node.elseBranch.type != "" {
-            count = count + countASTNodes(node.elseBranch);
-        }
-        return count;
-    } else if node.type == "BinaryExpression" {
-        let count = 1;
-        count = count + countASTNodes(node.left);
-        count = count + countASTNodes(node.right);
-        return count;
-    } else if node.type == "UnaryExpression" {
-        let count = 1;
-        count = count + countASTNodes(node.operand);
-        return count;
-    } else if node.type == "CallExpression" {
-        let count = 1;
-        count = count + countASTNodes(node.callee);
-        let i = 0;
-        while i < node.arguments.length {
-            count = count + countASTNodes(node.arguments[i]);
-            i = i + 1;
-        }
-        return count;
-    } else {
-        return 1;  # 叶子节点
-    }
-}
-
-# 带统计信息的编译函数
-micro compileWithStats(compiler, options) {
-    let stats = createCompilerStats();
-    
-    # 记录开始时间（简化实现）
-    let startTime = 0;
-    
-    # 执行编译
-    compileWithOptions(compiler, options);
-    
-    # 收集统计信息
-    stats.tokensCount = compiler.tokens.length;
-    stats.astNodesCount = countASTNodes(compiler.ast);
-    stats.outputSize = compiler.output.length;
-    stats.compileTime = 1;  # 简化的编译时间
-    
-    # 将统计信息添加到输出（如果启用调试模式）
     if options.debug {
-        let statsInfo = "\\n# Compilation Statistics:\\n";
-        statsInfo = statsInfo + "// Tokens: " + stats.tokensCount + "\\n";
-        statsInfo = statsInfo + "// AST Nodes: " + stats.astNodesCount + "\\n";
-        statsInfo = statsInfo + "// Output Size: " + stats.outputSize + " characters\\n";
-        statsInfo = statsInfo + "// Compile Time: " + stats.compileTime + " ms\\n";
-        compiler.output = compiler.output + statsInfo;
+        console.log("Debug mode enabled");
     }
     
-    return compiler;
+    let result = compile(compiler);
+    
+    if options.optimize {
+        # 这里可以添加优化逻辑
+        result = result;
+    }
+    
+    return result;
 }
 
-# 主编译函数 - 简单接口
+# 创建编译统计信息
+micro createStats() {
+    return {
+        "tokensCount": 0,
+        "astNodesCount": 0,
+        "compilationTime": 0,
+        "outputSize": 0
+    };
+}
+
+# 计算AST节点数量
+micro countASTNodes(node) {
+    if node == null {
+        return 0;
+    }
+    
+    let count = 1;
+    
+    if node.statements != null {
+        let i = 0;
+        while i < node.statements.length {
+            count = count + countASTNodes(node.statements[i]);
+            i = i + 1;
+        }
+    }
+    
+    if node.body != null {
+        count = count + countASTNodes(node.body);
+    }
+    
+    if node.left != null {
+        count = count + countASTNodes(node.left);
+    }
+    
+    if node.right != null {
+        count = count + countASTNodes(node.right);
+    }
+    
+    if node.expression != null {
+        count = count + countASTNodes(node.expression);
+    }
+    
+    if node.condition != null {
+        count = count + countASTNodes(node.condition);
+    }
+    
+    if node.thenBranch != null {
+        count = count + countASTNodes(node.thenBranch);
+    }
+    
+    if node.elseBranch != null {
+        count = count + countASTNodes(node.elseBranch);
+    }
+    
+    return count;
+}
+
+# 使用统计信息编译
+micro compileWithStats(compiler, options) {
+    let stats = createStats();
+    let startTime = Date.now();
+    
+    let result = compileWithOptions(compiler, options);
+    
+    stats.compilationTime = Date.now() - startTime;
+    stats.outputSize = result.length;
+    
+    return {
+        "result": result,
+        "stats": stats
+    };
+}
+
+# 简化的编译接口
 micro compileSource(source) {
-    let compiler = initCompiler(source);
-    compile(compiler);
-    return compiler.output;
+    let compiler = { "source": source, "multiFile": false };
+    return compile(compiler);
 }
 
-# 主编译函数 - 完整接口
+# 带选项的编译接口
 micro compileSourceWithOptions(source, outputFormat, optimize, debug) {
-    let compiler = initCompiler(source);
+    let compiler = { "source": source, "multiFile": false };
     let options = createCompilerOptions(outputFormat, optimize, debug);
-    compileWithStats(compiler, options);
-    return compiler.output;
+    return compileWithOptions(compiler, options);
 }
 
-# 验证源代码语法
+# 语法验证
 micro validateSyntax(source) {
-    let compiler = initCompiler(source);
+    let lexer = lexerNS.initLexer(source);
+    let tokens = lexerNS.tokenize(lexer);
     
-    # 只进行词法和语法分析
-    let lexer = initLexer(compiler.source);
-    compiler.tokens = tokenize(lexer);
-    
-    if compiler.tokens.length == 0 {
-        return false;
-    } else {
-        compiler.ast = parse(compiler.tokens);
-        return compiler.ast.type != "";
+    if tokens.length == 0 {
+        return {
+            "valid": false,
+            "error": "Lexical analysis failed"
+        };
     }
+    
+    let ast = parserNS.parse(tokens);
+    if ast.type == "" || ast.type == "ParseError" {
+        return {
+            "valid": false,
+            "error": "Syntax analysis failed"
+        };
+    }
+    
+    return {
+        "valid": true,
+        "error": null
+    };
+}
+
+# 路径连接工具函数
+micro joinPath(pathArray, separator) {
+    if pathArray == null || pathArray.length == 0 {
+        return "";
+    }
+    
+    let result = pathArray[0];
+    let i = 1;
+    while i < pathArray.length {
+        result = result + separator + pathArray[i];
+        i = i + 1;
+    }
+    return result;
+}
+
+# 创建命名空间管理器
+micro createNamespaceManager() {
+    return {
+        "namespaces": {},
+        "usings": {},
+        "currentNamespace": "",
+        "currentFile": "",
+        "mode": "repl"
+    };
+}
+
+# 设置编译模式
+micro setCompileMode(manager, mode) {
+    manager.mode = mode;
+}
+
+# 检查是否为主命名空间
+micro isMainNamespace(namespacePath) {
+    return namespacePath.endsWith("!");
+}
+
+# 获取主命名空间名称
+micro getMainNamespaceName(namespacePath) {
+    if isMainNamespace(namespacePath) {
+        return namespacePath.substring(0, namespacePath.length - 1);
+    }
+    return namespacePath;
+}
+
+# 添加符号到命名空间
+micro addSymbolToNamespace(manager, namespacePath, symbolName, symbolType, symbolData, filePath) {
+    if manager.namespaces[namespacePath] == null {
+        manager.namespaces[namespacePath] = {
+            "symbols": {},
+            "files": []
+        };
+    }
+    
+    let namespaceData = manager.namespaces[namespacePath];
+    
+    # 添加符号
+    namespaceData.symbols[symbolName] = {
+        "type": symbolType,
+        "data": symbolData,
+        "filePath": filePath
+    };
+    
+    # 添加文件到命名空间（如果不存在）
+    let fileExists = false;
+    let i = 0;
+    while i < namespaceData.files.length {
+        if namespaceData.files[i] == filePath {
+            fileExists = true;
+            break;
+        }
+        i = i + 1;
+    }
+    
+    if !fileExists {
+        namespaceData.files.push(filePath);
+    }
+}
+
+# 添加using导入
+micro addUsingImport(manager, usingPath, isGlobal) {
+    if manager.usings[manager.currentFile] == null {
+        manager.usings[manager.currentFile] = [];
+    }
+    
+    let usingInfo = {
+        "namespace": usingPath,
+        "isGlobal": isGlobal
+    };
+    
+    manager.usings[manager.currentFile].push(usingInfo);
+}
+
+# 解析符号
+micro resolveSymbol(manager, symbolName, currentNamespace, currentFile) {
+    # 首先在当前命名空间中查找
+    let currentNamespaceData = manager.namespaces[currentNamespace];
+    if currentNamespaceData != null && currentNamespaceData.symbols != null {
+        let symbol = currentNamespaceData.symbols[symbolName];
+        if symbol != null {
+            return {
+                "found": true,
+                "symbol": symbol,
+                "namespace": currentNamespace
+            };
+        }
+    }
+    
+    # 然后在using导入中查找
+    let fileUsings = manager.usings[currentFile];
+    if fileUsings != null {
+        let i = 0;
+        while i < fileUsings.length {
+            let usingInfo = fileUsings[i];
+            let usingNamespace = usingInfo["namespace"];
+            
+            let usingNamespaceData = manager.namespaces[usingNamespace];
+            if usingNamespaceData != null && usingNamespaceData.symbols != null {
+                let symbol = usingNamespaceData.symbols[symbolName];
+                if symbol != null {
+                    return {
+                        "found": true,
+                        "symbol": symbol,
+                        "namespace": usingNamespace
+                    };
+                }
+            }
+            
+            i = i + 1;
+        }
+    }
+    
+    # 最后在全局命名空间中查找
+    let globalNamespaceData = manager.namespaces[""];
+    if globalNamespaceData != null && globalNamespaceData.symbols != null {
+        let symbol = globalNamespaceData.symbols[symbolName];
+        if symbol != null {
+            return {
+                "found": true,
+                "symbol": symbol,
+                "namespace": ""
+            };
+        }
+    }
+    
+    return {
+        "found": false,
+        "symbol": null,
+        "namespace": null
+    };
+}
+
+# 获取完全限定名称
+micro getFullyQualifiedName(manager, symbolName, namespacePath) {
+    if namespacePath == "" {
+        return symbolName;
+    }
+    
+    let cleanNamespace = getMainNamespaceName(namespacePath);
+    return cleanNamespace.replace("::", "_") + "_" + symbolName;
+}
+
+# 编译源代码文本
+micro compileSourceText(sourceText) {
+    let lexer = lexerNS.initLexer(sourceText);
+    let tokens = lexerNS.tokenize(lexer);
+    
+    if tokens.length == 0 {
+        if sourceText == "" {
+            return "";
+        }
+        return "Error: Lexical analysis failed";
+    }
+    
+    let ast = parserNS.parse(tokens);
+    if ast.type == "" || ast.type == "ParseError" {
+        return "Error: Syntax analysis failed";
+    }
+    
+    return codegenNS.generate(ast);
+}
+
+# 解析多个命名空间
+micro resolveMultipleNamespaces(ast) {
+    let manager = createNamespaceManager();
+    
+    # 第一遍：收集所有命名空间和符号
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+        
+        if stmt.type == "NamespaceStatement" {
+            let namespacePath = joinPath(stmt.path, "::");
+            if stmt.isMainNamespace {
+                namespacePath = namespacePath + "!";
+            }
+            manager.currentNamespace = namespacePath;
+            
+        } else if stmt.type == "UsingStatement" {
+            let usingPath = joinPath(stmt.path, "::");
+            let isGlobal = isMainNamespace(usingPath);
+            addUsingImport(manager, usingPath, isGlobal);
+            
+        } else if stmt.type == "MicroDeclaration" {
+            addSymbolToNamespace(manager, manager.currentNamespace, stmt.name, "function", stmt, manager.currentFile);
+            
+        } else if stmt.type == "ClassDeclaration" {
+            addSymbolToNamespace(manager, manager.currentNamespace, stmt.name, "class", stmt, manager.currentFile);
+            
+        } else if stmt.type == "LetStatement" {
+            addSymbolToNamespace(manager, manager.currentNamespace, stmt.name, "variable", stmt, manager.currentFile);
+        }
+        
+        i = i + 1;
+    }
+    
+    # 第二遍：解析符号引用并生成唯一名称
+    let j = 0;
+    while j < ast.statements.length {
+        let stmt = ast.statements[j];
+        
+        if stmt.type == "MicroDeclaration" {
+            stmt.uniqueName = getFullyQualifiedName(manager, stmt.name, manager.currentNamespace);
+            
+        } else if stmt.type == "ClassDeclaration" {
+            stmt.uniqueName = getFullyQualifiedName(manager, stmt.name, manager.currentNamespace);
+            
+        } else if stmt.type == "LetStatement" {
+            stmt.uniqueName = getFullyQualifiedName(manager, stmt.name, manager.currentNamespace);
+        }
+        
+        j = j + 1;
+    }
+    
+    return ast;
+}
+
+# 编译文件
+micro compileFile(filePath, outputPath) {
+    # 这里可以添加文件读取和写入逻辑
+    return "File compilation not implemented yet";
+}
+
+# 验证命名空间规则
+micro validateNamespaceRules(ast, mode) {
+    let hasNamespace = false;
+    let hasMainNamespace = false;
+    
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+        
+        if stmt.type == "NamespaceStatement" {
+            hasNamespace = true;
+            if stmt.isMainNamespace {
+                hasMainNamespace = true;
+            }
+        }
+        
+        i = i + 1;
+    }
+    
+    if mode == "standard" && !hasNamespace {
+        return "Error: Standard mode requires at least one namespace declaration";
+    }
+    
+    if mode == "standard" && !hasMainNamespace {
+        return "Error: Standard mode requires exactly one main namespace (ending with !)";
+    }
+    
+    return "OK";
+}
+
+# 多文件编译
+micro compileFolderWithMode(fileContents, mode) {
+    let manager = createNamespaceManager();
+    setCompileMode(manager, mode);
+    
+    # 分类收集语句
+    let jsImportStatements = [];
+    let variableStatements = [];
+    let functionStatements = [];
+    let classStatements = [];
+    let executionStatements = [];
+    
+    # 处理所有文件
+    let fileNames = Object.keys(fileContents);
+    let i = 0;
+    while i < fileNames.length {
+        let fileName = fileNames[i];
+        let content = fileContents[fileName];
+        
+        manager.currentFile = fileName;
+        
+        # 词法和语法分析
+        let lexerInstance = lexerNS.initLexer(content);
+        let tokens = lexerNS.tokenize(lexerInstance);
+        
+        if tokens.length == 0 {
+            i = i + 1;
+            continue;
+        }
+        
+        let ast = parserNS.parse(tokens);
+        if ast.type != "Program" {
+            return "Error: Failed to parse " + fileName;
+        }
+        
+        # 验证命名空间规则
+        let validationResult = validateNamespaceRules(ast, mode);
+        if validationResult != "OK" {
+            return validationResult;
+        }
+        
+        # 处理语句
+        let currentNamespace = "";
+        let j = 0;
+        while j < ast.statements.length {
+            let stmt = ast.statements[j];
+            
+            if stmt.type == "NamespaceStatement" {
+                currentNamespace = joinPath(stmt.path, "::");
+                if stmt.isMainNamespace {
+                    currentNamespace = currentNamespace + "!";
+                    
+                    # 在standard模式下，检查重复的主命名空间
+                    if mode == "standard" {
+                        console.log("🔍 检查主命名空间: " + currentNamespace);
+                        console.log("📋 当前管理器中的命名空间: " + Object.keys(manager.namespaces).join(", "));
+                        if manager.namespaces[currentNamespace] != null {
+                            let cleanName = currentNamespace.substring(0, currentNamespace.length - 1);
+                            console.log("❌ 发现重复的主命名空间: " + cleanName);
+                            return "Error: Duplicate main namespace '" + cleanName + "' found. Each main namespace must have a unique name.";
+                        } else {
+                            console.log("✅ 主命名空间检查通过: " + currentNamespace);
+                        }
+                    }
+                }
+                manager.currentNamespace = currentNamespace;
+                
+                # 确保命名空间被添加到管理器中
+                if manager.namespaces[currentNamespace] == null {
+                    manager.namespaces[currentNamespace] = {
+                        "symbols": {},
+                        "files": []
+                    };
+                }
+                
+            } else if stmt.type == "UsingStatement" {
+                let usingPath = joinPath(stmt.path, "::");
+                let isGlobal = isMainNamespace(usingPath);
+                addUsingImport(manager, usingPath, isGlobal);
+                
+            } else if stmt.type == "JSImportStatement" {
+                jsImportStatements.push(stmt);
+                
+            } else if stmt.type == "LetStatement" {
+                variableStatements.push(stmt);
+                addSymbolToNamespace(manager, currentNamespace, stmt.name, "variable", stmt, fileName);
+                
+            } else if stmt.type == "MicroDeclaration" {
+                functionStatements.push(stmt);
+                addSymbolToNamespace(manager, currentNamespace, stmt.name, "function", stmt, fileName);
+                
+            } else if stmt.type == "ClassDeclaration" {
+                classStatements.push(stmt);
+                addSymbolToNamespace(manager, currentNamespace, stmt.name, "class", stmt, fileName);
+                
+            } else {
+                executionStatements.push(stmt);
+            }
+            
+            j = j + 1;
+        }
+        
+        i = i + 1;
+    }
+    
+    # 检查重复的主命名空间
+    if mode == "standard" {
+        let mainNamespaces = [];
+        let namespaceNames = Object.keys(manager.namespaces);
+        let nsIndex = 0;
+        while nsIndex < namespaceNames.length {
+            let nsName = namespaceNames[nsIndex];
+            if isMainNamespace(nsName) {
+                let cleanName = getMainNamespaceName(nsName);
+                let duplicateIndex = 0;
+                let isDuplicate = false;
+                while duplicateIndex < mainNamespaces.length {
+                    if mainNamespaces[duplicateIndex] == cleanName {
+                        isDuplicate = true;
+                        break;
+                    }
+                    duplicateIndex = duplicateIndex + 1;
+                }
+                if isDuplicate {
+                    return "Error: Duplicate main namespace '" + cleanName + "' found";
+                }
+                mainNamespaces.push(cleanName);
+            }
+            nsIndex = nsIndex + 1;
+        }
+    }
+    
+    # 生成唯一名称
+    let k = 0;
+    while k < functionStatements.length {
+        let funcStmt = functionStatements[k];
+        funcStmt.uniqueName = getFullyQualifiedName(manager, funcStmt.name, funcStmt["namespace"] || "");
+        k = k + 1;
+    }
+    
+    let l = 0;
+    while l < classStatements.length {
+        let classStmt = classStatements[l];
+        classStmt.uniqueName = getFullyQualifiedName(manager, classStmt.name, classStmt["namespace"] || "");
+        l = l + 1;
+    }
+    
+    let m = 0;
+    while m < variableStatements.length {
+        let varStmt = variableStatements[m];
+        varStmt.uniqueName = getFullyQualifiedName(manager, varStmt.name, varStmt["namespace"] || "");
+        m = m + 1;
+    }
+    
+    # 合并所有语句
+    let integratedAst = {
+        "type": "Program",
+        "statements": []
+    };
+    
+    # 添加JS导入
+    let n = 0;
+    while n < jsImportStatements.length {
+        integratedAst.statements.push(jsImportStatements[n]);
+        n = n + 1;
+    }
+    
+    # 添加变量
+    let o = 0;
+    while o < variableStatements.length {
+        integratedAst.statements.push(variableStatements[o]);
+        o = o + 1;
+    }
+    
+    # 添加函数
+    let p = 0;
+    while p < functionStatements.length {
+        integratedAst.statements.push(functionStatements[p]);
+        p = p + 1;
+    }
+    
+    # 添加类
+    let q = 0;
+    while q < classStatements.length {
+        integratedAst.statements.push(classStatements[q]);
+        q = q + 1;
+    }
+    
+    # 添加执行语句
+    let r = 0;
+    while r < executionStatements.length {
+        integratedAst.statements.push(executionStatements[r]);
+        r = r + 1;
+    }
+    
+    return codegenNS.generate(integratedAst);
+}
+
+# 简化的多文件编译接口
+micro compileFolder(fileContents) {
+    return compileFolderWithMode(fileContents, "repl");
+}
+
+# 解析多个命名空间并生成代码
+micro resolveMultipleNamespacesAndGenerate(ast) {
+    let manager = createNamespaceManager();
+    
+    # 分类收集语句
+    let jsImportStatements = [];
+    let variableStatements = [];
+    let functionStatements = [];
+    let classStatements = [];
+    let executionStatements = [];
+    
+    let currentNamespace = "";
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+        
+        if stmt.type == "NamespaceStatement" {
+            currentNamespace = joinPath(stmt.path, "::");
+            if stmt.isMainNamespace {
+                currentNamespace = currentNamespace + "!";
+            }
+            manager.currentNamespace = currentNamespace;
+            
+        } else if stmt.type == "UsingStatement" {
+            let usingPath = joinPath(stmt.path, "::");
+            let isGlobal = isMainNamespace(usingPath);
+            addUsingImport(manager, usingPath, isGlobal);
+            
+        } else if stmt.type == "JSImportStatement" {
+            jsImportStatements.push(stmt);
+            
+        } else if stmt.type == "LetStatement" {
+            variableStatements.push(stmt);
+            addSymbolToNamespace(manager, currentNamespace, stmt.name, "variable", stmt, manager.currentFile);
+            
+        } else if stmt.type == "MicroDeclaration" {
+            functionStatements.push(stmt);
+            addSymbolToNamespace(manager, currentNamespace, stmt.name, "function", stmt, manager.currentFile);
+            
+        } else if stmt.type == "ClassDeclaration" {
+            classStatements.push(stmt);
+            addSymbolToNamespace(manager, currentNamespace, stmt.name, "class", stmt, manager.currentFile);
+            
+        } else {
+            executionStatements.push(stmt);
+        }
+        
+        i = i + 1;
+    }
+    
+    # 生成唯一名称
+    let j = 0;
+    while j < functionStatements.length {
+        let funcStmt = functionStatements[j];
+        funcStmt.uniqueName = getFullyQualifiedName(manager, funcStmt.name, currentNamespace);
+        j = j + 1;
+    }
+    
+    let k = 0;
+    while k < classStatements.length {
+        let classStmt = classStatements[k];
+        classStmt.uniqueName = getFullyQualifiedName(manager, classStmt.name, currentNamespace);
+        k = k + 1;
+    }
+    
+    let l = 0;
+    while l < variableStatements.length {
+        let varStmt = variableStatements[l];
+        varStmt.uniqueName = getFullyQualifiedName(manager, varStmt.name, currentNamespace);
+        l = l + 1;
+    }
+    
+    # 合并所有语句
+    let integratedAst = {
+        "type": "Program",
+        "statements": []
+    };
+    
+    # 添加JS导入
+    let m = 0;
+    while m < jsImportStatements.length {
+        integratedAst.statements.push(jsImportStatements[m]);
+        m = m + 1;
+    }
+    
+    # 添加变量
+    let n = 0;
+    while n < variableStatements.length {
+        integratedAst.statements.push(variableStatements[n]);
+        n = n + 1;
+    }
+    
+    # 添加函数
+    let o = 0;
+    while o < functionStatements.length {
+        integratedAst.statements.push(functionStatements[o]);
+        o = o + 1;
+    }
+    
+    # 添加类
+    let p = 0;
+    while p < classStatements.length {
+        integratedAst.statements.push(classStatements[p]);
+        p = p + 1;
+    }
+    
+    # 添加执行语句
+    let q = 0;
+    while q < executionStatements.length {
+        integratedAst.statements.push(executionStatements[q]);
+        q = q + 1;
+    }
+    
+    return codegenNS.generate(integratedAst);
+}
+
+# 生成简单块语句
+micro generateSimpleBlock(blockStmt) {
+    return "{\n  // Block statement placeholder\n  return null;\n}";
+}
+
+# 单文件编译器 - 解决跨模块调用问题的完整解决方案
+micro compileSingleFileWithImports(sourceText) {
+    let lexerInstance = lexerNS.initLexer(sourceText);
+    let tokens = lexerNS.tokenize(lexerInstance);
+    
+    if tokens.length == 0 {
+        if sourceText == "" {
+            return "";
+        }
+        return "Error: Lexical analysis failed";
+    }
+    
+    let ast = parserNS.parse(tokens);
+    if ast.type == "" || ast.type == "ParseError" {
+        return "Error: Syntax analysis failed";
+    }
+    
+    let resolvedAst = resolveMultipleNamespacesAndGenerate(ast);
+    return resolvedAst;
+}
+
+# 基于 compileFolderWithMode 的单文件编译器
+micro compileSingleFileComplete(sourceText) {
+    let lexerInstance = lexerNS.initLexer(sourceText);
+    let tokens = lexerNS.tokenize(lexerInstance);
+    
+    if tokens.length == 0 {
+        if sourceText == "" {
+            return "";
+        }
+        return "Error: Lexical analysis failed";
+    }
+    
+    let ast = parserNS.parse(tokens);
+    if ast.type == "" || ast.type == "ParseError" {
+        return "Error: Syntax analysis failed";
+    }
+    
+    let manager = createNamespaceManager();
+    setCompileMode(manager, "repl");
+    
+    let jsImportStatements = [];
+    let variableStatements = [];
+    let functionStatements = [];
+    let classStatements = [];
+    let executionStatements = [];
+    
+    let currentNamespace = "";
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+        
+        if stmt.type == "NamespaceStatement" {
+            currentNamespace = joinPath(stmt.path, "::");
+            if stmt.isMainNamespace {
+                currentNamespace = currentNamespace + "!";
+            }
+            manager.currentNamespace = currentNamespace;
+            manager.currentFile = "single_file";
+            
+        } else if stmt.type == "UsingStatement" {
+            let usingPath = joinPath(stmt.path, "::");
+            let isGlobal = isMainNamespace(usingPath);
+            addUsingImport(manager, usingPath, isGlobal);
+            
+        } else if stmt.type == "JSImportStatement" {
+            jsImportStatements.push(stmt);
+            
+        } else if stmt.type == "LetStatement" {
+            variableStatements.push(stmt);
+            
+        } else if stmt.type == "MicroDeclaration" {
+            functionStatements.push(stmt);
+            
+        } else if stmt.type == "ClassDeclaration" {
+            classStatements.push(stmt);
+            
+        } else {
+            executionStatements.push(stmt);
+        }
+        
+        i = i + 1;
+    }
+    
+    let uniqueNames = {};
+    
+    let j = 0;
+    while j < functionStatements.length {
+        let funcStmt = functionStatements[j];
+        let uniqueName = getFullyQualifiedName(manager, funcStmt.name, currentNamespace);
+        uniqueNames[funcStmt.name] = uniqueName;
+        funcStmt.uniqueName = uniqueName;
+        j = j + 1;
+    }
+    
+    let k = 0;
+    while k < classStatements.length {
+        let classStmt = classStatements[k];
+        let uniqueName = getFullyQualifiedName(manager, classStmt.name, currentNamespace);
+        uniqueNames[classStmt.name] = uniqueName;
+        classStmt.uniqueName = uniqueName;
+        k = k + 1;
+    }
+    
+    let l = 0;
+    while l < variableStatements.length {
+        let varStmt = variableStatements[l];
+        let uniqueName = getFullyQualifiedName(manager, varStmt.name, currentNamespace);
+        uniqueNames[varStmt.name] = uniqueName;
+        varStmt.uniqueName = uniqueName;
+        l = l + 1;
+    }
+    
+    let integratedAst = {
+        "type": "Program",
+        "statements": []
+    };
+    
+    let m = 0;
+    while m < jsImportStatements.length {
+        integratedAst.statements.push(jsImportStatements[m]);
+        m = m + 1;
+    }
+    
+    let n = 0;
+    while n < variableStatements.length {
+        integratedAst.statements.push(variableStatements[n]);
+        n = n + 1;
+    }
+    
+    let o = 0;
+    while o < functionStatements.length {
+        integratedAst.statements.push(functionStatements[o]);
+        o = o + 1;
+    }
+    
+    let p = 0;
+    while p < classStatements.length {
+        integratedAst.statements.push(classStatements[p]);
+        p = p + 1;
+    }
+    
+    let q = 0;
+    while q < executionStatements.length {
+        integratedAst.statements.push(executionStatements[q]);
+        q = q + 1;
+    }
+    
+    return codegenNS.generate(integratedAst);
+}
+
+# 生成单一JS文件的主函数
+micro generateSingleJSFromAnalysis(fileContents, mode) {
+    let manager = createNamespaceManager();
+    setCompileMode(manager, mode || "repl");
+    
+    # 分析依赖关系
+    let analyzer = createDependencyAnalyzer();
+    
+    # 第一遍：收集每个文件的using依赖
+    let fileNames = Object.keys(fileContents);
+    let i = 0;
+    while i < fileNames.length {
+        let fileName = fileNames[i];
+        let content = fileContents[fileName];
+        
+        analyzer.dependencies[fileName] = [];
+        
+        let lexerInstance = lexerNS.initLexer(content);
+        let tokens = lexerNS.tokenize(lexerInstance);
+        
+        if tokens.length > 0 {
+            let ast = parserNS.parse(tokens);
+            
+            if ast.type == "Program" {
+                let j = 0;
+                while j < ast.statements.length {
+                    let stmt = ast.statements[j];
+                    
+                    if stmt.type == "UsingStatement" {
+                        let usingPath = joinPath(stmt.path, "::");
+                        let providerFile = findNamespaceProvider(usingPath, fileContents);
+                        if providerFile != null && providerFile != fileName {
+                            analyzer.dependencies[fileName].push(providerFile);
+                        }
+                    }
+                    
+                    j = j + 1;
+                }
+            }
+        }
+        
+        i = i + 1;
+    }
+    
+    # 拓扑排序
+    let sortResult = topologicalSort(analyzer, fileContents);
+    if sortResult.error != null {
+        return "Error: " + sortResult.error;
+    }
+    
+    let sortedFiles = sortResult.sorted;
+    
+    # 分类收集语句
+    let jsImportStatements = [];
+    let variableStatements = [];
+    let functionStatements = [];
+    let classStatements = [];
+    let executionStatements = [];
+    
+    # 按依赖顺序处理文件
+    let k = 0;
+    while k < sortedFiles.length {
+        let fileName = sortedFiles[k];
+        let content = fileContents[fileName];
+        
+        manager.currentFile = fileName;
+        
+        let lexerInstance = lexerNS.initLexer(content);
+        let tokens = lexerNS.tokenize(lexerInstance);
+        
+        if tokens.length == 0 {
+            k = k + 1;
+            continue;
+        }
+        
+        let ast = parserNS.parse(tokens);
+        if ast.type != "Program" {
+            return "Error: Failed to parse " + fileName;
+        }
+        
+        let validationResult = validateNamespaceRules(ast, mode);
+        if validationResult != "OK" {
+            return validationResult;
+        }
+        
+        let currentNamespace = "";
+        let l = 0;
+        while l < ast.statements.length {
+            let stmt = ast.statements[l];
+            
+            if stmt.type == "NamespaceStatement" {
+                currentNamespace = joinPath(stmt.path, "::");
+                if stmt.isMainNamespace {
+                    currentNamespace = currentNamespace + "!";
+                    
+                    # 在standard模式下，检查重复的主命名空间
+                    if mode == "standard" {
+                        console.log("🔍 检查主命名空间: " + currentNamespace);
+                        console.log("📋 当前管理器中的命名空间: " + Object.keys(manager.namespaces).join(", "));
+                        if manager.namespaces[currentNamespace] != null {
+                            let cleanName = currentNamespace.substring(0, currentNamespace.length - 1);
+                            console.log("❌ 发现重复的主命名空间: " + cleanName);
+                            return "Error: Duplicate main namespace '" + cleanName + "' found. Each main namespace must have a unique name.";
+                        } else {
+                            console.log("✅ 主命名空间检查通过: " + currentNamespace);
+                        }
+                    }
+                }
+                manager.currentNamespace = currentNamespace;
+                
+            } else if stmt.type == "UsingStatement" {
+                let usingPath = joinPath(stmt.path, "::");
+                let isGlobal = isMainNamespace(usingPath);
+                addUsingImport(manager, usingPath, isGlobal);
+                
+            } else if stmt.type == "JSImportStatement" {
+                jsImportStatements.push(stmt);
+                
+            } else if stmt.type == "LetStatement" {
+                variableStatements.push(stmt);
+                addSymbolToNamespace(manager, currentNamespace, stmt.name, "variable", stmt, fileName);
+                
+            } else if stmt.type == "MicroDeclaration" {
+                functionStatements.push(stmt);
+                addSymbolToNamespace(manager, currentNamespace, stmt.name, "function", stmt, fileName);
+                
+            } else if stmt.type == "ClassDeclaration" {
+                classStatements.push(stmt);
+                addSymbolToNamespace(manager, currentNamespace, stmt.name, "class", stmt, fileName);
+                
+            } else {
+                executionStatements.push(stmt);
+            }
+            
+            l = l + 1;
+        }
+        
+        k = k + 1;
+    }
+    
+    # 检查重复主命名空间（仅在standard模式下）
+    if mode == "standard" {
+        let mainNamespaces = [];
+        let mainNamespaceNames = [];
+        
+        # 遍历所有命名空间，收集主命名空间
+        let namespaceKeys = Object.keys(manager.namespaces);
+        let nsIndex = 0;
+        while nsIndex < namespaceKeys.length {
+            let nsName = namespaceKeys[nsIndex];
+            if nsName.endsWith("!") {
+                mainNamespaces.push(nsName);
+                # 提取干净的命名空间名称（去掉!）
+                let cleanName = nsName.substring(0, nsName.length - 1);
+                mainNamespaceNames.push(cleanName);
+            }
+            nsIndex = nsIndex + 1;
+        }
+        
+        # 检查是否有重复的主命名空间名称
+        let duplicateIndex = 0;
+        while duplicateIndex < mainNamespaceNames.length {
+            let currentName = mainNamespaceNames[duplicateIndex];
+            let checkIndex = duplicateIndex + 1;
+            while checkIndex < mainNamespaceNames.length {
+                if mainNamespaceNames[checkIndex] == currentName {
+                    return "Error: Duplicate main namespace '" + currentName + "' found. Each main namespace must have a unique name.";
+                }
+                checkIndex = checkIndex + 1;
+            }
+            duplicateIndex = duplicateIndex + 1;
+        }
+    }
+    
+    # 生成唯一名称
+    let m = 0;
+    while m < functionStatements.length {
+        let funcStmt = functionStatements[m];
+        funcStmt.uniqueName = getFullyQualifiedName(manager, funcStmt.name, funcStmt["namespace"] || "");
+        m = m + 1;
+    }
+    
+    let n = 0;
+    while n < classStatements.length {
+        let classStmt = classStatements[n];
+        classStmt.uniqueName = getFullyQualifiedName(manager, classStmt.name, classStmt["namespace"] || "");
+        n = n + 1;
+    }
+    
+    let o = 0;
+    while o < variableStatements.length {
+        let varStmt = variableStatements[o];
+        varStmt.uniqueName = getFullyQualifiedName(manager, varStmt.name, varStmt["namespace"] || "");
+        o = o + 1;
+    }
+    
+    # 合并所有语句
+    let integratedAst = {
+        "type": "Program",
+        "statements": []
+    };
+    
+    let p = 0;
+    while p < jsImportStatements.length {
+        integratedAst.statements.push(jsImportStatements[p]);
+        p = p + 1;
+    }
+    
+    let q = 0;
+    while q < variableStatements.length {
+        integratedAst.statements.push(variableStatements[q]);
+        q = q + 1;
+    }
+    
+    let r = 0;
+    while r < functionStatements.length {
+        integratedAst.statements.push(functionStatements[r]);
+        r = r + 1;
+    }
+    
+    let s = 0;
+    while s < classStatements.length {
+        integratedAst.statements.push(classStatements[s]);
+        s = s + 1;
+    }
+    
+    let t = 0;
+    while t < executionStatements.length {
+        integratedAst.statements.push(executionStatements[t]);
+        t = t + 1;
+    }
+    
+    return codegenNS.generate(integratedAst);
+}
+
+# REPL模式的单一JS文件生成
+micro generateSingleJS(fileContents) {
+    return generateSingleJSFromAnalysis(fileContents, "repl");
+}
+
+# 标准模式的单一JS文件生成
+micro generateSingleJSStandard(fileContents) {
+    return generateSingleJSFromAnalysis(fileContents, "standard");
+}
+
+# 创建依赖分析器
+micro createDependencyAnalyzer() {
+    return {
+        "dependencies": {},
+        "reverseDependencies": {}
+    };
+}
+
+# 查找提供指定命名空间的文件
+micro findNamespaceProvider(namespacePath, fileContents) {
+    let fileNames = Object.keys(fileContents);
+    let i = 0;
+    while i < fileNames.length {
+        let fileName = fileNames[i];
+        let content = fileContents[fileName];
+        
+        let lexerInstance = lexerNS.initLexer(content);
+        let tokens = lexerNS.tokenize(lexerInstance);
+        
+        if tokens.length > 0 {
+            let ast = parserNS.parse(tokens);
+            
+            if ast.type == "Program" {
+                let j = 0;
+                while j < ast.statements.length {
+                    let stmt = ast.statements[j];
+                    
+                    if stmt.type == "NamespaceStatement" {
+                        let declaredNamespace = joinPath(stmt.path, "::");
+                        if declaredNamespace == namespacePath {
+                            return fileName;
+                        }
+                    }
+                    
+                    j = j + 1;
+                }
+            }
+        }
+        
+        i = i + 1;
+    }
+    
+    return null;
+}
+
+# 拓扑排序 (简化版，不检测循环依赖)
+micro topologicalSort(analyzer, fileContents) {
+    let fileNames = Object.keys(fileContents);
+    let visited = {};
+    let sorted = [];
+    
+    let i = 0;
+    while i < fileNames.length {
+        visited[fileNames[i]] = false;
+        i = i + 1;
+    }
+    
+    let j = 0;
+    while j < fileNames.length {
+        let fileName = fileNames[j];
+        if !visited[fileName] {
+            simpleDfsVisit(fileName, analyzer, visited, sorted);
+        }
+        j = j + 1;
+    }
+    
+    return {
+        "error": null,
+        "sorted": sorted
+    };
+}
+
+# 简化的DFS访问 (不检测循环依赖)
+micro simpleDfsVisit(filePath, analyzer, visited, sorted) {
+    if visited[filePath] {
+        return;
+    }
+    
+    visited[filePath] = true;
+    
+    let dependencies = analyzer.dependencies[filePath];
+    if dependencies != null {
+        let i = 0;
+        while i < dependencies.length {
+            let depFile = dependencies[i];
+            simpleDfsVisit(depFile, analyzer, visited, sorted);
+            i = i + 1;
+        }
+    }
+    
+    sorted.push(filePath);
 }

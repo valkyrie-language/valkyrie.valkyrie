@@ -1,0 +1,59 @@
+# 复杂依赖测试 - 应用层
+# 依赖中间层和基础层
+
+namespace! application::main;
+
+using middleware::services;
+using foundation::core;
+
+# 主应用类
+class Application {
+    constructor() {
+        this.arrayService = ArrayService();
+        this.name = "Complex Dependency Test App";
+    }
+    
+    micro initialize() {
+        # 添加测试数据
+        this.arrayService.add(1);
+        this.arrayService.add(2);
+        this.arrayService.add(3);
+        this.arrayService.add(4);
+        this.arrayService.add(5);
+        this.arrayService.add(6);
+        this.arrayService.add(7);
+        this.arrayService.add(8);
+        this.arrayService.add(9);
+        this.arrayService.add(10);
+    }
+    
+    micro run() {
+        let banner = createBanner(this.name, "*");
+        console.log(banner);
+        
+        let evens = this.arrayService.getEvenNumbers();
+        let odds = this.arrayService.getOddNumbers();
+        let maxVal = this.arrayService.getMaxValue();
+        
+        let evenMsg = formatMessage("Even numbers: [", evens.join(", "), "]");
+        let oddMsg = formatMessage("Odd numbers: [", odds.join(", "), "]");
+        let maxMsg = formatMessage("Maximum value: ", maxVal, "");
+        
+        console.log(evenMsg);
+        console.log(oddMsg);
+        console.log(maxMsg);
+        
+        return concat(concat(evenMsg, " | "), concat(oddMsg, " | " + maxMsg));
+    }
+}
+
+# 运行应用
+micro runComplexDependencyTest() {
+    let app = Application();
+    app.initialize();
+    return app.run();
+}
+
+# 执行测试
+let result = runComplexDependencyTest();
+console.log("Complex dependency test completed: " + result);

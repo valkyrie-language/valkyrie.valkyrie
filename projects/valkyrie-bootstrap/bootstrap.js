@@ -59,65 +59,26 @@ export function copyDir(src, dest) {
     }
 }
 
-// --- Compiler Logic ---
+// --- New Compiler Logic using compiler.valkyrie functions ---
 
-export function compileSource(source, compilerParts) {
-    const { lexer, parser, codegen } = compilerParts;
+export async function compileSourceWithCompiler(source, compilerParts) {
+    const { compiler } = compilerParts;
     try {
-        let tokens;
-
-        if (typeof lexer.initLexer === "function") {
-            // API for handwritten bootstrap/lexer.js
-            const lexerInstance = lexer.initLexer(source);
-            tokens = lexer.tokenize(lexerInstance);
+        // Use the existing compiler function
+        if (typeof compiler.compileSourceText === "function") {
+            const result = compiler.compileSourceText(source);
+            if (result.startsWith("Error:")) {
+                return {
+                    success: false,
+                    error: result,
+                };
+            }
+            return { success: true, code: result };
         } else {
-            throw new Error("initLexer function not found in lexer module");
+            throw new Error(
+                "compileSourceText function not found in compiler module"
+            );
         }
-
-        if (tokens.length === 0) {
-            // Handle empty files gracefully
-            if (source.trim() === "") return { success: true, code: "" };
-            return {
-                success: false,
-                error: "Lexical analysis failed: No tokens produced.",
-            };
-        }
-
-        let ast;
-        if (typeof parser.parse === "function") {
-            ast = parser.parse(tokens);
-        } else {
-            throw new Error("parse function not found in parser module");
-        }
-
-        // 检查解析是否产生了错误
-        if (!ast || !ast.type) {
-            // Handle empty files gracefully
-            if (source.trim() === "") return { success: true, code: "" };
-            return {
-                success: false,
-                error: "Syntax analysis failed: Invalid AST produced.",
-            };
-        }
-
-        // 检查 AST 是否包含解析错误
-        const parseError = findFirstParseError(ast);
-        if (parseError) {
-            const { message, line, column } = parseError;
-            return {
-                success: false,
-                error: `Parse error: ${message} at line ${line}, column ${column}`,
-            };
-        }
-
-        let code;
-        if (typeof codegen.generate === "function") {
-            code = codegen.generate(ast);
-        } else {
-            throw new Error("generate function not found in codegen module");
-        }
-
-        return { success: true, code };
     } catch (err) {
         return {
             success: false,
@@ -126,11 +87,15 @@ export function compileSource(source, compilerParts) {
     }
 }
 
-export function compileFile(inputPath, outputPath, compilerParts) {
+export async function compileFileWithCompiler(
+    inputPath,
+    outputPath,
+    compilerParts
+) {
     try {
         log(`Compiling file: ${path.relative(__dirname, inputPath)}`);
         const source = fs.readFileSync(inputPath, "utf8");
-        const result = compileSource(source, compilerParts);
+        const result = await compileSourceWithCompiler(source, compilerParts);
 
         if (!result.success) {
             error(
@@ -149,7 +114,9 @@ export function compileFile(inputPath, outputPath, compilerParts) {
     }
 }
 
-export function compileDirectory(inputDir, outputDir, compilerParts) {
+// --- Directory Compilation using Compiler.js ---
+
+export async function compileDirectory(inputDir, outputDir, compilerParts) {
     log(
         `Compiling directory: ${path.relative(__dirname, inputDir)} -> ${path.relative(__dirname, outputDir)}`
     );
@@ -164,7 +131,13 @@ export function compileDirectory(inputDir, outputDir, compilerParts) {
             outputDir,
             file.replace(".valkyrie", ".js")
         );
-        if (!compileFile(inputPath, outputPath, compilerParts)) {
+        if (
+            !(await compileFileWithCompiler(
+                inputPath,
+                outputPath,
+                compilerParts
+            ))
+        ) {
             error(
                 `Failed to compile directory ${path.relative(__dirname, inputDir)}. Compilation stopped at ${file}.`
             );
@@ -176,108 +149,6 @@ export function compileDirectory(inputDir, outputDir, compilerParts) {
         `Compilation completed: ${files.length}/${files.length} files successful`
     );
     return true;
-}
-
-export function compileDirectoryIntegrated(
-    inputDir,
-    outputPath,
-    compilerParts
-) {
-    log(
-        `Compiling directory with namespace integration: ${path.relative(__dirname, inputDir)} -> ${path.relative(__dirname, outputPath)}`
-    );
-
-    const files = fs
-        .readdirSync(inputDir)
-        .filter((f) => f.endsWith(".valkyrie") || f.endsWith(".vk"));
-    if (files.length === 0) {
-        error(
-            `No .valkyrie or .vk files found in ${path.relative(__dirname, inputDir)}`
-        );
-        return false;
-    }
-
-    try {
-        const { lexer, parser, codegen } = compilerParts;
-
-        // 第一阶段：解析所有文件，收集 namespace 信息
-        const namespaces = {};
-        const allStatements = [];
-        const definitionStatements = [];
-        const executionStatements = [];
-
-        for (const file of files) {
-            const filePath = path.join(inputDir, file);
-            const source = fs.readFileSync(filePath, "utf8");
-
-            if (source.trim() === "") continue;
-
-            // 编译单个文件
-            const result = compileSource(source, compilerParts);
-            if (!result.success) {
-                error(`Failed to compile ${file}: ${result.error}`);
-                return false;
-            }
-
-            // 解析 AST 来提取 namespace 信息
-            const lexerInstance = lexer.initLexer(source);
-            const tokens = lexer.tokenize(lexerInstance);
-            const ast = parser.parse(tokens);
-
-            let currentNamespace = "";
-
-            for (const stmt of ast.statements) {
-                if (stmt.type === "NamespaceStatement") {
-                    currentNamespace = stmt.path.join("::");
-                } else if (stmt.type === "UsingStatement") {
-                    // 记录 using 导入
-                    continue;
-                } else if (
-                    stmt.type === "MicroFunctionDeclaration" ||
-                    stmt.type === "ClassDeclaration" ||
-                    stmt.type === "LetStatement"
-                ) {
-                    // 定义语句
-                    definitionStatements.push(stmt);
-
-                    // 记录到 namespace
-                    if (!namespaces[currentNamespace]) {
-                        namespaces[currentNamespace] = {};
-                    }
-                    namespaces[currentNamespace][stmt.name] = {
-                        type: stmt.type,
-                        statement: stmt,
-                    };
-                } else {
-                    // 执行语句
-                    executionStatements.push(stmt);
-                }
-            }
-        }
-
-        // 第二阶段：生成整合的代码
-        const allOrderedStatements = [
-            ...definitionStatements,
-            ...executionStatements,
-        ];
-        const integratedAst = {
-            type: "Program",
-            statements: allOrderedStatements,
-        };
-
-        const integratedCode = codegen.generate(integratedAst);
-
-        // 写入整合后的输出
-        ensureDir(path.dirname(outputPath));
-        fs.writeFileSync(outputPath, integratedCode, "utf8");
-        log(
-            `✅ Integrated compilation successful: ${files.length} files -> ${path.relative(__dirname, outputPath)}`
-        );
-        return true;
-    } catch (err) {
-        error(`Exception during integrated compilation: ${err.message}`);
-        return false;
-    }
 }
 
 // --- Comparison Logic ---
@@ -463,65 +334,26 @@ export function compareDirectories(dir1, dir2) {
 
 // --- Bootstrap Process ---
 async function loadThisGenerationCompiler() {
-    log("Loading bootstrap compiler components...");
-    const bootstrapLexer = await import(
-        pathToFileURL(path.join(PATHS.bootstrap, "lexer.js")).href
-    );
-    const bootstrapParser = await import(
-        pathToFileURL(path.join(PATHS.bootstrap, "parser.js")).href
-    );
-    const bootstrapCodegen = await import(
-        pathToFileURL(path.join(PATHS.bootstrap, "codegen.js")).href
-    );
+    log("Loading bootstrap compiler...");
     const bootstrapCompiler = await import(
         pathToFileURL(path.join(PATHS.bootstrap, "compiler.js")).href
     );
-    log("Bootstrap compiler components loaded.");
+    log("Bootstrap compiler loaded.");
 
     return {
-        lexer: bootstrapLexer,
-        parser: bootstrapParser,
-        codegen: bootstrapCodegen,
         compiler: bootstrapCompiler,
     };
 }
 
 async function loadNextGenerationCompiler() {
-    log("Loading stage-0 compiler components...");
-    const stage0Lexer = await import(
-        pathToFileURL(path.join(PATHS.stage0, "lexer.js")).href
-    );
-    const stage0Parser = await import(
-        pathToFileURL(path.join(PATHS.stage0, "parser.js")).href
-    );
-    const stage0Codegen = await import(
-        pathToFileURL(path.join(PATHS.stage0, "codegen.js")).href
-    );
+    log("Loading stage-0 compiler...");
     const stage0Compiler = await import(
         pathToFileURL(path.join(PATHS.stage0, "compiler.js")).href
     );
-    log("Stage-0 compiler components loaded.");
+    log("Stage-0 compiler loaded.");
 
     return {
-        lexer: stage0Lexer,
-        parser: stage0Parser,
-        codegen: stage0Codegen,
         compiler: stage0Compiler,
-    };
-}
-
-async function loadIntegratedCompiler(compilerPath) {
-    log(
-        `Loading integrated compiler from: ${path.relative(__dirname, compilerPath)}`
-    );
-    const integratedCompiler = await import(pathToFileURL(compilerPath).href);
-    log("Integrated compiler loaded.");
-
-    return {
-        lexer: integratedCompiler,
-        parser: integratedCompiler,
-        codegen: integratedCompiler,
-        compiler: integratedCompiler,
     };
 }
 
@@ -541,46 +373,28 @@ async function bootstrap() {
         // Step 2: Use bootstrap compiler to compile library to stage-0
         log("Step 2: Compiling library with bootstrap compiler to stage-0");
         if (
-            !compileDirectory(
+            !(await compileDirectory(
                 PATHS.library,
                 PATHS.stage0,
                 bootstrapCompilerParts
-            )
+            ))
         ) {
             throw new Error("Stage-0 compilation failed");
         }
         // Step 2.1: Directly generate a single integrated js file
-
-        // Step 2.5: Generate integrated stage-0 compiler
-        log("Step 2.5: Generating integrated stage-0 compiler");
-        const stage0OutputPath = path.join(PATHS.stage0, "integrated-compiler.js");
-        if (
-            !compileDirectoryIntegrated(
-                PATHS.library,
-                stage0OutputPath,
-                bootstrapCompilerParts
-            )
-        ) {
-            throw new Error("Stage-0 integrated compilation failed");
-        }
 
         // Step 3: Use stage-0 compiler to compile library to stage-1
         log("Step 3: Compiling library with stage-0 compiler to stage-1");
         const stage0CompilerParts = await loadNextGenerationCompiler();
 
         if (
-            !compileDirectory(PATHS.library, PATHS.stage1, stage0CompilerParts)
+            !(await compileDirectory(
+                PATHS.library,
+                PATHS.stage1,
+                stage0CompilerParts
+            ))
         ) {
             throw new Error("Stage-1 compilation failed");
-        }
-
-        // Step 3.5: Generate integrated stage-1 compiler
-        log("Step 3.5: Generating integrated stage-1 compiler");
-        const stage1OutputPath = path.join(PATHS.stage1, "integrated-compiler.js");
-        if (
-            !compileDirectoryIntegrated(PATHS.library, stage1OutputPath, stage0CompilerParts)
-        ) {
-            throw new Error("Stage-1 integrated compilation failed");
         }
 
         // Step 4: Compare stage-0 and stage-1
@@ -590,27 +404,6 @@ async function bootstrap() {
                 "Bootstrap verification failed: stage-0 and stage-1 differ"
             );
         }
-
-        // Step 4.5: Compare integrated compilers
-        log("Step 4.5: Comparing integrated compilers");
-        const stage0IntegratedContent = fs.readFileSync(stage0OutputPath, "utf8").trim();
-        const stage1IntegratedContent = fs.readFileSync(stage1OutputPath, "utf8").trim();
-
-        if (stage0IntegratedContent !== stage1IntegratedContent) {
-            error("❌ Integrated compilers differ");
-
-            // 生成详细的差异报告
-            const detailedDiff = generateDetailedDiff(stage0IntegratedContent, stage1IntegratedContent, "integrated-compiler.js");
-            const diffDir = path.join(PATHS.dist, "diff");
-            ensureDir(diffDir);
-            fs.writeFileSync(path.join(diffDir, "integrated-compiler.js.stage0"), stage0IntegratedContent);
-            fs.writeFileSync(path.join(diffDir, "integrated-compiler.js.stage1"), stage1IntegratedContent);
-            fs.writeFileSync(path.join(diffDir, "integrated-compiler.js.diff.txt"), detailedDiff);
-
-            throw new Error("Bootstrap verification failed: integrated compilers differ");
-        }
-
-        log("✅ Integrated compilers are identical");
 
         // Step 5: Bootstrap successful, update bootstrap directory
         log("Step 5: Bootstrap successful! Updating bootstrap directory");
@@ -665,29 +458,6 @@ export function findFirstParseError(node) {
     return null;
 }
 
-export function findParseErrors(node) {
-    if (!node || typeof node !== "object") {
-        return;
-    }
-
-    if (node.type === "Identifier" && node.name === "__PARSE_ERROR__") {
-        console.error(
-            `[Valkyrie Debug] Parse Error Found at ${node.line}:${node.column}`
-        );
-    }
-
-    for (const key in node) {
-        if (Object.prototype.hasOwnProperty.call(node, key)) {
-            const child = node[key];
-            if (Array.isArray(child)) {
-                child.forEach(findParseErrors);
-            } else if (child && typeof child === "object") {
-                findParseErrors(child);
-            }
-        }
-    }
-}
-
 // --- Command-Line Interface ---
 
 export function showHelp() {
@@ -701,8 +471,6 @@ Commands:
   bootstrap, boot    Run the complete bootstrap process.
   compile <file.vk>   Compile a single .vk file to JavaScript (output in same directory).
   test                Compile all .vk files in test directory.
-  test-namespace      Test namespace integration functionality.
-  compile-test        Alias for 'test' command (backward compatibility).
   help, -h, --help   Show this help message.
 
 Options:
@@ -717,29 +485,6 @@ Examples:
   node bootstrap.js test --stage-0
   node bootstrap.js test-namespace
 `);
-}
-
-async function compileTest() {
-    log("Compiling parser.valkyrie for testing...");
-    try {
-        const bootstrapCompilerParts = await loadThisGenerationCompiler();
-        const inputPath = path.join(PATHS.library, "parser.valkyrie");
-        const outputPath = path.join(PATHS.dist, "parser.test.js");
-
-        if (compileFile(inputPath, outputPath, bootstrapCompilerParts)) {
-            log(
-                `✅ Test compilation successful: ${path.relative(__dirname, outputPath)}`
-            );
-            return true;
-        } else {
-            error("❌ Test compilation failed");
-            return false;
-        }
-    } catch (err) {
-        error(`Test compilation failed: ${err.message}`);
-        console.error(err.stack);
-        return false;
-    }
 }
 
 async function compileTestDirectory(useStage0 = false) {
@@ -787,7 +532,13 @@ async function compileTestDirectory(useStage0 = false) {
 
             log(`Compiling test file: ${testFile}`);
 
-            if (compileFile(inputPath, outputPath, compilerParts)) {
+            if (
+                await compileFileWithCompiler(
+                    inputPath,
+                    outputPath,
+                    compilerParts
+                )
+            ) {
                 log(`✅ Test file compiled successfully: ${testFile}`);
                 successCount++;
             } else {
@@ -838,7 +589,9 @@ async function compileSingleFile(inputPath, useStage0 = false) {
         }
 
         // 编译文件
-        if (compileFile(inputPath, outputPath, compilerParts)) {
+        if (
+            await compileFileWithCompiler(inputPath, outputPath, compilerParts)
+        ) {
             log(
                 `✅ Compilation successful: ${path.relative(process.cwd(), outputPath)}`
             );
@@ -852,59 +605,6 @@ async function compileSingleFile(inputPath, useStage0 = false) {
     } catch (err) {
         error(`Exception during single file compilation: ${err.message}`);
         console.error(err.stack);
-        return false;
-    }
-}
-
-async function testNamespaceIntegration(useStage0 = false) {
-    try {
-        log("Testing namespace integration...");
-
-        const testDir = path.join(PATHS.tests, "namespace_integration_test");
-        if (!fs.existsSync(testDir)) {
-            error(
-                `Namespace integration test directory does not exist: ${testDir}`
-            );
-            return false;
-        }
-
-        const compilerParts = useStage0
-            ? await loadNextGenerationCompiler()
-            : await loadThisGenerationCompiler();
-
-        // Test integrated compilation
-        const outputPath = path.join(testDir, "integrated_output.js");
-        const success = compileDirectoryIntegrated(
-            testDir,
-            outputPath,
-            compilerParts
-        );
-
-        if (success) {
-            log(
-                `Successfully compiled namespace integration test to ${outputPath}`
-            );
-
-            // Try to run the generated JavaScript
-            try {
-                const { execSync } = await import("child_process");
-                const result = execSync(`node "${outputPath}"`, {
-                    encoding: "utf8",
-                    cwd: testDir,
-                });
-                log("Namespace integration test output:");
-                console.log(result);
-            } catch (runError) {
-                error(`Error running integrated output: ${runError.message}`);
-                return false;
-            }
-        } else {
-            error("Failed to compile namespace integration test");
-        }
-
-        return success;
-    } catch (err) {
-        error(`Error testing namespace integration: ${err.message}`);
         return false;
     }
 }
@@ -942,17 +642,6 @@ async function main() {
         case "test":
             const testSuccess = await compileTestDirectory(options.stage0);
             process.exit(testSuccess ? 0 : 1);
-            break;
-        case "compile-test":
-            // 向后兼容
-            const oldTestSuccess = await compileTestDirectory(options.stage0);
-            process.exit(oldTestSuccess ? 0 : 1);
-            break;
-        case "test-namespace":
-            const namespaceTestSuccess = await testNamespaceIntegration(
-                options.stage0
-            );
-            process.exit(namespaceTestSuccess ? 0 : 1);
             break;
         case "help":
         case "-h":

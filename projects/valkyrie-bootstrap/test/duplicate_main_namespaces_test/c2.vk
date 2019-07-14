@@ -1,0 +1,7 @@
+namespace! c;
+
+micro testFunctionC2() {
+    return "Function from second c namespace";
+}
+
+let result = testFunctionC2();

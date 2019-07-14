@@ -2,12 +2,18 @@ namespace package::parser;
 
 # Valkyrie 语法分析器 - 使用 Pratt 解析器避免卡死
 
-micro makeParser(tokens) {
-    let parser = {};
-    parser.tokens = tokens;
-    parser.position = 0;
-    parser.current_token = tokens[0];
-    return parser;
+class ValkyrieParser {
+    constructor(tokens) {
+        self.tokens = tokens;
+        self.position = 0;
+        self.current_token = tokens[0];
+    }
+}
+
+class Node {
+    constructor(type) {
+        self.type = type;
+    }
 }
 
 micro advance(parser) {
@@ -34,11 +40,7 @@ micro expect(parser, tokenType) {
     return token;
 }
 
-micro makeNode(type) {
-    let node = {};
-    node.type = type;
-    return node;
-}
+
 
 # Pratt 解析器优先级表
 micro getOperatorPrecedence(tokenType) {
@@ -87,6 +89,9 @@ micro getOperatorPrecedence(tokenType) {
     if tokenType == "DIVIDE" {
         return 8;
     }
+    if tokenType == "MODULO" {
+        return 8;
+    }
     return -1;
 }
 
@@ -123,12 +128,12 @@ micro parseExpressionWithPrecedence(parser, minPrecedence) {
         }
 
         if tokenType == "ASSIGN" {
-            let node = makeNode("Assignment");
+            let node = new Node("Assignment");
             node.left = left;
             node.right = right;
             left = node;
         } else {
-            let node = makeNode("BinaryOp");
+            let node = new Node("BinaryOp");
             node.left = left;
             node.operator = op;
             node.right = right;
@@ -144,20 +149,58 @@ micro parseExpression(parser) {
 }
 
 micro parseUnaryExpression(parser) {
-    if parser.current_token.type == "NOT" || parser.current_token.type == "MINUS" {
+    if parser.current_token.type == "BANG" || parser.current_token.type == "MINUS" {
         let op = parser.current_token.value;
         advance(parser);
         let operand = parseUnaryExpression(parser);
         if operand && operand.type == "ParseError" {
             return operand;
         }
-        let node = makeNode("UnaryOp");
+        let node = new Node("UnaryOp");
         node.operator = op;
         node.operand = operand;
         return node;
     }
+    
+    if parser.current_token.type == "NEW" {
+        return parseNewExpression(parser);
+    }
 
     return parsePostfixExpression(parser);
+}
+
+micro parseNewExpression(parser) {
+    advance(parser); # skip 'new'
+    
+    # 解析类名
+    let className = expect(parser, "IDENTIFIER");
+    if className.type == "ParseError" { return className; }
+    
+    # 解析构造函数参数
+    let lparen = expect(parser, "LPAREN");
+    if lparen.type == "ParseError" { return lparen; }
+    
+    let args = [];
+    if parser.current_token.type != "RPAREN" {
+        let arg = parseExpression(parser);
+        if arg.type == "ParseError" { return arg; }
+        args.push(arg);
+        
+        while parser.current_token.type == "COMMA" {
+            advance(parser); # skip comma
+            arg = parseExpression(parser);
+            if arg.type == "ParseError" { return arg; }
+            args.push(arg);
+        }
+    }
+    
+    let rparen = expect(parser, "RPAREN");
+    if rparen.type == "ParseError" { return rparen; }
+    
+    let node = new Node("NewExpression");
+    node.className = className.value;
+    node.arguments = args;
+    return node;
 }
 
 micro parsePostfixExpression(parser) {
@@ -194,7 +237,7 @@ micro parsePostfixExpression(parser) {
                 return rparen;
             }
 
-            let callNode = makeNode("MicroCall");
+            let callNode = new Node("MicroCall");
             callNode.callee = expr;
             callNode.arguments = args;
             expr = callNode;
@@ -202,7 +245,7 @@ micro parsePostfixExpression(parser) {
             advance(parser);
             if parser.current_token.type == "AWAIT" {
                 advance(parser);
-                let awaitNode = makeNode("AwaitExpression");
+                let awaitNode = new Node("AwaitExpression");
                 awaitNode.argument = expr;
                 expr = awaitNode;
             } else {
@@ -210,7 +253,7 @@ micro parsePostfixExpression(parser) {
                 if property && property.type == "ParseError" {
                     return property;
                 }
-                let accessNode = makeNode("PropertyAccess");
+                let accessNode = new Node("PropertyAccess");
                 accessNode.object = expr;
                 accessNode.property = property.value;
                 expr = accessNode;
@@ -225,7 +268,7 @@ micro parsePostfixExpression(parser) {
             if rbracket && rbracket.type == "ParseError" {
                 return rbracket;
             }
-            let accessNode = makeNode("ArrayAccess");
+            let accessNode = new Node("ArrayAccess");
             accessNode.object = expr;
             accessNode.index = index;
             expr = accessNode;
@@ -241,7 +284,7 @@ micro parseAtomicExpression(parser) {
     if parser.current_token.type == "NUMBER" {
         let value = parser.current_token.value;
         advance(parser);
-        let node = makeNode("Number");
+        let node = new Node("Number");
         node.value = value;
         return node;
     }
@@ -249,7 +292,7 @@ micro parseAtomicExpression(parser) {
     if parser.current_token.type == "STRING" {
         let value = parser.current_token.value;
         advance(parser);
-        let node = makeNode("String");
+        let node = new Node("String");
         node.value = value;
         return node;
     }
@@ -257,7 +300,7 @@ micro parseAtomicExpression(parser) {
     if parser.current_token.type == "BOOLEAN" {
         let value = parser.current_token.value;
         advance(parser);
-        let node = makeNode("Boolean");
+        let node = new Node("Boolean");
         node.value = value;
         return node;
     }
@@ -265,14 +308,14 @@ micro parseAtomicExpression(parser) {
     if parser.current_token.type == "IDENTIFIER" {
         let name = parser.current_token.value;
         advance(parser);
-        let node = makeNode("Identifier");
+        let node = new Node("Identifier");
         node.name = name;
         return node;
     }
 
     if parser.current_token.type == "SELF" {
         advance(parser);
-        let node = makeNode("ThisExpression");
+        let node = new Node("ThisExpression");
         return node;
     }
 
@@ -311,7 +354,7 @@ micro parseAtomicExpression(parser) {
             return rparen;
         }
 
-        let node = makeNode("NewExpression");
+        let node = new Node("NewExpression");
         node.className = className.value;
         node.arguments = args;
         return node;
@@ -333,7 +376,7 @@ micro parseAtomicExpression(parser) {
     # 支持数组字面量 []
     if parser.current_token.type == "LBRACKET" {
         advance(parser);
-        let node = makeNode("ArrayLiteral");
+        let node = new Node("ArrayLiteral");
         node.elements = [];
 
         if parser.current_token.type != "RBRACKET" {
@@ -364,7 +407,7 @@ micro parseAtomicExpression(parser) {
     # 支持对象字面量 {}
     if parser.current_token.type == "LBRACE" {
         advance(parser);
-        let node = makeNode("ObjectLiteral");
+        let node = new Node("ObjectLiteral");
         node.properties = [];
 
         if parser.current_token.type != "RBRACE" {
@@ -380,7 +423,7 @@ micro parseAtomicExpression(parser) {
                     return value;
                 }
 
-                let propertyNode = makeNode("Property");
+                let propertyNode = new Node("Property");
                 propertyNode.key = key;
                 propertyNode.value = value;
                 node.properties.push(propertyNode);
@@ -468,6 +511,10 @@ micro parseStatement(parser) {
         return parseUsingStatement(parser);
     }
 
+    if parser.current_token.type == "ATTRIBUTE" {
+        return parseAttributeStatement(parser);
+    }
+
     if parser.current_token.type == "CLASS" {
         return parseClassDeclaration(parser);
     }
@@ -518,7 +565,7 @@ micro parseStatement(parser) {
     }
 
     # 创建ExpressionStatement节点
-    let stmt = makeNode("ExpressionStatement");
+    let stmt = new Node("ExpressionStatement");
     stmt.expression = expr;
     return stmt;
 }
@@ -545,7 +592,7 @@ micro parseLetStatement(parser) {
         return semicolon;
     }
 
-    let node = makeNode("LetStatement");
+    let node = new Node("LetStatement");
     node.name = name.value;
     node.value = value;
     return node;
@@ -554,6 +601,13 @@ micro parseLetStatement(parser) {
 micro parseNamespaceStatement(parser) {
     advance(parser); # skip 'namespace'
     let path = [];
+    let isMainNamespace = false;
+
+    # 检查是否为主空间（namespace!）
+    if (parser.current_token.type == "BANG") {
+        advance(parser); # skip '!'
+        isMainNamespace = true;
+    }
 
     let identifier = expect(parser, "IDENTIFIER");
     if (identifier.type == "ParseError") { return identifier; }
@@ -569,8 +623,9 @@ micro parseNamespaceStatement(parser) {
     let semicolon = expect(parser, "SEMICOLON");
     if (semicolon.type == "ParseError") { return semicolon; }
 
-    let node = makeNode("NamespaceStatement");
+    let node = new Node("NamespaceStatement");
     node.path = path;
+    node.isMainNamespace = isMainNamespace;
     return node;
 }
 
@@ -592,8 +647,85 @@ micro parseUsingStatement(parser) {
     let semicolon = expect(parser, "SEMICOLON");
     if (semicolon.type == "ParseError") { return semicolon; }
 
-    let node = makeNode("UsingStatement");
+    let node = new Node("UsingStatement");
     node.path = path;
+    return node;
+}
+
+micro parseAttributeStatement(parser) {
+    advance(parser); # skip '↯'
+    
+    # 期望 js 标识符
+    let jsToken = expect(parser, "IDENTIFIER");
+    if jsToken.type == "ParseError" { return jsToken; }
+    if jsToken.value != "js" {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Expected 'js' after ↯";
+        error.line = jsToken.line;
+        error.column = jsToken.column;
+        return error;
+    }
+    
+    # 期望左括号
+    let lparen = expect(parser, "LPAREN");
+    if lparen.type == "ParseError" { return lparen; }
+    
+    # 期望模块路径字符串
+    let modulePath = expect(parser, "STRING");
+    if modulePath.type == "ParseError" { return modulePath; }
+    
+    # 期望逗号
+    let comma = expect(parser, "COMMA");
+    if comma.type == "ParseError" { return comma; }
+    
+    # 期望导入名称字符串
+    let importName = expect(parser, "STRING");
+    if importName.type == "ParseError" { return importName; }
+    
+    # 期望右括号
+    let rparen = expect(parser, "RPAREN");
+    if rparen.type == "ParseError" { return rparen; }
+    
+    # 期望 micro 函数声明
+    let microToken = expect(parser, "MICRO");
+    if microToken.type == "ParseError" { return microToken; }
+    
+    # 解析函数名
+    let functionName = expect(parser, "IDENTIFIER");
+    if functionName.type == "ParseError" { return functionName; }
+    
+    # 解析参数列表
+    let paramLparen = expect(parser, "LPAREN");
+    if paramLparen.type == "ParseError" { return paramLparen; }
+    
+    let parameters = [];
+    if parser.current_token.type != "RPAREN" {
+        let param = expect(parser, "IDENTIFIER");
+        if param.type == "ParseError" { return param; }
+        parameters.push(param.value);
+        
+        while parser.current_token.type == "COMMA" {
+            advance(parser); # skip comma
+            param = expect(parser, "IDENTIFIER");
+            if param.type == "ParseError" { return param; }
+            parameters.push(param.value);
+        }
+    }
+    
+    let paramRparen = expect(parser, "RPAREN");
+    if paramRparen.type == "ParseError" { return paramRparen; }
+    
+    # 解析函数体
+    let body = parseStatement(parser);
+    if body.type == "ParseError" { return body; }
+    
+    let node = new Node("JSAttributeStatement");
+    node.modulePath = modulePath.value;
+    node.importName = importName.value;
+    node.functionName = functionName.value;
+    node.parameters = parameters;
+    node.body = body;
     return node;
 }
 
@@ -625,7 +757,7 @@ micro parseMicroFunctionDeclaration(parser) {
         return body;
     }
 
-    let node = makeNode("MicroDeclaration");
+    let node = new Node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.body = body;
@@ -639,7 +771,7 @@ micro parseClassDeclaration(parser) {
         return name;
     }
 
-    let node = makeNode("ClassDeclaration");
+    let node = new Node("ClassDeclaration");
     node.name = name.value;
     node.superClass = null;
     node.members = [];
@@ -678,6 +810,36 @@ micro parseClassDeclaration(parser) {
 }
 
 micro parseClassMember(parser) {
+    # 检查是否是构造函数
+    if parser.current_token.type == "CONSTRUCTOR" {
+        advance(parser); # skip 'constructor'
+        
+        let lparen = expect(parser, "LPAREN");
+        if lparen && lparen.type == "ParseError" {
+            return lparen;
+        }
+
+        let params = parseTermParameters(parser);
+        if params && params.type == "ParseError" {
+            return params;
+        }
+
+        let rparen = expect(parser, "RPAREN");
+        if rparen && rparen.type == "ParseError" {
+            return rparen;
+        }
+
+        let body = parseFunctionBlock(parser);
+        if body && body.type == "ParseError" {
+            return body;
+        }
+
+        let ctorNode = new Node("ConstructorStatement");
+        ctorNode.parameters = params;
+        ctorNode.body = body;
+        return ctorNode;
+    }
+    
     # 检查是否是 micro 方法
     if parser.current_token.type == "MICRO" {
         advance(parser); # skip 'micro'
@@ -717,7 +879,7 @@ micro parseClassMember(parser) {
             i = i + 1;
         }
 
-        let methodNode = makeNode("MemberStatement");
+        let methodNode = new Node("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
         methodNode.body = body;
@@ -752,7 +914,7 @@ micro parseClassMember(parser) {
                     return semicolon;
                 }
 
-                let node = makeNode("Property");
+                let node = new Node("Property");
                 node.name = name.value;
                 node.initializer = initValue;
                 return node;
@@ -796,7 +958,7 @@ micro parseFunctionDeclaration(parser) {
         return body;
     }
 
-    let node = makeNode("MicroDeclaration");
+    let node = new Node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.body = body;
@@ -815,7 +977,7 @@ micro parseIfStatement(parser) {
         return thenBranch;
     }
 
-    let node = makeNode("IfStatement");
+    let node = new Node("IfStatement");
     node.condition = condition;
     node.thenBranch = thenBranch;
     node.elseBranch = null;
@@ -844,7 +1006,7 @@ micro parseWhileStatement(parser) {
         return body;
     }
 
-    let node = makeNode("WhileStatement");
+    let node = new Node("WhileStatement");
     node.condition = condition;
     node.body = body;
     return node;
@@ -853,7 +1015,7 @@ micro parseWhileStatement(parser) {
 micro parseReturnStatement(parser) {
     advance(parser); # skip 'return'
 
-    let node = makeNode("ReturnStatement");
+    let node = new Node("ReturnStatement");
 
     if parser.current_token.type == "SEMICOLON" {
         node.value = null;
@@ -894,7 +1056,7 @@ micro parseFunctionBlock(parser) {
         return rbrace;
     }
     
-    let node = makeNode("Block");
+    let node = new Node("Block");
     node.statements = statements;
     return node;
 }
@@ -910,12 +1072,12 @@ micro parseProgram(parser) {
         statements.push(stmt);
     }
     
-    let node = makeNode("Program");
+    let node = new Node("Program");
     node.statements = statements;
     return node;
 }
 
 micro parse(tokens) {
-    let parser = makeParser(tokens);
+    let parser = new ValkyrieParser(tokens);
     return parseProgram(parser);
 }

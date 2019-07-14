@@ -1,0 +1,17 @@
+namespace app::main;
+
+using math::operations::add;
+using math::operations::MathHelper;
+
+micro runApp() {
+    let result = add(10, 20);
+    let helper = new MathHelper();
+    let result2 = helper.compute(5, 15);
+    
+    console.log("Result 1: " + result);
+    console.log("Result 2: " + result2);
+    
+    return result + result2;
+}
+
+runApp();

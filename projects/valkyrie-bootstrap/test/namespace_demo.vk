@@ -1,0 +1,31 @@
+namespace demo::showcase;
+
+using math::utils::add;
+
+# 演示 namespace 和 using 机制
+micro demonstrateNamespace() {
+    console.log("Namespace demo starting...");
+    
+    # 创建一个简单的计算器类
+    let calc = new SimpleCalculator();
+    let result = calc.calculate(10, 5);
+    
+    console.log("Calculation result: " + result);
+    return result;
+}
+
+class SimpleCalculator {
+    micro calculate(self, a, b) {
+        # 在实际的 namespace 实现中，这里会调用 add 函数
+        # 目前作为演示，直接使用加法
+        return a + b;
+    }
+    
+    micro getVersion(self) {
+        return "1.0.0";
+    }
+}
+
+# 运行演示
+let result = demonstrateNamespace();
+console.log("Final result: " + result);

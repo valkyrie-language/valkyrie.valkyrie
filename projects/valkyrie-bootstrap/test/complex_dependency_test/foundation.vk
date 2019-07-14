@@ -1,0 +1,42 @@
+# 复杂依赖测试 - 基础层
+# 最底层的模块，不依赖其他模块
+
+namespace foundation::core;
+
+# 基础工具函数
+micro isEven(number) {
+    return number % 2 == 0;
+}
+
+micro isOdd(number) {
+    return number % 2 == 1;
+}
+
+micro max(a, b) {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+
+micro min(a, b) {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+
+# 字符串工具
+micro concat(str1, str2) {
+    return str1 + str2;
+}
+
+micro repeat(str, times) {
+    let result = "";
+    let i = 0;
+    while i < times {
+        result = concat(result, str);
+        i = i + 1;
+    }
+    return result;
+}

@@ -1,0 +1,23 @@
+# 循环依赖测试 - 主文件
+# 这个文件应该触发循环依赖检测
+
+namespace! circular::main;
+
+using circular::module_a;
+using circular::module_b;
+
+# 测试循环依赖
+micro testCircularDependency() {
+    # 这些调用应该触发循环依赖错误
+    let resultA = functionA();
+    let resultB = functionB();
+    
+    console.log("Result A: " + resultA);
+    console.log("Result B: " + resultB);
+    
+    return resultA + " | " + resultB;
+}
+
+# 执行测试
+let result = testCircularDependency();
+console.log("Circular dependency test result: " + result);

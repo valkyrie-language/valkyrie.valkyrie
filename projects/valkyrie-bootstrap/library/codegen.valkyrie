@@ -1,6 +1,22 @@
 namespace package::codegen;
 
+using package::compiler::joinPath;
+
 # Valkyrie 代码生成器 - 超简单版本
+
+# joinPath 函数定义（在单文件编译中需要）
+micro joinPath(pathArray, separator) {
+    let result = "";
+    let i = 0;
+    while i < pathArray.length {
+        if i > 0 {
+            result = result + separator;
+        }
+        result = result + pathArray[i];
+        i = i + 1;
+    }
+    return result;
+}
 
 micro replaceAll(str, search, replace) {
     let result = "";
@@ -8,10 +24,12 @@ micro replaceAll(str, search, replace) {
     while i < str.length {
         if str[i] == search {
             result = result + replace;
+            i = i + search.length;
         } else {
+            # 没有匹配，添加当前字符
             result = result + str[i];
+            i = i + 1;
         }
-        i = i + 1;
     }
     return result;
 }
@@ -70,11 +88,10 @@ micro generateExpression(node) {
         
         let i = 0;
         while i < node.arguments.length {
-            let arg = generateExpression(node.arguments[i]);
-            args = args + arg;
-            if i < node.arguments.length - 1 {
+            if i > 0 {
                 args = args + ", ";
             }
+            args = args + generateExpression(node.arguments[i]);
             i = i + 1;
         }
         
@@ -86,11 +103,10 @@ micro generateExpression(node) {
         
         let i = 0;
         while i < node.arguments.length {
-            let arg = generateExpression(node.arguments[i]);
-            args = args + arg;
-            if i < node.arguments.length - 1 {
+            if i > 0 {
                 args = args + ", ";
             }
+            args = args + generateExpression(node.arguments[i]);
             i = i + 1;
         }
         
@@ -123,7 +139,21 @@ micro generateExpression(node) {
     }
     
     if node.type == "ObjectLiteral" {
-        return "{}";
+        if node.properties.length == 0 {
+            return "{}";
+        }
+        let result = "{";
+        let i = 0;
+        while i < node.properties.length {
+            let prop = node.properties[i];
+            if i > 0 {
+                result = result + ", ";
+            }
+            result = result + "\"" + prop.key + "\": " + generateExpression(prop.value);
+            i = i + 1;
+        }
+        result = result + "}";
+        return result;
     }
     
     if node.type == "ArrayLiteral" {
@@ -136,7 +166,7 @@ micro generateExpression(node) {
     }
     
     if node.type == "ThisExpression" {
-        return "self";
+        return "this";
     }
     
     if node.type == "DefaultValue" {
@@ -153,13 +183,28 @@ micro generateStatement(node) {
     }
 
     if node.type == "NamespaceStatement" {
-        # TODO 处理 namespace 语句
-        return "";
+        # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
+        let namespacePath = joinPath(node.path, "::");
+        if node.isMainNamespace {
+            return "// namespace! " + namespacePath + ";";
+        } else {
+            return "// namespace " + namespacePath + ";";
+        }
     }
 
     if node.type == "UsingStatement" {
-        # TODO 处理 using 语句
-        return "";
+        # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
+        return "// using " + joinPath(node.path, "::") + ";";
+    }
+
+    if node.type == "JSAttributeStatement" {
+        # 生成 JS 导入语句：import {importName as functionName} from "modulePath"
+        return "import { " + node.importName + " as " + node.functionName + " } from \"" + node.modulePath + "\";";
+    }
+
+    if node.type == "ImportJsStatement" {
+        # 生成 JS 导入语句：import {importName as localName} from "module"
+        return "import { " + node.importName + " as " + node.localName + " } from \"" + node.module + "\";";
     }
 
     if node.type == "MicroDeclaration" {
@@ -174,7 +219,9 @@ micro generateStatement(node) {
         }
         
         let body = generateStatement(node.body);
-        return "export function " + node.name + "(" + params + ") " + body;
+        # 直接使用 name 字段（已经是解析后的名称）
+        let functionName = node.name;
+        return "export function " + functionName + "(" + params + ") " + body;
     }
     
     if node.type == "MemberStatement" {
@@ -238,41 +285,110 @@ micro generateStatement(node) {
         return generateExpression(node.expression) + ";";
     }
     
+    if node.type == "NamespaceStatement" {
+        # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
+        return "// namespace " + joinPath(node.path, "::") + ";";
+    }
+    
+    if node.type == "UsingStatement" {
+        # using 语句在单文件编译中被忽略，在多文件编译中用于符号导入
+        return "// using " + joinPath(node.path, "::") + ";";
+    }
+    
+    if node.type == "JSAttributeStatement" {
+        # 生成 JS 导入语句和函数定义
+        let cleanImportName = replaceAll(node.importName, "-", "_");
+        cleanImportName = replaceAll(cleanImportName, ".", "_");
+        cleanImportName = replaceAll(cleanImportName, "/", "_");
+        let uniqueName = node.functionName + "_" + cleanImportName;
+        let importStatement = "import { " + node.importName + " as " + uniqueName + " } from \"" + node.modulePath + "\";";
+        
+        # 生成函数包装
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            params = params + node.parameters[i];
+            i = i + 1;
+        }
+        
+        let functionDef = "export function " + node.functionName + "(" + params + ") {\n";
+        functionDef = functionDef + "  return " + uniqueName + "(" + params + ");\n";
+        functionDef = functionDef + "}";
+        
+        return importStatement + "\n" + functionDef;
+    }
+    
     if node.type == "ClassDeclaration" {
+        # 直接使用 name 字段（已经是解析后的名称）
         let className = node.name;
         let superClass = node.superClass;
         let members = node.members;
         
-        let result = "";
+        let result = "class " + className;
         
-        # 收集字段初始化代码
+        # 添加继承
+        if superClass {
+            result = result + " extends " + superClass;
+        }
+        
+        result = result + " {\n";
+        
+        # 检查是否有显式构造函数
+        let hasExplicitConstructor = false;
+        let explicitConstructor = null;
         let fieldInits = "";
         let i = 0;
         while i < members.length {
             let member = members[i];
-            if member.type == "Property" {
+            if member.type == "ConstructorStatement" {
+                hasExplicitConstructor = true;
+                explicitConstructor = member;
+            } else if member.type == "Property" {
                 if member.initializer && member.initializer.type {
                     let initValue = generateExpression(member.initializer);
-                    fieldInits = fieldInits + "  this." + member.name + " = " + initValue + ";\n";
+                    fieldInits = fieldInits + "    self." + member.name + " = " + initValue + ";\n";
                 } else {
-                    fieldInits = fieldInits + "  this." + member.name + " = undefined;\n";
+                    fieldInits = fieldInits + "    self." + member.name + " = undefined;\n";
                 }
             }
             i = i + 1;
         }
         
-        # 生成类构造函数
-        if superClass {
-            result = result + "function " + className + "(args) {\n";
-            result = result + "  " + superClass + ".call(this, args);\n";
+        # 生成构造函数
+        if hasExplicitConstructor {
+            # 使用显式构造函数
+            let params = "";
+            let j = 0;
+            while j < explicitConstructor.parameters.length {
+                if j > 0 {
+                    params = params + ", ";
+                }
+                params = params + explicitConstructor.parameters[j];
+                j = j + 1;
+            }
+            result = result + "  constructor(" + params + ") {\n";
+            if superClass {
+                result = result + "    super();\n";
+            }
             result = result + fieldInits;
-            result = result + "}\n";
-            result = result + className + ".prototype = Object.create(" + superClass + ".prototype);\n";
-            result = result + className + ".prototype.constructor = " + className + ";\n";
-        } else {
-            result = result + "function " + className + "() {\n";
+            let ctorBody = generateStatement(explicitConstructor.body);
+            # 移除外层的大括号，只保留内容
+            if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
+                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+            }
+            result = result + ctorBody;
+            result = result + "  }\n\n";
+        } else if fieldInits != "" {
+            # 自动生成构造函数用于字段初始化
+            result = result + "  constructor() {\n";
+            if superClass {
+                result = result + "    super();\n";
+            }
             result = result + fieldInits;
-            result = result + "}\n";
+            result = result + "  }\n\n";
         }
         
         # 生成类方法
@@ -283,19 +399,25 @@ micro generateStatement(node) {
                 let methodName = member.name;
                 let params = "";
                 let j = 0;
+                let paramCount = 0;
                 while j < member.parameters.length {
-                    if j > 0 {
-                        params = params + ", ";
+                    # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
+                    if member.parameters[j] != "self" {
+                        if paramCount > 0 {
+                            params = params + ", ";
+                        }
+                        params = params + member.parameters[j];
+                        paramCount = paramCount + 1;
                     }
-                    params = params + member.parameters[j];
                     j = j + 1;
                 }
                 let body = generateStatement(member.body);
-                result = result + className + ".prototype." + methodName + " = function(" + params + ") " + body + "\n";
+                result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
             }
             i = i + 1;
         }
         
+        result = result + "}";
         return result;
     }
     

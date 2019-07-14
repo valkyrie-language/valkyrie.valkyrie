@@ -1,0 +1,21 @@
+namespace! app::main;
+
+using math::utils::add;
+using math::utils::Calculator;
+using data::processor::process;
+
+micro runAdvancedTest() {
+    let result1 = add(10, 20);  # 使用主空间的 add
+    let calc = new Calculator();
+    let result2 = calc.compute(5, 15);
+    let result3 = process(result1, result2);
+    
+    console.log("Advanced test results:");
+    console.log("Result 1: " + result1);
+    console.log("Result 2: " + result2);
+    console.log("Result 3: " + result3);
+    
+    return result3;
+}
+
+runAdvancedTest();

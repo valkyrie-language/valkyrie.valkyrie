@@ -1,0 +1,17 @@
+# 循环依赖测试 - 模块 B
+# 这个模块依赖模块 A，形成循环依赖
+
+namespace circular::module_b;
+
+using circular::module_a;
+
+# 模块 B 的函数，依赖模块 A
+micro functionB() {
+    let result = anotherFunctionA();
+    return "B called A: " + result;
+}
+
+# 模块 B 的另一个函数
+micro anotherFunctionB() {
+    return "This is function B";
+}

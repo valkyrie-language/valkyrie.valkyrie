@@ -1,0 +1,7 @@
+namespace! b;
+
+micro testFunctionB() {
+    return "Function from namespace b";
+}
+
+let result = testFunctionB();
