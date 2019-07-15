@@ -1,22 +1,6 @@
 namespace package::lexer;
 
 # Valkyrie 词法分析器 - 超简单版本
-
-micro initLexer(source) {
-    let lexer = {};
-    lexer.source = source;
-    lexer.position = 0;
-    lexer.line = 1;
-    lexer.column = 1;
-    lexer.current_char = "";
-
-    if source.length > 0 {
-        lexer.current_char = source.charAt(0);
-    }
-    return lexer;
-}
-
-
 class ValkyrieLexer {
     constructor(source) {
         self.source = source;
@@ -27,6 +11,22 @@ class ValkyrieLexer {
 
         if source.length > 0 {
             self.current_char = source.charAt(0);
+        }
+    }
+    micro advance(self) {
+        if self.current_char == "\n" {
+            self.line = self.line + 1;
+            self.column = 1;
+        } else {
+            self.column = self.column + 1;
+        }
+
+        self.position = self.position + 1;
+
+        if self.position >= self.source.length {
+            self.current_char = "";
+        } else {
+            self.current_char = self.source.charAt(self.position);
         }
     }
 }
@@ -40,26 +40,9 @@ class Token {
     }
 }
 
-micro advance(lexer) {
-    if lexer.current_char == "\n" {
-        lexer.line = lexer.line + 1;
-        lexer.column = 1;
-    } else {
-        lexer.column = lexer.column + 1;
-    }
-    
-    lexer.position = lexer.position + 1;
-    
-    if lexer.position >= lexer.source.length {
-        lexer.current_char = "";
-    } else {
-        lexer.current_char = lexer.source.charAt(lexer.position);
-    }
-}
-
 micro skipWhitespace(lexer) {
     while lexer.current_char != "" && isWhitespace(lexer.current_char) {
-        advance(lexer);
+        lexer.advance();
     }
 }
 
@@ -84,7 +67,7 @@ micro readIdentifier(lexer) {
     
     while lexer.current_char != "" && isAlphaNumeric(lexer.current_char) {
         result = result + lexer.current_char;
-        advance(lexer);
+        lexer.advance();
     }
     
     return result;
@@ -95,7 +78,7 @@ micro readNumber(lexer) {
     
     while lexer.current_char != "" && isDigit(lexer.current_char) {
         result = result + lexer.current_char;
-        advance(lexer);
+        lexer.advance();
     }
     
     return result;
@@ -103,11 +86,11 @@ micro readNumber(lexer) {
 
 micro readString(lexer) {
     let result = "";
-    advance(lexer); # skip opening quote
+    lexer.advance(); # skip opening quote
     
     while lexer.current_char != "" && lexer.current_char != "\"" {
         if lexer.current_char == "\\" {
-            advance(lexer); # consume '\'
+            lexer.advance(); # consume '\'
             if lexer.current_char == "n" {
                 result = result + "\n";
             } else {
@@ -132,11 +115,11 @@ micro readString(lexer) {
         } else {
             result = result + lexer.current_char;
         }
-        advance(lexer);
+        lexer.advance();
     }
     
     if lexer.current_char == "\"" {
-        advance(lexer); # skip closing quote
+        lexer.advance(); # skip closing quote
     }
     
     return result;
@@ -144,7 +127,7 @@ micro readString(lexer) {
 
 micro skipComment(lexer) {
     while lexer.current_char != "" && lexer.current_char != "\n" {
-        advance(lexer);
+        lexer.advance();
     }
 }
 
@@ -205,7 +188,7 @@ micro nextToken(lexer) {
         
         # Single character tokens
         let ch = lexer.current_char;
-        advance(lexer);
+        lexer.advance();
         
         if ch == "{" { return new Token("LBRACE", ch, line, column); }
         if ch == "}" { return new Token("RBRACE", ch, line, column); }
@@ -217,7 +200,7 @@ micro nextToken(lexer) {
         if ch == "," { return new Token("COMMA", ch, line, column); }
         if ch == ":" {
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == ":" {
-                advance(lexer);
+                lexer.advance();
                 return new Token("DOUBLE_COLON", "::", line, column);
             }
             return new Token("COLON", ch, line, column);
@@ -225,7 +208,7 @@ micro nextToken(lexer) {
         if ch == "=" {
             # 检查是否是 == 操作符
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer);
+                lexer.advance();
                 return new Token("EQ", "==", line, column);
             }
             return new Token("ASSIGN", ch, line, column);
@@ -238,7 +221,7 @@ micro nextToken(lexer) {
         if ch == "&" { 
             # 检查是否是 &&
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "&" {
-                advance(lexer); # 跳过第二个 &
+                lexer.advance(); # 跳过第二个 &
                 return new Token("AND", "&&", line, column);
             }
             return new Token("AMPERSAND", ch, line, column);
@@ -246,7 +229,7 @@ micro nextToken(lexer) {
         if ch == "|" { 
             # 检查是否是 ||
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "|" {
-                advance(lexer); # 跳过第二个 |
+                lexer.advance(); # 跳过第二个 |
                 return new Token("OR", "||", line, column);
             }
             return new Token("PIPE", ch, line, column);
@@ -254,7 +237,7 @@ micro nextToken(lexer) {
         if ch == ">" { 
             # 检查是否是 >=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer); # 跳过 =
+                lexer.advance(); # 跳过 =
                 return new Token("GTE", ">=", line, column);
             }
             return new Token("GT", ch, line, column);
@@ -262,7 +245,7 @@ micro nextToken(lexer) {
         if ch == "<" { 
             # 检查是否是 <=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer); # 跳过 =
+                lexer.advance(); # 跳过 =
                 return new Token("LTE", "<=", line, column);
             }
             return new Token("LT", ch, line, column);
@@ -270,7 +253,7 @@ micro nextToken(lexer) {
         if ch == "!" { 
             # 检查是否是 !=
             if lexer.position < lexer.source.length && lexer.source.charAt(lexer.position) == "=" {
-                advance(lexer); # 跳过 =
+                lexer.advance(); # 跳过 =
                 return new Token("NE", "!=", line, column);
             }
             return new Token("BANG", ch, line, column);

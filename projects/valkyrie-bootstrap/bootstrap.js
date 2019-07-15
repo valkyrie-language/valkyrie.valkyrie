@@ -65,8 +65,8 @@ export async function compileSourceWithCompiler(source, compilerParts) {
     const { compiler } = compilerParts;
     try {
         // Use the existing compiler function
-        if (typeof compiler.compileSourceText === "function") {
-            const result = compiler.compileSourceText(source);
+        if (typeof compiler.package_compiler_compileSourceText === "function") {
+            const result = compiler.package_compiler_compileSourceText(source);
             if (result.startsWith("Error:")) {
                 return {
                     success: false,
@@ -110,6 +110,58 @@ export async function compileFileWithCompiler(
         error(
             `Exception while compiling file ${path.relative(__dirname, inputPath)}: ${err.message}`
         );
+        return false;
+    }
+}
+
+// --- Single File Compilation Functions ---
+
+export function readLibraryFiles(libraryDir) {
+    const files = fs
+        .readdirSync(libraryDir)
+        .filter((f) => f.endsWith(".valkyrie"));
+    const fileContents = {};
+
+    for (const file of files) {
+        const filePath = path.join(libraryDir, file);
+        const content = fs.readFileSync(filePath, "utf8");
+        fileContents[file] = content;
+    }
+
+    return fileContents;
+}
+
+export async function generateSingleFileWithCompiler(
+    libraryDir,
+    outputPath,
+    compilerParts
+) {
+    try {
+        log(
+            `Generating single file from library: ${path.relative(__dirname, libraryDir)} -> ${path.relative(__dirname, outputPath)}`
+        );
+
+        const fileContents = readLibraryFiles(libraryDir);
+        const { compiler } = compilerParts;
+
+        // Use generateSingleJS function from the compiler
+        if (typeof compiler.package_compiler_generateSingleJS === "function") {
+            const result =
+                compiler.package_compiler_generateSingleJS(fileContents);
+
+            ensureDir(path.dirname(outputPath));
+            fs.writeFileSync(outputPath, result, "utf8");
+
+            const stats = fs.statSync(outputPath);
+            log(`Single file generated successfully (${stats.size} bytes)`);
+            return true;
+        } else {
+            throw new Error(
+                "package_compiler_generateSingleJS function not found in compiler module"
+            );
+        }
+    } catch (err) {
+        error(`Failed to generate single file: ${err.message}`);
         return false;
     }
 }
@@ -334,9 +386,9 @@ export function compareDirectories(dir1, dir2) {
 
 // --- Bootstrap Process ---
 async function loadThisGenerationCompiler() {
-    log("Loading bootstrap compiler...");
+    log("Loading bootstrap compiler from compiled index.js...");
     const bootstrapCompiler = await import(
-        pathToFileURL(path.join(PATHS.bootstrap, "compiler.js")).href
+        pathToFileURL(path.join(PATHS.bootstrap, "index.js")).href
     );
     log("Bootstrap compiler loaded.");
 
@@ -346,9 +398,9 @@ async function loadThisGenerationCompiler() {
 }
 
 async function loadNextGenerationCompiler() {
-    log("Loading stage-0 compiler...");
+    log("Loading stage-0 compiler from single-file index.js...");
     const stage0Compiler = await import(
-        pathToFileURL(path.join(PATHS.stage0, "compiler.js")).href
+        pathToFileURL(path.join(PATHS.stage0, "index.js")).href
     );
     log("Stage-0 compiler loaded.");
 
@@ -361,45 +413,61 @@ async function bootstrap() {
     log("Starting Valkyrie language bootstrap process...");
 
     try {
-        // Load the initial compiler parts from the bootstrap directory
+        // Load the initial compiler from the bootstrap directory
         const bootstrapCompilerParts = await loadThisGenerationCompiler();
 
         // Step 1: Clean output directories
         log("Step 1: Cleaning output directories");
         cleanDir(PATHS.dist);
         ensureDir(PATHS.dist);
+        ensureDir(PATHS.stage0);
+        ensureDir(PATHS.stage1);
 
-        // TODO: remove step2, No longer generate separate js files
-        // Step 2: Use bootstrap compiler to compile library to stage-0
-        log("Step 2: Compiling library with bootstrap compiler to stage-0");
+        // Step 2: Use bootstrap compiler to generate stage-0 single file
+        log("Step 2: Generating stage-0 single file with bootstrap compiler");
+        const stage0OutputPath = path.join(PATHS.stage0, "index.js");
         if (
-            !(await compileDirectory(
+            !(await generateSingleFileWithCompiler(
                 PATHS.library,
-                PATHS.stage0,
+                stage0OutputPath,
                 bootstrapCompilerParts
             ))
         ) {
             throw new Error("Stage-0 compilation failed");
         }
-        // Step 2.1: Directly generate a single integrated js file
 
-        // Step 3: Use stage-0 compiler to compile library to stage-1
-        log("Step 3: Compiling library with stage-0 compiler to stage-1");
+        // Step 3: Use stage-0 compiler to generate stage-1 single file
+        log("Step 3: Generating stage-1 single file with stage-0 compiler");
         const stage0CompilerParts = await loadNextGenerationCompiler();
-
+        const stage1OutputPath = path.join(PATHS.stage1, "index.js");
         if (
-            !(await compileDirectory(
+            !(await generateSingleFileWithCompiler(
                 PATHS.library,
-                PATHS.stage1,
+                stage1OutputPath,
                 stage0CompilerParts
             ))
         ) {
             throw new Error("Stage-1 compilation failed");
         }
 
-        // Step 4: Compare stage-0 and stage-1
+        // Step 4: Compare stage-0 and stage-1 single files
         log("Step 4: Comparing stage-0 and stage-1 outputs");
-        if (!compareDirectories(PATHS.stage0, PATHS.stage1)) {
+        const stage0Content = fs.readFileSync(stage0OutputPath, "utf8");
+        const stage1Content = fs.readFileSync(stage1OutputPath, "utf8");
+
+        if (stage0Content !== stage1Content) {
+            const diffPath = path.join(PATHS.dist, "bootstrap_diff.txt");
+            const diffContent = generateDetailedDiff(
+                stage0Content,
+                stage1Content,
+                "index.js"
+            );
+            fs.writeFileSync(diffPath, diffContent, "utf8");
+
+            log(`Stage-0 size: ${stage0Content.length} bytes`);
+            log(`Stage-1 size: ${stage1Content.length} bytes`);
+            log(`Diff saved to: ${path.relative(__dirname, diffPath)}`);
+
             throw new Error(
                 "Bootstrap verification failed: stage-0 and stage-1 differ"
             );
@@ -417,11 +485,15 @@ async function bootstrap() {
         );
         copyDir(PATHS.bootstrap, backupPath);
 
-        cleanDir(PATHS.bootstrap);
-        copyDir(PATHS.stage1, PATHS.bootstrap);
+        // Copy the new single file to bootstrap directory
+        const newBootstrapPath = path.join(PATHS.bootstrap, "index.js");
+        fs.copyFileSync(stage1OutputPath, newBootstrapPath);
 
         log("🎉 Bootstrap completed successfully!");
         log("The Valkyrie compiler has successfully bootstrapped itself.");
+        log(
+            `New bootstrap compiler: ${path.relative(__dirname, newBootstrapPath)}`
+        );
 
         return true;
     } catch (err) {

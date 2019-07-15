@@ -1,15 +1,17 @@
+namespace package::compiler;
+using package::lexer::initLexer;
+using package::lexer::tokenize;
+using package::parser::parse;
+using package::codegen::generate;
+using package::lexer::Token;
+
 # Valkyrie 编译器核心模块
 # 提供词法分析、语法分析、代码生成和多文件编译功能
 
-# 导入必要的模块
-let lexerNS = import("./lexer.js").await;
-let parserNS = import("./parser.js").await;
-let codegenNS = import("./codegen.js").await;
-
 # 编译器主函数
 micro compile(compiler) {
-    let lexer = lexerNS.initLexer(compiler.source);
-    let tokens = lexerNS.tokenize(lexer);
+    let lexer = new ValkyrieLexer(compiler.source);
+    let tokens = tokenize(lexer);
     
     if tokens.length == 0 {
         if compiler.source == "" {
@@ -18,7 +20,7 @@ micro compile(compiler) {
         return "Error: Lexical analysis failed";
     }
     
-    let ast = parserNS.parse(tokens);
+    let ast = parse(tokens);
     if ast.type == "" || ast.type == "ParseError" {
         return "Error: Syntax analysis failed";
     }
@@ -26,10 +28,10 @@ micro compile(compiler) {
     # 如果是多文件模式，使用命名空间解析
     if compiler.multiFile {
         let resolvedAst = resolveMultipleNamespaces(ast);
-        return codegenNS.generate(resolvedAst);
+        return generate(resolvedAst);
     }
     
-    return codegenNS.generate(ast);
+    return generate(ast);
 }
 
 # 创建编译器错误对象
@@ -162,8 +164,8 @@ micro compileSourceWithOptions(source, outputFormat, optimize, debug) {
 
 # 语法验证
 micro validateSyntax(source) {
-    let lexer = lexerNS.initLexer(source);
-    let tokens = lexerNS.tokenize(lexer);
+    let lexer = new ValkyrieLexer(source);
+    let tokens = tokenize(lexer);
     
     if tokens.length == 0 {
         return {
@@ -172,7 +174,7 @@ micro validateSyntax(source) {
         };
     }
     
-    let ast = parserNS.parse(tokens);
+    let ast = parse(tokens);
     if ast.type == "" || ast.type == "ParseError" {
         return {
             "valid": false,
@@ -219,6 +221,9 @@ micro setCompileMode(manager, mode) {
 
 # 检查是否为主命名空间
 micro isMainNamespace(namespacePath) {
+    if namespacePath == null {
+        return false;
+    }
     return namespacePath.endsWith("!");
 }
 
@@ -337,9 +342,27 @@ micro resolveSymbol(manager, symbolName, currentNamespace, currentFile) {
     };
 }
 
+# 查找符号所属的命名空间
+micro findSymbolNamespace(manager, symbolName, symbolType) {
+    let namespaceKeys = Object.keys(manager.namespaces);
+    let i = 0;
+    while i < namespaceKeys.length {
+        let namespaceName = namespaceKeys[i];
+        let namespaceData = manager.namespaces[namespaceName];
+        if namespaceData != null && namespaceData.symbols != null {
+            let symbol = namespaceData.symbols[symbolName];
+            if symbol != null && symbol.type == symbolType {
+                return namespaceName;
+            }
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
 # 获取完全限定名称
 micro getFullyQualifiedName(manager, symbolName, namespacePath) {
-    if namespacePath == "" {
+    if namespacePath == "" || namespacePath == null {
         return symbolName;
     }
     
@@ -349,8 +372,8 @@ micro getFullyQualifiedName(manager, symbolName, namespacePath) {
 
 # 编译源代码文本
 micro compileSourceText(sourceText) {
-    let lexer = lexerNS.initLexer(sourceText);
-    let tokens = lexerNS.tokenize(lexer);
+    let lexer = new ValkyrieLexer(sourceText);
+    let tokens = tokenize(lexer);
     
     if tokens.length == 0 {
         if sourceText == "" {
@@ -359,12 +382,12 @@ micro compileSourceText(sourceText) {
         return "Error: Lexical analysis failed";
     }
     
-    let ast = parserNS.parse(tokens);
+    let ast = parse(tokens);
     if ast.type == "" || ast.type == "ParseError" {
         return "Error: Syntax analysis failed";
     }
     
-    return codegenNS.generate(ast);
+    return generate(ast);
 }
 
 # 解析多个命名空间
@@ -480,15 +503,15 @@ micro compileFolderWithMode(fileContents, mode) {
         manager.currentFile = fileName;
         
         # 词法和语法分析
-        let lexerInstance = lexerNS.initLexer(content);
-        let tokens = lexerNS.tokenize(lexerInstance);
+        let lexerInstance = new ValkyrieLexer(content);
+        let tokens = tokenize(lexerInstance);
         
         if tokens.length == 0 {
             i = i + 1;
             continue;
         }
         
-        let ast = parserNS.parse(tokens);
+        let ast = parse(tokens);
         if ast.type != "Program" {
             return "Error: Failed to parse " + fileName;
         }
@@ -542,14 +565,17 @@ micro compileFolderWithMode(fileContents, mode) {
                 jsImportStatements.push(stmt);
                 
             } else if stmt.type == "LetStatement" {
+                stmt.sourceNamespace = currentNamespace;
                 variableStatements.push(stmt);
                 addSymbolToNamespace(manager, currentNamespace, stmt.name, "variable", stmt, fileName);
                 
             } else if stmt.type == "MicroDeclaration" {
+                stmt.sourceNamespace = currentNamespace;
                 functionStatements.push(stmt);
                 addSymbolToNamespace(manager, currentNamespace, stmt.name, "function", stmt, fileName);
                 
             } else if stmt.type == "ClassDeclaration" {
+                stmt.sourceNamespace = currentNamespace;
                 classStatements.push(stmt);
                 addSymbolToNamespace(manager, currentNamespace, stmt.name, "class", stmt, fileName);
                 
@@ -653,7 +679,7 @@ micro compileFolderWithMode(fileContents, mode) {
         r = r + 1;
     }
     
-    return codegenNS.generate(integratedAst);
+    return generate(integratedAst);
 }
 
 # 简化的多文件编译接口
@@ -774,7 +800,7 @@ micro resolveMultipleNamespacesAndGenerate(ast) {
         q = q + 1;
     }
     
-    return codegenNS.generate(integratedAst);
+    return generate(integratedAst);
 }
 
 # 生成简单块语句
@@ -784,8 +810,8 @@ micro generateSimpleBlock(blockStmt) {
 
 # 单文件编译器 - 解决跨模块调用问题的完整解决方案
 micro compileSingleFileWithImports(sourceText) {
-    let lexerInstance = lexerNS.initLexer(sourceText);
-    let tokens = lexerNS.tokenize(lexerInstance);
+    let lexerInstance = new ValkyrieLexer(sourceText);
+    let tokens = tokenize(lexerInstance);
     
     if tokens.length == 0 {
         if sourceText == "" {
@@ -794,7 +820,7 @@ micro compileSingleFileWithImports(sourceText) {
         return "Error: Lexical analysis failed";
     }
     
-    let ast = parserNS.parse(tokens);
+    let ast = parse(tokens);
     if ast.type == "" || ast.type == "ParseError" {
         return "Error: Syntax analysis failed";
     }
@@ -805,8 +831,8 @@ micro compileSingleFileWithImports(sourceText) {
 
 # 基于 compileFolderWithMode 的单文件编译器
 micro compileSingleFileComplete(sourceText) {
-    let lexerInstance = lexerNS.initLexer(sourceText);
-    let tokens = lexerNS.tokenize(lexerInstance);
+    let lexerInstance = new ValkyrieLexer(sourceText);
+    let tokens = tokenize(lexerInstance);
     
     if tokens.length == 0 {
         if sourceText == "" {
@@ -815,7 +841,7 @@ micro compileSingleFileComplete(sourceText) {
         return "Error: Lexical analysis failed";
     }
     
-    let ast = parserNS.parse(tokens);
+    let ast = parse(tokens);
     if ast.type == "" || ast.type == "ParseError" {
         return "Error: Syntax analysis failed";
     }
@@ -851,12 +877,15 @@ micro compileSingleFileComplete(sourceText) {
             jsImportStatements.push(stmt);
             
         } else if stmt.type == "LetStatement" {
+            stmt.sourceNamespace = currentNamespace;
             variableStatements.push(stmt);
             
         } else if stmt.type == "MicroDeclaration" {
+            stmt.sourceNamespace = currentNamespace;
             functionStatements.push(stmt);
             
         } else if stmt.type == "ClassDeclaration" {
+            stmt.sourceNamespace = currentNamespace;
             classStatements.push(stmt);
             
         } else {
@@ -871,7 +900,7 @@ micro compileSingleFileComplete(sourceText) {
     let j = 0;
     while j < functionStatements.length {
         let funcStmt = functionStatements[j];
-        let uniqueName = getFullyQualifiedName(manager, funcStmt.name, currentNamespace);
+        let uniqueName = getFullyQualifiedName(manager, funcStmt.name, funcStmt.sourceNamespace);
         uniqueNames[funcStmt.name] = uniqueName;
         funcStmt.uniqueName = uniqueName;
         j = j + 1;
@@ -880,7 +909,7 @@ micro compileSingleFileComplete(sourceText) {
     let k = 0;
     while k < classStatements.length {
         let classStmt = classStatements[k];
-        let uniqueName = getFullyQualifiedName(manager, classStmt.name, currentNamespace);
+        let uniqueName = getFullyQualifiedName(manager, classStmt.name, classStmt.sourceNamespace);
         uniqueNames[classStmt.name] = uniqueName;
         classStmt.uniqueName = uniqueName;
         k = k + 1;
@@ -889,7 +918,7 @@ micro compileSingleFileComplete(sourceText) {
     let l = 0;
     while l < variableStatements.length {
         let varStmt = variableStatements[l];
-        let uniqueName = getFullyQualifiedName(manager, varStmt.name, currentNamespace);
+        let uniqueName = getFullyQualifiedName(manager, varStmt.name, varStmt.sourceNamespace);
         uniqueNames[varStmt.name] = uniqueName;
         varStmt.uniqueName = uniqueName;
         l = l + 1;
@@ -930,7 +959,7 @@ micro compileSingleFileComplete(sourceText) {
         q = q + 1;
     }
     
-    return codegenNS.generate(integratedAst);
+    return generate(integratedAst);
 }
 
 # 生成单一JS文件的主函数
@@ -950,11 +979,11 @@ micro generateSingleJSFromAnalysis(fileContents, mode) {
         
         analyzer.dependencies[fileName] = [];
         
-        let lexerInstance = lexerNS.initLexer(content);
-        let tokens = lexerNS.tokenize(lexerInstance);
+        let lexerInstance = new ValkyrieLexer(content);
+        let tokens = tokenize(lexerInstance);
         
         if tokens.length > 0 {
-            let ast = parserNS.parse(tokens);
+            let ast = parse(tokens);
             
             if ast.type == "Program" {
                 let j = 0;
@@ -1000,15 +1029,15 @@ micro generateSingleJSFromAnalysis(fileContents, mode) {
         
         manager.currentFile = fileName;
         
-        let lexerInstance = lexerNS.initLexer(content);
-        let tokens = lexerNS.tokenize(lexerInstance);
+        let lexerInstance = new ValkyrieLexer(content);
+        let tokens = tokenize(lexerInstance);
         
         if tokens.length == 0 {
             k = k + 1;
             continue;
         }
         
-        let ast = parserNS.parse(tokens);
+        let ast = parse(tokens);
         if ast.type != "Program" {
             return "Error: Failed to parse " + fileName;
         }
@@ -1052,14 +1081,17 @@ micro generateSingleJSFromAnalysis(fileContents, mode) {
                 jsImportStatements.push(stmt);
                 
             } else if stmt.type == "LetStatement" {
+                stmt.sourceNamespace = currentNamespace;
                 variableStatements.push(stmt);
                 addSymbolToNamespace(manager, currentNamespace, stmt.name, "variable", stmt, fileName);
                 
             } else if stmt.type == "MicroDeclaration" {
+                stmt.sourceNamespace = currentNamespace;
                 functionStatements.push(stmt);
                 addSymbolToNamespace(manager, currentNamespace, stmt.name, "function", stmt, fileName);
                 
             } else if stmt.type == "ClassDeclaration" {
+                stmt.sourceNamespace = currentNamespace;
                 classStatements.push(stmt);
                 addSymbolToNamespace(manager, currentNamespace, stmt.name, "class", stmt, fileName);
                 
@@ -1111,21 +1143,21 @@ micro generateSingleJSFromAnalysis(fileContents, mode) {
     let m = 0;
     while m < functionStatements.length {
         let funcStmt = functionStatements[m];
-        funcStmt.uniqueName = getFullyQualifiedName(manager, funcStmt.name, funcStmt["namespace"] || "");
+        funcStmt.uniqueName = getFullyQualifiedName(manager, funcStmt.name, funcStmt.sourceNamespace);
         m = m + 1;
     }
     
     let n = 0;
     while n < classStatements.length {
         let classStmt = classStatements[n];
-        classStmt.uniqueName = getFullyQualifiedName(manager, classStmt.name, classStmt["namespace"] || "");
+        classStmt.uniqueName = getFullyQualifiedName(manager, classStmt.name, classStmt.sourceNamespace);
         n = n + 1;
     }
     
     let o = 0;
     while o < variableStatements.length {
         let varStmt = variableStatements[o];
-        varStmt.uniqueName = getFullyQualifiedName(manager, varStmt.name, varStmt["namespace"] || "");
+        varStmt.uniqueName = getFullyQualifiedName(manager, varStmt.name, varStmt.sourceNamespace);
         o = o + 1;
     }
     
@@ -1143,29 +1175,59 @@ micro generateSingleJSFromAnalysis(fileContents, mode) {
     
     let q = 0;
     while q < variableStatements.length {
-        integratedAst.statements.push(variableStatements[q]);
+        let varStmt = variableStatements[q];
+        if varStmt.uniqueName != null && varStmt.uniqueName != varStmt.name {
+            # 创建一个副本并使用唯一名称
+            let modifiedStmt = Object.assign({}, varStmt);
+            modifiedStmt.name = varStmt.uniqueName;
+            integratedAst.statements.push(modifiedStmt);
+        } else {
+            integratedAst.statements.push(varStmt);
+        }
         q = q + 1;
     }
     
     let r = 0;
     while r < functionStatements.length {
-        integratedAst.statements.push(functionStatements[r]);
+        let funcStmt = functionStatements[r];
+        if funcStmt.uniqueName != null && funcStmt.uniqueName != funcStmt.name {
+            # 创建一个副本并使用唯一名称
+            let modifiedStmt = Object.assign({}, funcStmt);
+            modifiedStmt.name = funcStmt.uniqueName;
+            # 解析函数体内的标识符
+            modifiedStmt.body = resolveIdentifiersInStatement(funcStmt.body, manager, functionStatements, variableStatements, classStatements);
+            integratedAst.statements.push(modifiedStmt);
+        } else {
+            # 即使没有重命名，也要解析函数体内的标识符
+            let modifiedStmt = Object.assign({}, funcStmt);
+            modifiedStmt.body = resolveIdentifiersInStatement(funcStmt.body, manager, functionStatements, variableStatements, classStatements);
+            integratedAst.statements.push(modifiedStmt);
+        }
         r = r + 1;
     }
     
     let s = 0;
     while s < classStatements.length {
-        integratedAst.statements.push(classStatements[s]);
+        let classStmt = classStatements[s];
+        if classStmt.uniqueName != null && classStmt.uniqueName != classStmt.name {
+            # 创建一个副本并使用唯一名称
+            let modifiedStmt = Object.assign({}, classStmt);
+            modifiedStmt.name = classStmt.uniqueName;
+            integratedAst.statements.push(modifiedStmt);
+        } else {
+            integratedAst.statements.push(classStmt);
+        }
         s = s + 1;
     }
     
     let t = 0;
     while t < executionStatements.length {
-        integratedAst.statements.push(executionStatements[t]);
+        let resolvedStmt = resolveIdentifiersInStatement(executionStatements[t], manager, functionStatements, variableStatements, classStatements);
+        integratedAst.statements.push(resolvedStmt);
         t = t + 1;
     }
     
-    return codegenNS.generate(integratedAst);
+    return generate(integratedAst);
 }
 
 # REPL模式的单一JS文件生成
@@ -1194,11 +1256,11 @@ micro findNamespaceProvider(namespacePath, fileContents) {
         let fileName = fileNames[i];
         let content = fileContents[fileName];
         
-        let lexerInstance = lexerNS.initLexer(content);
-        let tokens = lexerNS.tokenize(lexerInstance);
+        let lexerInstance = new ValkyrieLexer(content);
+        let tokens = tokenize(lexerInstance);
         
         if tokens.length > 0 {
-            let ast = parserNS.parse(tokens);
+            let ast = parse(tokens);
             
             if ast.type == "Program" {
                 let j = 0;
@@ -1248,6 +1310,182 @@ micro topologicalSort(analyzer, fileContents) {
         "error": null,
         "sorted": sorted
     };
+}
+
+# 递归解析表达式中的标识符
+micro resolveIdentifiersInExpression(expr, manager, functionStatements, variableStatements, classStatements) {
+    if expr == null {
+        return expr;
+    }
+    
+    if expr.type == "Identifier" {
+        # 查找是否是函数调用
+        let i = 0;
+        while i < functionStatements.length {
+            let funcStmt = functionStatements[i];
+            if funcStmt.name == expr.name && funcStmt.uniqueName != null {
+                let resolvedExpr = Object.assign({}, expr);
+                resolvedExpr.name = funcStmt.uniqueName;
+                return resolvedExpr;
+            }
+            i = i + 1;
+        }
+        
+        # 查找是否是变量
+        let j = 0;
+        while j < variableStatements.length {
+            let varStmt = variableStatements[j];
+            if varStmt.name == expr.name && varStmt.uniqueName != null {
+                let resolvedExpr = Object.assign({}, expr);
+                resolvedExpr.name = varStmt.uniqueName;
+                return resolvedExpr;
+            }
+            j = j + 1;
+        }
+        
+        return expr;
+    }
+    
+    if expr.type == "MicroCall" {
+        let resolvedExpr = Object.assign({}, expr);
+        
+        # 特殊处理函数名的 namespace 解析
+        if expr.callee.type == "Identifier" {
+            let functionName = expr.callee.name;
+            let i = 0;
+            while i < functionStatements.length {
+                let funcStmt = functionStatements[i];
+                if funcStmt.name == functionName && funcStmt.uniqueName != null {
+                    let resolvedCallee = Object.assign({}, expr.callee);
+                    resolvedCallee.name = funcStmt.uniqueName;
+                    resolvedExpr.callee = resolvedCallee;
+                    break;
+                }
+                i = i + 1;
+            }
+            if i == functionStatements.length {
+                resolvedExpr.callee = resolveIdentifiersInExpression(expr.callee, manager, functionStatements, variableStatements, classStatements);
+            }
+        } else {
+            resolvedExpr.callee = resolveIdentifiersInExpression(expr.callee, manager, functionStatements, variableStatements, classStatements);
+        }
+        
+        let resolvedArgs = [];
+        let k = 0;
+        while k < expr.arguments.length {
+            resolvedArgs.push(resolveIdentifiersInExpression(expr.arguments[k], manager, functionStatements, variableStatements, classStatements));
+            k = k + 1;
+        }
+        resolvedExpr.arguments = resolvedArgs;
+        return resolvedExpr;
+    }
+    
+    if expr.type == "BinaryOp" {
+        let resolvedExpr = Object.assign({}, expr);
+        resolvedExpr.left = resolveIdentifiersInExpression(expr.left, manager, functionStatements, variableStatements, classStatements);
+        resolvedExpr.right = resolveIdentifiersInExpression(expr.right, manager, functionStatements, variableStatements, classStatements);
+        return resolvedExpr;
+    }
+    
+    if expr.type == "Assignment" {
+        let resolvedExpr = Object.assign({}, expr);
+        resolvedExpr.left = resolveIdentifiersInExpression(expr.left, manager, functionStatements, variableStatements, classStatements);
+        resolvedExpr.right = resolveIdentifiersInExpression(expr.right, manager, functionStatements, variableStatements, classStatements);
+        return resolvedExpr;
+    }
+    
+    if expr.type == "PropertyAccess" {
+        let resolvedExpr = Object.assign({}, expr);
+        resolvedExpr.object = resolveIdentifiersInExpression(expr.object, manager, functionStatements, variableStatements, classStatements);
+        return resolvedExpr;
+    }
+    
+    if expr.type == "NewExpression" {
+        let resolvedExpr = Object.assign({}, expr);
+        
+        # 解析 className，查找是否需要添加 namespace 前缀
+        let m = 0;
+        while m < classStatements.length {
+            let classStmt = classStatements[m];
+            if classStmt.name == expr.className && classStmt.uniqueName != null {
+                resolvedExpr.className = classStmt.uniqueName;
+                break;
+            }
+            m = m + 1;
+        }
+        
+        # 解析参数
+        let resolvedArgs = [];
+        if expr.arguments != null {
+            let n = 0;
+            while n < expr.arguments.length {
+                resolvedArgs.push(resolveIdentifiersInExpression(expr.arguments[n], manager, functionStatements, variableStatements, classStatements));
+                n = n + 1;
+            }
+        }
+        resolvedExpr.arguments = resolvedArgs;
+        return resolvedExpr;
+    }
+    
+    return expr;
+}
+
+# 递归解析语句中的标识符
+micro resolveIdentifiersInStatement(stmt, manager, functionStatements, variableStatements, classStatements) {
+    if stmt == null {
+        return stmt;
+    }
+    
+    if stmt.type == "LetStatement" {
+        let resolvedStmt = Object.assign({}, stmt);
+        resolvedStmt.value = resolveIdentifiersInExpression(stmt.value, manager, functionStatements, variableStatements, classStatements);
+        return resolvedStmt;
+    }
+    
+    if stmt.type == "ExpressionStatement" {
+        let resolvedStmt = Object.assign({}, stmt);
+        resolvedStmt.expression = resolveIdentifiersInExpression(stmt.expression, manager, functionStatements, variableStatements, classStatements);
+        return resolvedStmt;
+    }
+    
+    if stmt.type == "ReturnStatement" {
+        let resolvedStmt = Object.assign({}, stmt);
+        if stmt.value != null {
+            resolvedStmt.value = resolveIdentifiersInExpression(stmt.value, manager, functionStatements, variableStatements, classStatements);
+        }
+        return resolvedStmt;
+    }
+    
+    if stmt.type == "IfStatement" {
+        let resolvedStmt = Object.assign({}, stmt);
+        resolvedStmt.condition = resolveIdentifiersInExpression(stmt.condition, manager, functionStatements, variableStatements, classStatements);
+        resolvedStmt.thenBranch = resolveIdentifiersInStatement(stmt.thenBranch, manager, functionStatements, variableStatements, classStatements);
+        if stmt.elseBranch != null {
+            resolvedStmt.elseBranch = resolveIdentifiersInStatement(stmt.elseBranch, manager, functionStatements, variableStatements, classStatements);
+        }
+        return resolvedStmt;
+    }
+    
+    if stmt.type == "WhileStatement" {
+        let resolvedStmt = Object.assign({}, stmt);
+        resolvedStmt.condition = resolveIdentifiersInExpression(stmt.condition, manager, functionStatements, variableStatements, classStatements);
+        resolvedStmt.body = resolveIdentifiersInStatement(stmt.body, manager, functionStatements, variableStatements, classStatements);
+        return resolvedStmt;
+    }
+    
+    if stmt.type == "Block" {
+        let resolvedStmt = Object.assign({}, stmt);
+        let resolvedStatements = [];
+        let i = 0;
+        while i < stmt.statements.length {
+            resolvedStatements.push(resolveIdentifiersInStatement(stmt.statements[i], manager, functionStatements, variableStatements, classStatements));
+            i = i + 1;
+        }
+        resolvedStmt.statements = resolvedStatements;
+        return resolvedStmt;
+    }
+    
+    return stmt;
 }
 
 # 简化的DFS访问 (不检测循环依赖)

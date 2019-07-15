@@ -1,10 +1,7 @@
 namespace package::codegen;
 
-using package::compiler::joinPath;
-
 # Valkyrie 代码生成器 - 超简单版本
 
-# joinPath 函数定义（在单文件编译中需要）
 micro joinPath(pathArray, separator) {
     let result = "";
     let i = 0;
