@@ -1,0 +1,11 @@
+namespace package::compiler;
+
+# 创建编译统计信息
+class CompilerStatistics {
+    constructor() {
+        self.tokensCount = 0;
+        self.astNodesCount = 0;
+        self.compilationTime = 0;
+        self.outputSize = 0;
+    }
+}

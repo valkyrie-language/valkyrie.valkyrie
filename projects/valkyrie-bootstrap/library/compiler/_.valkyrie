@@ -1,0 +1,18 @@
+# Valkyrie 编译器核心模块
+# 提供词法分析、语法分析、代码生成和多文件编译功能
+namespace package::compiler;
+
+using package::lexer::tokenize;
+using package::parser::parse;
+using package::codegen::generate;
+using package::lexer::Token;
+
+# REPL模式的单一JS文件生成
+micro generate_single_js(file_contents) {
+    return compile_asts(file_contents, "repl");
+}
+
+# 标准模式的单一JS文件生成
+micro generate_single_js_standard(file_contents) {
+    return compile_asts(file_contents, "standard");
+}

@@ -1,0 +1,591 @@
+namespace package::parser;
+
+micro parseStatement(parser) {
+    # 检查 EOF
+    if parser.current_token.type == "EOF" {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Unexpected EOF in statement";
+        error.line = parser.current_token.line;
+        error.column = parser.current_token.column;
+        return error;
+    }
+
+    if parser.current_token.type == "NAMESPACE" {
+        return parseNamespaceStatement(parser);
+    }
+
+    if parser.current_token.type == "USING" {
+        return parseUsingStatement(parser);
+    }
+
+    if parser.current_token.type == "ATTRIBUTE" {
+        return parseAttributeStatement(parser);
+    }
+
+    if parser.current_token.type == "CLASS" {
+        return parseClassDeclaration(parser);
+    }
+
+    if parser.current_token.type == "LET" {
+        return parseLetStatement(parser);
+    }
+
+    if parser.current_token.type == "MICRO" {
+        # 检查是否是顶级 micro function
+        let nextIndex = parser.position + 1;
+        if nextIndex < parser.tokens.length && parser.tokens[nextIndex].type == "IDENTIFIER" {
+            let afterNameIndex = nextIndex + 1;
+            if afterNameIndex < parser.tokens.length && parser.tokens[afterNameIndex].type == "LPAREN" {
+                return parseMicroFunctionDeclaration(parser);
+            }
+        }
+        return parseFunctionDeclaration(parser);
+    }
+
+    if parser.current_token.type == "IF" {
+        return parseIfStatement(parser);
+    }
+
+    if parser.current_token.type == "WHILE" {
+        return parseWhileStatement(parser);
+    }
+
+    if parser.current_token.type == "RETURN" {
+        return parseReturnStatement(parser);
+    }
+
+    if parser.current_token.type == "LBRACE" {
+        return parseFunctionBlock(parser);
+    }
+
+    # 表达式语句
+    let expr = parseExpression(parser);
+
+    # 检查表达式是否有错误
+    if expr && expr.type == "ParseError" {
+        return expr;
+    }
+
+    let semicolon = parser.expect("SEMICOLON");
+    if semicolon && semicolon.type == "ParseError" {
+        return semicolon;
+    }
+
+    # 创建ExpressionStatement节点
+    let stmt = new Node("ExpressionStatement");
+    stmt.expression = expr;
+    return stmt;
+}
+
+micro parseLetStatement(parser) {
+    parser.advance(); # skip 'let'
+    let name = parser.expect("IDENTIFIER");
+    if name && name.type == "ParseError" {
+        return name;
+    }
+
+    let assignToken = parser.expect("ASSIGN");
+    if assignToken && assignToken.type == "ParseError" {
+        return assignToken;
+    }
+
+    let value = parseExpression(parser);
+    if value && value.type == "ParseError" {
+        return value;
+    }
+
+    let semicolon = parser.expect("SEMICOLON");
+    if semicolon && semicolon.type == "ParseError" {
+        return semicolon;
+    }
+
+    let node = new Node("LetStatement");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+
+micro parseNamespaceStatement(parser) {
+    parser.advance(); # skip 'namespace'
+    let path = [];
+    let isMainNamespace = false;
+
+    # 检查是否为主空间（namespace!）
+    if (parser.current_token.type == "BANG") {
+        parser.advance(); # skip '!'
+        isMainNamespace = true;
+    }
+
+    let identifier = parser.expect("IDENTIFIER");
+    if (identifier.type == "ParseError") { return identifier; }
+    path.push(identifier.value);
+
+    while (parser.current_token.type == "DOUBLE_COLON") {
+        parser.advance();
+        identifier = parser.expect("IDENTIFIER");
+        if (identifier.type == "ParseError") { return identifier; }
+        path.push(identifier.value);
+    }
+
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon.type == "ParseError") { return semicolon; }
+
+    let node = new Node("NamespaceStatement");
+    node.path = path;
+    node.isMainNamespace = isMainNamespace;
+    return node;
+}
+
+micro parseUsingStatement(parser) {
+    parser.advance(); # skip 'using'
+    let path = [];
+
+    let identifier = parser.expect("IDENTIFIER");
+    if (identifier.type == "ParseError") { return identifier; }
+    path.push(identifier.value);
+
+    while (parser.current_token.type == "DOUBLE_COLON") {
+        parser.advance();
+        identifier = parser.expect("IDENTIFIER");
+        if (identifier.type == "ParseError") { return identifier; }
+        path.push(identifier.value);
+    }
+
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon.type == "ParseError") { return semicolon; }
+
+    let node = new Node("UsingStatement");
+    node.path = path;
+    return node;
+}
+
+micro parseAttributeStatement(parser) {
+    parser.advance(); # skip '↯'
+
+    # 期望 js 标识符
+    let jsToken = parser.expect("IDENTIFIER");
+    if jsToken.type == "ParseError" { return jsToken; }
+    if jsToken.value != "js" {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Expected 'js' after ↯";
+        error.line = jsToken.line;
+        error.column = jsToken.column;
+        return error;
+    }
+
+    # 期望左括号
+    let lparen = parser.expect("LPAREN");
+    if lparen.type == "ParseError" { return lparen; }
+
+    # 期望模块路径字符串
+    let modulePath = parser.expect("STRING");
+    if modulePath.type == "ParseError" { return modulePath; }
+
+    # 期望逗号
+    let comma = parser.expect("COMMA");
+    if comma.type == "ParseError" { return comma; }
+
+    # 期望导入名称字符串
+    let importName = parser.expect("STRING");
+    if importName.type == "ParseError" { return importName; }
+
+    # 期望右括号
+    let rparen = parser.expect("RPAREN");
+    if rparen.type == "ParseError" { return rparen; }
+
+    # 期望 micro 函数声明
+    let microToken = parser.expect("MICRO");
+    if microToken.type == "ParseError" { return microToken; }
+
+    # 解析函数名
+    let functionName = parser.expect("IDENTIFIER");
+    if functionName.type == "ParseError" { return functionName; }
+
+    # 解析参数列表
+    let paramLparen = parser.expect("LPAREN");
+    if paramLparen.type == "ParseError" { return paramLparen; }
+
+    let parameters = [];
+    if parser.current_token.type != "RPAREN" {
+        let param = parser.expect("IDENTIFIER");
+        if param.type == "ParseError" { return param; }
+        parameters.push(param.value);
+
+        while parser.current_token.type == "COMMA" {
+            parser.advance(); # skip comma
+            param = parser.expect("IDENTIFIER");
+            if param.type == "ParseError" { return param; }
+            parameters.push(param.value);
+        }
+    }
+
+    let paramRparen = parser.expect("RPAREN");
+    if paramRparen.type == "ParseError" { return paramRparen; }
+
+    # 解析函数体
+    let body = parseStatement(parser);
+    if body.type == "ParseError" { return body; }
+
+    let node = new Node("JSAttributeStatement");
+    node.modulePath = modulePath.value;
+    node.importName = importName.value;
+    node.functionName = functionName.value;
+    node.parameters = parameters;
+    node.body = body;
+    return node;
+}
+
+# 解析顶级 micro function 语法: micro name(params) { ... }
+micro parseMicroFunctionDeclaration(parser) {
+    parser.advance(); # skip 'micro'
+    let name = parser.expect("IDENTIFIER");
+    if name && name.type == "ParseError" {
+        return name;
+    }
+
+    let lparen = parser.expect("LPAREN");
+    if lparen && lparen.type == "ParseError" {
+        return lparen;
+    }
+
+    let params = parseTermParameters(parser);
+    if params && params.type == "ParseError" {
+        return params;
+    }
+
+    let rparen = parser.expect("RPAREN");
+    if rparen && rparen.type == "ParseError" {
+        return rparen;
+    }
+
+    let body = parseFunctionBlock(parser);
+    if body && body.type == "ParseError" {
+        return body;
+    }
+
+    let node = new Node("MicroDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.body = body;
+    return node;
+}
+
+micro parseClassDeclaration(parser) {
+    parser.advance(); # skip 'class'
+    let name = parser.expect("IDENTIFIER");
+    if name && name.type == "ParseError" {
+        return name;
+    }
+
+    let node = new Node("ClassDeclaration");
+    node.name = name.value;
+    node.superClass = null;
+    node.members = [];
+
+    # 检查继承
+    if parser.current_token.type == "EXTENDS" {
+        parser.advance(); # skip 'extends'
+        let superName = parser.expect("IDENTIFIER");
+        if superName && superName.type == "ParseError" {
+            return superName;
+        }
+        node.superClass = superName.value;
+    }
+
+    let lbrace = parser.expect("LBRACE");
+    if lbrace && lbrace.type == "ParseError" {
+        return lbrace;
+    }
+
+    # 解析类成员
+    while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+        let member = parseClassMember(parser);
+        if member && member.type != "ParseError" {
+            node.members.push(member);
+        } else if member && member.type == "ParseError" {
+            return member;
+        }
+    }
+
+    let rbrace = parser.expect("RBRACE");
+    if rbrace && rbrace.type == "ParseError" {
+        return rbrace;
+    }
+
+    return node;
+}
+
+micro parseClassMember(parser) {
+    # 检查是否是构造函数
+    if parser.current_token.type == "CONSTRUCTOR" {
+        parser.advance(); # skip 'constructor'
+
+        let lparen = parser.expect("LPAREN");
+        if lparen && lparen.type == "ParseError" {
+            return lparen;
+        }
+
+        let params = parseTermParameters(parser);
+        if params && params.type == "ParseError" {
+            return params;
+        }
+
+        let rparen = parser.expect("RPAREN");
+        if rparen && rparen.type == "ParseError" {
+            return rparen;
+        }
+
+        let body = parseFunctionBlock(parser);
+        if body && body.type == "ParseError" {
+            return body;
+        }
+
+        let ctorNode = new Node("ConstructorStatement");
+        ctorNode.parameters = params;
+        ctorNode.body = body;
+        return ctorNode;
+    }
+
+    # 检查是否是 micro 方法
+    if parser.current_token.type == "MICRO" {
+        parser.advance(); # skip 'micro'
+        let name = parser.expect("IDENTIFIER");
+        if name && name.type == "ParseError" {
+            return name;
+        }
+
+        let lparen = parser.expect("LPAREN");
+        if lparen && lparen.type == "ParseError" {
+            return lparen;
+        }
+
+        let params = parseTermParameters(parser);
+        if params && params.type == "ParseError" {
+            return params;
+        }
+
+        let rparen = parser.expect("RPAREN");
+        if rparen && rparen.type == "ParseError" {
+            return rparen;
+        }
+
+        let body = parseFunctionBlock(parser);
+        if body && body.type == "ParseError" {
+            return body;
+        }
+
+        # 检查是否有 self 参数来判断是实例方法还是静态方法
+        let isInstanceMethod = false;
+        let i = 0;
+        while i < params.length {
+            if params[i] == "self" {
+                isInstanceMethod = true;
+                break;
+            }
+            i = i + 1;
+        }
+
+        let methodNode = new Node("MemberStatement");
+        methodNode.name = name.value;
+        methodNode.parameters = params;
+        methodNode.body = body;
+        methodNode.isInstanceMethod = isInstanceMethod;
+        methodNode.isStatic = !isInstanceMethod;
+        return methodNode;
+    }
+
+    # 检查是否是 field（标识符后面可能跟 = 或 ;）
+    if parser.current_token.type == "IDENTIFIER" {
+        let nextIndex = parser.position + 1;
+        if nextIndex < parser.tokens.length {
+            let next_token = parser.tokens[nextIndex];
+            if next_token.type == "ASSIGN" || next_token.type == "SEMICOLON" {
+                # 这是一个 field
+                let name = parser.expect("IDENTIFIER");
+                if name && name.type == "ParseError" {
+                    return name;
+                }
+
+                let initValue = null;
+                if parser.current_token.type == "ASSIGN" {
+                    parser.advance(); # skip '='
+                    initValue = parseExpression(parser);
+                    if initValue && initValue.type == "ParseError" {
+                        return initValue;
+                    }
+                }
+
+                let semicolon = parser.expect("SEMICOLON");
+                if semicolon && semicolon.type == "ParseError" {
+                    return semicolon;
+                }
+
+                let node = new Node("Property");
+                node.name = name.value;
+                node.initializer = initValue;
+                return node;
+            }
+        }
+    }
+
+    # 如果都不匹配，返回错误
+    let error = {};
+    error.type = "ParseError";
+    error.message = "Expected class member (field or method) but got " + parser.current_token.type;
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
+}
+
+micro parseFunctionDeclaration(parser) {
+    parser.advance(); # skip 'micro'
+    let name = parser.expect("IDENTIFIER");
+    if name && name.type == "ParseError" {
+        return name;
+    }
+
+    let lparen = parser.expect("LPAREN");
+    if lparen && lparen.type == "ParseError" {
+        return lparen;
+    }
+
+    let params = parseTermParameters(parser);
+    if params && params.type == "ParseError" {
+        return params;
+    }
+
+    let rparen = parser.expect("RPAREN");
+    if rparen && rparen.type == "ParseError" {
+        return rparen;
+    }
+
+    let body = parseFunctionBlock(parser);
+    if body && body.type == "ParseError" {
+        return body;
+    }
+
+    let node = new Node("MicroDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.body = body;
+    return node;
+}
+
+micro parseIfStatement(parser) {
+    parser.advance(); # skip 'if'
+    let condition = parseExpression(parser);
+    if condition && condition.type == "ParseError" {
+        return condition;
+    }
+
+    let thenBranch = parseStatement(parser);
+    if thenBranch && thenBranch.type == "ParseError" {
+        return thenBranch;
+    }
+
+    let node = new Node("IfStatement");
+    node.condition = condition;
+    node.thenBranch = thenBranch;
+    node.elseBranch = null;
+
+    if parser.current_token.type == "ELSE" {
+        parser.advance();
+        let elseBranch = parseStatement(parser);
+        if elseBranch && elseBranch.type == "ParseError" {
+            return elseBranch;
+        }
+        node.elseBranch = elseBranch;
+    }
+
+    return node;
+}
+
+micro parseWhileStatement(parser) {
+    parser.advance(); # skip 'while'
+    let condition = parseExpression(parser);
+    if condition && condition.type == "ParseError" {
+        return condition;
+    }
+
+    let body = parseFunctionBlock(parser);
+    if body && body.type == "ParseError" {
+        return body;
+    }
+
+    let node = new Node("WhileStatement");
+    node.condition = condition;
+    node.body = body;
+    return node;
+}
+
+micro parseReturnStatement(parser) {
+    parser.advance(); # skip 'return'
+
+    let node = new Node("ReturnStatement");
+
+    if parser.current_token.type == "SEMICOLON" {
+        node.value = null;
+    } else {
+        let value = parseExpression(parser);
+        if value && value.type == "ParseError" {
+            return value;
+        }
+        node.value = value;
+    }
+
+    let semicolon = parser.expect("SEMICOLON");
+    if semicolon && semicolon.type == "ParseError" {
+        return semicolon;
+    }
+
+    return node;
+}
+
+micro parseFunctionBlock(parser) {
+    let lbrace = parser.expect("LBRACE");
+    if lbrace && lbrace.type == "ParseError" {
+        return lbrace;
+    }
+
+    let statements = [];
+
+    while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+        let stmt = parseStatement(parser);
+        if stmt && stmt.type == "ParseError" {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+
+    let rbrace = parser.expect("RBRACE");
+    if rbrace && rbrace.type == "ParseError" {
+        return rbrace;
+    }
+
+    let node = new Node("Block");
+    node.statements = statements;
+    return node;
+}
+
+micro parseProgram(parser) {
+    let statements = [];
+
+    while parser.current_token.type != "EOF" {
+        let stmt = parseStatement(parser);
+        if stmt && stmt.type == "ParseError" {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+
+    let node = new Node("Program");
+    node.statements = statements;
+    return node;
+}
+
+micro parse(tokens) {
+    let parser = new ValkyrieParser(tokens);
+    return parseProgram(parser);
+}

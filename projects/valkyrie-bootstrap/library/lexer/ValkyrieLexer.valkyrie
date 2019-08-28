@@ -1,0 +1,273 @@
+namespace package::lexer;
+
+# Valkyrie 词法分析器
+class ValkyrieLexer {
+    constructor(source) {
+        self.source = source;
+        self.position = 0;
+        self.line = 1;
+        self.column = 1;
+        self.current_char = "";
+
+        if source.length > 0 {
+            self.current_char = source.charAt(0);
+        }
+    }
+    micro advance(self) {
+        if self.current_char == "\n" {
+            self.line = self.line + 1;
+            self.column = 1;
+        } else {
+            self.column = self.column + 1;
+        }
+
+        self.position = self.position + 1;
+
+        if self.position >= self.source.length {
+            self.current_char = "";
+        } else {
+            self.current_char = self.source.charAt(self.position);
+        }
+    }
+
+    micro skip_whitespace() {
+        while self.current_char != "" && self.is_whitespace(self.current_char) {
+            self.advance();
+        }
+    }
+
+    micro is_whitespace(ch) {
+        return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
+    }
+
+    micro is_alpha_numeric(ch) {
+        return self.is_alpha(ch) || self.is_digit(ch);
+    }
+
+    micro is_alpha(ch) {
+        return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
+    }
+
+    micro is_digit(ch) {
+        return ch >= "0" && ch <= "9";
+    }
+
+    micro read_number() {
+        let result = "";
+
+        while self.current_char != "" && self.is_digit(self.current_char) {
+            result = result + self.current_char;
+            self.advance();
+        }
+
+        return result;
+    }
+
+    micro read_identifier() {
+        let result = "";
+
+        while self.current_char != "" && self.is_alpha_numeric(self.current_char) {
+            result = result + self.current_char;
+            self.advance();
+        }
+
+        return result;
+    }
+
+    micro read_string() {
+        let result = "";
+        self.advance(); # skip opening quote
+
+        while self.current_char != "" && self.current_char != "\"" {
+            if self.current_char == "\\" {
+                self.advance(); # consume '\'
+                if self.current_char == "n" {
+                    result = result + "\n";
+                } else {
+                    if self.current_char == "t" {
+                        result = result + "\t";
+                    } else {
+                        if self.current_char == "r" {
+                            result = result + "\r";
+                        } else {
+                            if self.current_char == "\"" {
+                                result = result + "\"";
+                            } else {
+                                if self.current_char == "\\" {
+                                    result = result + "\\";
+                                } else {
+                                    result = result + "\\" + self.current_char;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                result = result + self.current_char;
+            }
+            self.advance();
+        }
+
+        if self.current_char == "\"" {
+            self.advance(); # skip closing quote
+        }
+
+        return result;
+    }
+
+    micro skip_comment() {
+        while self.current_char != "" && self.current_char != "\n" {
+            self.advance();
+        }
+    }
+
+    micro get_keyword_type(value) {
+        if value == "micro" { return "MICRO"; }
+        if value == "let" { return "LET"; }
+        if value == "if" { return "IF"; }
+        if value == "else" { return "ELSE"; }
+        if value == "while" { return "WHILE"; }
+        if value == "return" { return "RETURN"; }
+        if value == "true" { return "BOOLEAN"; }
+        if value == "false" { return "BOOLEAN"; }
+        if value == "namespace" { return "NAMESPACE"; }
+        if value == "using" { return "USING"; }
+        if value == "class" { return "CLASS"; }
+        if value == "constructor" { return "CONSTRUCTOR"; }
+        if value == "self" { return "SELF"; }
+        if value == "extends" { return "EXTENDS"; }
+        if value == "implements" { return "IMPLEMENTS"; }
+        if value == "new" { return "NEW"; }
+        if value == "default" { return "DEFAULT"; }
+        if value == "await" { return "AWAIT"; }
+        return "IDENTIFIER";
+    }
+
+    micro next_token() {
+        while self.current_char != "" {
+            if self.is_whitespace(self.current_char) {
+                self.skip_whitespace();
+                continue;
+            }
+
+            if self.current_char == "#" {
+                self.skip_comment();
+                continue;
+            }
+
+            let line = self.line;
+            let column = self.column;
+
+            if self.is_alpha(self.current_char) {
+                let value = self.read_identifier();
+                let tokenType = self.get_keyword_type(value);
+                return new Token(tokenType, value, line, column);
+            }
+
+            if self.is_digit(self.current_char) {
+                let value = self.read_number();
+                return new Token("NUMBER", value, line, column);
+            }
+
+            if self.current_char == "\"" {
+                let value = self.read_string();
+                return new Token("STRING", value, line, column);
+            }
+
+            # Single character tokens
+            let ch = self.current_char;
+            self.advance();
+
+            if ch == "{" { return new Token("LBRACE", ch, line, column); }
+            if ch == "}" { return new Token("RBRACE", ch, line, column); }
+            if ch == "(" { return new Token("LPAREN", ch, line, column); }
+            if ch == ")" { return new Token("RPAREN", ch, line, column); }
+            if ch == "[" { return new Token("LBRACKET", ch, line, column); }
+            if ch == "]" { return new Token("RBRACKET", ch, line, column); }
+            if ch == ";" { return new Token("SEMICOLON", ch, line, column); }
+            if ch == "," { return new Token("COMMA", ch, line, column); }
+            if ch == ":" {
+                if self.position < self.source.length && self.source.charAt(self.position) == ":" {
+                    self.advance();
+                    return new Token("DOUBLE_COLON", "::", line, column);
+                }
+                return new Token("COLON", ch, line, column);
+            }
+            if ch == "=" {
+                # 检查是否是 == 操作符
+                if self.position < self.source.length && self.source.charAt(self.position) == "=" {
+                    self.advance();
+                    return new Token("EQ", "==", line, column);
+                }
+                return new Token("ASSIGN", ch, line, column);
+            }
+            if ch == "+" { return new Token("PLUS", ch, line, column); }
+            if ch == "-" { return new Token("MINUS", ch, line, column); }
+            if ch == "*" { return new Token("MULTIPLY", ch, line, column); }
+            if ch == "/" { return new Token("DIVIDE", ch, line, column); }
+            if ch == "%" { return new Token("MODULO", ch, line, column); }
+            if ch == "&" {
+                # 检查是否是 &&
+                if self.position < self.source.length && self.source.charAt(self.position) == "&" {
+                    self.advance(); # 跳过第二个 &
+                    return new Token("AND", "&&", line, column);
+                }
+                return new Token("AMPERSAND", ch, line, column);
+            }
+            if ch == "|" {
+                # 检查是否是 ||
+                if self.position < self.source.length && self.source.charAt(self.position) == "|" {
+                    self.advance(); # 跳过第二个 |
+                    return new Token("OR", "||", line, column);
+                }
+                return new Token("PIPE", ch, line, column);
+            }
+            if ch == ">" {
+                # 检查是否是 >=
+                if self.position < self.source.length && self.source.charAt(self.position) == "=" {
+                    self.advance(); # 跳过 =
+                    return new Token("GTE", ">=", line, column);
+                }
+                return new Token("GT", ch, line, column);
+            }
+            if ch == "<" {
+                # 检查是否是 <=
+                if self.position < self.source.length && self.source.charAt(self.position) == "=" {
+                    self.advance(); # 跳过 =
+                    return new Token("LTE", "<=", line, column);
+                }
+                return new Token("LT", ch, line, column);
+            }
+            if ch == "!" {
+                # 检查是否是 !=
+                if self.position < self.source.length && self.source.charAt(self.position) == "=" {
+                    self.advance(); # 跳过 =
+                    return new Token("NE", "!=", line, column);
+                }
+                return new Token("BANG", ch, line, column);
+            }
+            if ch == "." { return new Token("DOT", ch, line, column); }
+            if ch == "↯" { return new Token("ATTRIBUTE", ch, line, column); }
+
+            # Unknown character
+            return new Token("ERROR", "Unknown character: " + ch, line, column);
+        }
+
+        return new Token("EOF", "", self.line, self.column);
+    }
+
+    micro tokenize() {
+        let tokens = [];
+
+        while true {
+            let token = self.next_token();
+            tokens.push(token);
+
+            if token.type == "EOF" {
+                break;
+            }
+        }
+
+        return tokens;
+    }
+}
