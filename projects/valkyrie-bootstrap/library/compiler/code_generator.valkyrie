@@ -30,6 +30,11 @@ micro topological_sort(analyzer, file_contents) {
 
 # 生成单一JS文件的主函数
 micro compile_asts(file_contents, mode) {
+    return compile_asts_with_options(file_contents, mode, null);
+}
+
+# 带选项的生成单一JS文件的主函数
+micro compile_asts_with_options(file_contents, mode, options) {
     let manager = new NamespaceManager();
     set_compile_mode(manager, mode || "repl");
     
@@ -261,12 +266,12 @@ micro compile_asts(file_contents, mode) {
             let modified_stmt = Object.assign({}, func_stmt);
             modified_stmt.name = func_stmt.uniqueName;
             # 解析函数体内的标识符
-            modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, manager, function_statements, variable_statements, class_statements);
+            modified_stmt.body = resolve_identifiers_in_statement_with_options(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
             integrated_ast.statements.push(modified_stmt);
         } else {
             # 即使没有重命名，也要解析函数体内的标识符
             let modified_stmt = Object.assign({}, func_stmt);
-            modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, manager, function_statements, variable_statements, class_statements);
+            modified_stmt.body = resolve_identifiers_in_statement_with_options(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
             integrated_ast.statements.push(modified_stmt);
         }
         r = r + 1;
@@ -291,7 +296,7 @@ micro compile_asts(file_contents, mode) {
                 let resolved_member = Object.assign({}, member);
                 # 只对方法（MemberStatement）和构造函数（ConstructorStatement）进行符号解析
                 if (member.type == "MemberStatement" || member.type == "ConstructorStatement") && member.body != null {
-                    resolved_member.body = resolve_identifiers_in_statement(member.body, manager, function_statements, variable_statements, class_statements);
+                    resolved_member.body = resolve_identifiers_in_statement_with_options(member.body, manager, function_statements, variable_statements, class_statements, options);
                 }
                 resolved_members.push(resolved_member);
                 m = m + 1;
@@ -305,7 +310,7 @@ micro compile_asts(file_contents, mode) {
     
     let t = 0;
     while t < execution_statements.length {
-        let resolved_stmt = resolve_identifiers_in_statement(execution_statements[t], manager, function_statements, variable_statements, class_statements);
+        let resolved_stmt = resolve_identifiers_in_statement_with_options(execution_statements[t], manager, function_statements, variable_statements, class_statements, options);
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
