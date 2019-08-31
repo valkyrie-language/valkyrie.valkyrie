@@ -1,7 +1,7 @@
 namespace package::lexer;
 
 class Token {
-    constructor(type, value, line, column) {
+    constructor(type, value, line: u32, column: u32) {
         self.type = type;
         self.value = value;
         self.line = line;
