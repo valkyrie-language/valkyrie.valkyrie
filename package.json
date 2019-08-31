@@ -5,7 +5,7 @@
         "boot": "pnpm --filter @valkyrie-language/valkyrie-bootstrap bootstrap",
         "help": "pnpm --filter @valkyrie-language/valkyrie-document dev",
         "test": "cargo build",
-        "fmt": "prettier --write \"**/*.{js,json}\" --ignore-path .prettierignore",
+        "fmt": "prettier --write \"**/*.js\" --ignore-path .prettierignore",
         "fmt:check": "prettier --check \"**/*.{js,json}\" --ignore-path .prettierignore",
         "push": "yarn test && git push",
         "reset": "git reset Head~ --soft",
