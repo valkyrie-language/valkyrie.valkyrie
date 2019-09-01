@@ -1,8 +1,10 @@
 namespace package::codegen;
 
+using package::parser::Node;
+
 # Valkyrie 代码生成器 - 超简单版本
 
-micro joinPath(pathArray, separator) {
+micro joinPath(pathArray: Array<String>, separator: String) -> String {
     let result = "";
     let i = 0;
     while i < pathArray.length {
@@ -15,7 +17,7 @@ micro joinPath(pathArray, separator) {
     return result;
 }
 
-micro replaceAll(str, search, replace) {
+micro replaceAll(str: String, search: String, replace: String) -> String {
     let result = "";
     let i = 0;
     while i < str.length {
@@ -31,7 +33,7 @@ micro replaceAll(str, search, replace) {
     return result;
 }
 
-micro generateExpression(node) {
+micro generateExpression(node: Node) -> String {
     if node.type == "Number" {
         return node.value;
     }
@@ -225,7 +227,7 @@ micro generateExpression(node) {
     return "/* Unknown expression: " + node.type + " */";
 }
 
-micro generateStatement(node) {
+micro generateStatement(node: Node) -> String {
     if node.type == "LetStatement" {
         let value = generateExpression(node.value);
         return "let " + node.name + " = " + value + ";";
@@ -511,7 +513,7 @@ micro generateStatement(node) {
     return "/* Unknown statement: " + node.type + " */";
 }
 
-micro generate(ast) {
+micro generate(ast: Node) -> String {
     if ast.type == "Program" {
         let result = "";
         let i = 0;

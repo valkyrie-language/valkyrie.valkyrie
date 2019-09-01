@@ -1,1 +1,2 @@
-*.vk diff=coq linguist-language=coq
+*.valkyrie diff=Typescript linguist-language=Browserslist
+*.vk diff=Typescript linguist-language=Browserslist
