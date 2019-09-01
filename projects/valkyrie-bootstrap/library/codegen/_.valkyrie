@@ -323,6 +323,12 @@ micro generateStatement(node: Node) -> String {
         return "while (" + condition + ") " + body;
     }
     
+    if node.type == "UntilStatement" {
+        let condition = generateExpression(node.condition);
+        let body = generateStatement(node.body);
+        return "while (!(" + condition + ")) " + body;
+    }
+    
     if node.type == "ReturnStatement" {
         if node.value && node.value.type {
             let value = generateExpression(node.value);

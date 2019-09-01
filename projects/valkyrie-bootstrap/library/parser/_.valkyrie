@@ -55,6 +55,10 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
         return parseWhileStatement(parser);
     }
 
+    if parser.current_token.type == "UNTIL" {
+        return parseUntilStatement(parser);
+    }
+
     if parser.current_token.type == "RETURN" {
         return parseReturnStatement(parser);
     }
@@ -552,6 +556,24 @@ micro parseWhileStatement(parser: ValkyrieParser) -> Node {
     }
 
     let node = new Node("WhileStatement");
+    node.condition = condition;
+    node.body = body;
+    return node;
+}
+
+micro parseUntilStatement(parser: ValkyrieParser) -> Node {
+    parser.advance(); # skip 'until'
+    let condition = parseExpression(parser);
+    if condition && condition.type == "ParseError" {
+        return condition;
+    }
+
+    let body = parseFunctionBlock(parser);
+    if body && body.type == "ParseError" {
+        return body;
+    }
+
+    let node = new Node("UntilStatement");
     node.condition = condition;
     node.body = body;
     return node;
