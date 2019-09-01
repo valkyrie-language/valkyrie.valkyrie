@@ -64,7 +64,7 @@ micro add_symbol_to_namespace(manager: NamespaceManager, namespace_path: Array<S
 }
 
 # 添加using导入
-micro add_using_import(manager: NamespaceManager, using_path: Array<String>, is_global: Bool) {
+micro add_using_import(manager: NamespaceManager, using_path: Array<String>, is_global: bool) {
     if manager.usings[manager.currentFile] == null {
         manager.usings[manager.currentFile] = [];
     }

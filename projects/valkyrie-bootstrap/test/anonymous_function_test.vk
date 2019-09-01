@@ -1,0 +1,38 @@
+# 测试匿名函数和尾随闭包功能
+
+# 测试匿名函数语法
+let add = micro(a: i32, b: i32) {
+    return a + b;
+};
+
+# 测试尾随闭包调用 - 有参数版本
+micro forEach(arr: Array<i32>, callback: Function) {
+    let i = 0;
+    while i < arr.length {
+        callback(arr[i]);
+        i = i + 1;
+    }
+}
+
+# 测试尾随闭包调用 - 无参数版本  
+micro doSomething(callback: Function) {
+    callback();
+}
+
+micro main() {
+    let numbers = [1, 2, 3, 4, 5];
+    
+    # 使用匿名函数
+    let result = add(10, 20);
+    
+    # 使用尾随闭包 - 有参数版本
+    forEach(numbers) {
+        # 这里应该是闭包体
+        let doubled = numbers[0] * 2;
+    };
+    
+    # 使用尾随闭包 - 无参数版本
+    doSomething {
+        let message = "Hello from closure!";
+    };
+}
