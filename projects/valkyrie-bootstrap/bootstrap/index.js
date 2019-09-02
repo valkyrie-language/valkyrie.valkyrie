@@ -71,7 +71,39 @@ export function package_codegen_generateExpression(node) {
             args = args + package_codegen_generateExpression(node.arguments[i]);
             i = i + 1;
         }
+        if (node.closure) {
+            let closureParams = "";
+            let closureBody = "";
+            if (node.closure) {
+                closureBody = package_codegen_generateStatement(node.closure);
+            }
+            if (args.length > 0) {
+                args = args + ", ";
+            }
+            args = args + "function(" + closureParams + ") " + closureBody;
+        }
         return callee + "(" + args + ")";
+    }
+    if (node.type == "AnonymousFunction") {
+        let params = "";
+        let i = 0;
+        while (i < node.parameters.length) {
+            if (i > 0) {
+                params = params + ", ";
+            }
+            let param = node.parameters[i];
+            if (param && param.name) {
+                params = params + param.name;
+            } else {
+                params = params + param;
+            }
+            i = i + 1;
+        }
+        let body = "";
+        if (node.body) {
+            body = package_codegen_generateStatement(node.body);
+        }
+        return "function(" + params + ") " + body;
     }
     if (node.type == "NewExpression") {
         let args = "";
