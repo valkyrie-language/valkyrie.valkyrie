@@ -2,10 +2,12 @@ namespace package::compiler;
 
 # 创建编译统计信息
 class CompilerStatistics {
+    output_size: usize;
+
     constructor() {
         self.tokensCount = 0;
         self.astNodesCount = 0;
         self.compilationTime = 0;
-        self.outputSize = 0;
+        self.output_size = 0;
     }
 }

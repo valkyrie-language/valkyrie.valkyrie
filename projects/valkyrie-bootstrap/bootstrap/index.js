@@ -613,7 +613,7 @@ export function package_compiler_compile_asts_with_options(
         file_contents
     );
     if (sort_result.error != null) {
-        return "Error: " + sort_result.error;
+        return { success: false, error: sort_result.error };
     }
     let sorted_files = sort_result.sorted;
     let js_import_statements = [];
@@ -625,7 +625,7 @@ export function package_compiler_compile_asts_with_options(
     while (k < sorted_files.length) {
         let file_name = sorted_files[k];
         let content = file_contents[file_name];
-        manager.currentFile = file_name;
+        manager.current_file = file_name;
         let lexer_instance = new package_lexer_ValkyrieLexer(content);
         let tokens = lexer_instance.tokenize();
         if (tokens.length == 0) {
@@ -634,13 +634,20 @@ export function package_compiler_compile_asts_with_options(
         }
         let ast = package_parser_parse(tokens);
         if (ast.type != "Program") {
-            return "Error: Failed to parse " + file_name;
+            return {
+                success: false,
+                error:
+                    "Failed to parse " +
+                    file_name +
+                    " at " +
+                    JSON.stringify(ast),
+            };
         }
         let validation_result = package_compiler_validate_namespace_rules(
             ast,
             mode
         );
-        if (validation_result != "OK") {
+        if (!validation_result.success) {
             return validation_result;
         }
         let current_namespace = "";
@@ -665,11 +672,13 @@ export function package_compiler_compile_asts_with_options(
                             console.log(
                                 "❌ 发现重复的主命名空间: " + clean_name
                             );
-                            return (
-                                "Error: Duplicate main namespace '" +
-                                clean_name +
-                                "' found. Each main namespace must have a unique name."
-                            );
+                            return {
+                                success: false,
+                                error:
+                                    "Duplicate main namespace '" +
+                                    clean_name +
+                                    "' found. Each main namespace must have a unique name.",
+                            };
                         } else {
                             console.log(
                                 "✅ 主命名空间检查通过: " + current_namespace
@@ -677,7 +686,7 @@ export function package_compiler_compile_asts_with_options(
                         }
                     }
                 }
-                manager.currentNamespace = current_namespace;
+                manager.current_namespace = current_namespace;
             } else if (stmt.type == "UsingStatement") {
                 let using_path = package_compiler_join_path(stmt.path, "::");
                 let is_global = package_compiler_is_main_namespace(using_path);
@@ -748,11 +757,13 @@ export function package_compiler_compile_asts_with_options(
             let check_index = duplicate_index + 1;
             while (check_index < main_namespace_names.length) {
                 if (main_namespace_names[check_index] == current_name) {
-                    return (
-                        "Error: Duplicate main namespace '" +
-                        current_name +
-                        "' found. Each main namespace must have a unique name."
-                    );
+                    return {
+                        success: false,
+                        error:
+                            "Duplicate main namespace '" +
+                            current_name +
+                            "' found. Each main namespace must have a unique name.",
+                    };
                 }
                 check_index = check_index + 1;
             }
@@ -897,7 +908,8 @@ export function package_compiler_compile_asts_with_options(
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
-    return package_codegen_generate(integrated_ast);
+    let generated = package_codegen_generate(integrated_ast);
+    return { success: true, code: generated, error: null };
 }
 export function package_compiler_resolve_multiple_namespaces(ast) {
     let manager = new package_compiler_NamespaceManager();
@@ -909,7 +921,7 @@ export function package_compiler_resolve_multiple_namespaces(ast) {
             if (stmt.isMainNamespace) {
                 namespace_path = namespace_path + "!";
             }
-            manager.currentNamespace = namespace_path;
+            manager.current_namespace = namespace_path;
         } else if (stmt.type == "UsingStatement") {
             let using_path = package_compiler_join_path(stmt.path, "::");
             let is_global = package_compiler_is_main_namespace(using_path);
@@ -917,29 +929,29 @@ export function package_compiler_resolve_multiple_namespaces(ast) {
         } else if (stmt.type == "MicroDeclaration") {
             package_compiler_add_symbol_to_namespace(
                 manager,
-                manager.currentNamespace,
+                manager.current_namespace,
                 stmt.name,
                 "function",
                 stmt,
-                manager.currentFile
+                manager.current_file
             );
         } else if (stmt.type == "ClassDeclaration") {
             package_compiler_add_symbol_to_namespace(
                 manager,
-                manager.currentNamespace,
+                manager.current_namespace,
                 stmt.name,
                 "class",
                 stmt,
-                manager.currentFile
+                manager.current_file
             );
         } else if (stmt.type == "LetStatement") {
             package_compiler_add_symbol_to_namespace(
                 manager,
-                manager.currentNamespace,
+                manager.current_namespace,
                 stmt.name,
                 "variable",
                 stmt,
-                manager.currentFile
+                manager.current_file
             );
         }
         i = i + 1;
@@ -951,19 +963,19 @@ export function package_compiler_resolve_multiple_namespaces(ast) {
             stmt.uniqueName = package_compiler_get_fully_qualified_name(
                 manager,
                 stmt.name,
-                manager.currentNamespace
+                manager.current_namespace
             );
         } else if (stmt.type == "ClassDeclaration") {
             stmt.uniqueName = package_compiler_get_fully_qualified_name(
                 manager,
                 stmt.name,
-                manager.currentNamespace
+                manager.current_namespace
             );
         } else if (stmt.type == "LetStatement") {
             stmt.uniqueName = package_compiler_get_fully_qualified_name(
                 manager,
                 stmt.name,
-                manager.currentNamespace
+                manager.current_namespace
             );
         }
         j = j + 1;
@@ -1230,20 +1242,6 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
     }
     if (expr.type == "NewExpression") {
         let resolved_expr = Object.assign({}, expr);
-        if (expr.className == "Token") {
-            console.log("DEBUG: Processing NewExpression for Token class");
-            console.log("DEBUG: Available classes:");
-            let debug_m = 0;
-            while (debug_m < class_statements.length) {
-                console.log(
-                    "  - " +
-                        class_statements[debug_m].name +
-                        " -> " +
-                        class_statements[debug_m].uniqueName
-                );
-                debug_m = debug_m + 1;
-            }
-        }
         let m = 0;
         while (m < class_statements.length) {
             let class_stmt = class_statements[m];
@@ -1252,12 +1250,6 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
                 class_stmt.uniqueName != null
             ) {
                 resolved_expr.className = class_stmt.uniqueName;
-                if (expr.className == "Token") {
-                    console.log(
-                        "DEBUG: Token class resolved to: " +
-                            class_stmt.uniqueName
-                    );
-                }
                 break;
             }
             m = m + 1;
@@ -1498,11 +1490,11 @@ export function package_compiler_add_using_import(
     using_path,
     is_global
 ) {
-    if (manager.usings[manager.currentFile] == null) {
-        manager.usings[manager.currentFile] = [];
+    if (manager.usings[manager.current_file] == null) {
+        manager.usings[manager.current_file] = [];
     }
     let using_info = { namespace: using_path, isGlobal: is_global };
-    manager.usings[manager.currentFile].push(using_info);
+    manager.usings[manager.current_file].push(using_info);
 }
 export function package_compiler_find_symbol_namespace(
     manager,
@@ -1551,12 +1543,18 @@ export function package_compiler_validate_namespace_rules(ast, mode) {
         i = i + 1;
     }
     if (mode == "standard" && !has_namespace) {
-        return "Error: Standard mode requires at least one namespace declaration";
+        return {
+            success: false,
+            error: "Standard mode requires at least one namespace declaration",
+        };
     }
     if (mode == "standard" && !has_main_namespace) {
-        return "Error: Standard mode requires exactly one main namespace (ending with !)";
+        return {
+            success: false,
+            error: "Standard mode requires exactly one main namespace (ending with !)",
+        };
     }
-    return "OK";
+    return { success: true, error: null };
 }
 export function package_compiler_find_namespace_provider(
     namespace_path,
@@ -3027,6 +3025,10 @@ export function package_parser_parseClassDeclaration(parser) {
         parser.current_token.type != "RBRACE" &&
         parser.current_token.type != "EOF"
     ) {
+        if (parser.current_token.type == "SEMICOLON") {
+            parser.advance();
+            continue;
+        }
         let member = package_parser_parseClassMember(parser);
         if (member && member.type != "ParseError") {
             node.members.push(member);
@@ -3082,6 +3084,22 @@ export function package_parser_parseClassMember(parser) {
         if (rparen && rparen.type == "ParseError") {
             return rparen;
         }
+        let returnType = null;
+        if (parser.current_token.type == "ARROW") {
+            parser.advance();
+            returnType = package_parser_parseTypeExpression(parser);
+            if (returnType && returnType.type == "ParseError") {
+                return returnType;
+            }
+        }
+        let effectType = null;
+        if (parser.current_token.type == "DIVIDE") {
+            parser.advance();
+            effectType = package_parser_parseTypeExpression(parser);
+            if (effectType && effectType.type == "ParseError") {
+                return effectType;
+            }
+        }
         let body = package_parser_parse_function_block(parser);
         if (body && body.type == "ParseError") {
             return body;
@@ -3105,6 +3123,8 @@ export function package_parser_parseClassMember(parser) {
         let methodNode = new package_parser_Node("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
+        methodNode.returnType = returnType;
+        methodNode.effectType = effectType;
         methodNode.body = body;
         methodNode.isInstanceMethod = isInstanceMethod;
         methodNode.isStatic = !isInstanceMethod;
@@ -3114,10 +3134,22 @@ export function package_parser_parseClassMember(parser) {
         let nextIndex = parser.position + 1;
         if (nextIndex < parser.tokens.length) {
             let next_token = parser.tokens[nextIndex];
-            if (next_token.type == "ASSIGN" || next_token.type == "SEMICOLON") {
+            if (
+                next_token.type == "COLON" ||
+                next_token.type == "ASSIGN" ||
+                next_token.type == "SEMICOLON"
+            ) {
                 let name = parser.expect("IDENTIFIER");
                 if (name && name.type == "ParseError") {
                     return name;
+                }
+                let typeAnnotation = null;
+                if (parser.current_token.type == "COLON") {
+                    parser.advance();
+                    typeAnnotation = package_parser_parseTypeExpression(parser);
+                    if (typeAnnotation && typeAnnotation.type == "ParseError") {
+                        return typeAnnotation;
+                    }
                 }
                 let initValue = null;
                 if (parser.current_token.type == "ASSIGN") {
@@ -3133,6 +3165,7 @@ export function package_parser_parseClassMember(parser) {
                 }
                 let node = new package_parser_Node("Property");
                 node.name = name.value;
+                node.typeAnnotation = typeAnnotation;
                 node.initializer = initValue;
                 return node;
             }
@@ -3298,10 +3331,11 @@ class package_compiler_CompilerOptions {
 }
 class package_compiler_CompilerStatistics {
     constructor() {
+        self.output_size = undefined;
         this.tokensCount = 0;
         this.astNodesCount = 0;
         this.compilationTime = 0;
-        this.outputSize = 0;
+        this.output_size = 0;
     }
 }
 class package_compiler_DependencyAnalyzer {
@@ -3314,8 +3348,8 @@ class package_compiler_NamespaceManager {
     constructor(source) {
         this.namespaces = {};
         this.usings = {};
-        this.currentNamespace = "";
-        this.currentFile = "";
+        this.current_namespace = "";
+        this.current_file = "";
         this.mode = "repl";
     }
 }
