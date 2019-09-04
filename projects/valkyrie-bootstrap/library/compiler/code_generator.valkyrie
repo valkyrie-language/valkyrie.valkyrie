@@ -2,10 +2,11 @@ namespace package::compiler;
 
 using package::lexer::ValkyrieLexer;
 using package::parser::parse;
-using package::codegen::generate;
+using package::codegen::JsCodeGeneration;
 using package::parser::Node;
 using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
+using package::codegen::join_name_path;
 
 # 拓扑排序 (简化版，不检测循环依赖)
 micro topological_sort(analyzer: DependencyAnalyzer, file_contents: Map<String, String>) -> Array<String> {
@@ -281,12 +282,12 @@ micro compile_asts_with_options(file_contents: Map<String, String>, mode: String
             let modified_stmt = Object.assign({}, func_stmt);
             modified_stmt.name = func_stmt.uniqueName;
             # 解析函数体内的标识符
-            modified_stmt.body = resolve_identifiers_in_statement_with_options(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
+            modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
             integrated_ast.statements.push(modified_stmt);
         } else {
             # 即使没有重命名，也要解析函数体内的标识符
             let modified_stmt = Object.assign({}, func_stmt);
-            modified_stmt.body = resolve_identifiers_in_statement_with_options(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
+            modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
             integrated_ast.statements.push(modified_stmt);
         }
         r = r + 1;
@@ -311,7 +312,7 @@ micro compile_asts_with_options(file_contents: Map<String, String>, mode: String
                 let resolved_member = Object.assign({}, member);
                 # 只对方法（MemberStatement）和构造函数（ConstructorStatement）进行符号解析
                 if (member.type == "MemberStatement" || member.type == "ConstructorStatement") && member.body != null {
-                    resolved_member.body = resolve_identifiers_in_statement_with_options(member.body, manager, function_statements, variable_statements, class_statements, options);
+                    resolved_member.body = resolve_identifiers_in_statement(member.body, manager, function_statements, variable_statements, class_statements, options);
                 }
                 resolved_members.push(resolved_member);
                 m = m + 1;
@@ -325,12 +326,13 @@ micro compile_asts_with_options(file_contents: Map<String, String>, mode: String
     
     let t = 0;
     while t < execution_statements.length {
-        let resolved_stmt = resolve_identifiers_in_statement_with_options(execution_statements[t], manager, function_statements, variable_statements, class_statements, options);
+        let resolved_stmt = resolve_identifiers_in_statement(execution_statements[t], manager, function_statements, variable_statements, class_statements, options);
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
 
-    let generated = generate(integrated_ast);
+    let generator = new JsCodeGeneration("    ");
+    let generated = generator.generate(integrated_ast);
 
     return {
         "success": true,

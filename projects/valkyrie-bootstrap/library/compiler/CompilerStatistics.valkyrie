@@ -5,9 +5,9 @@ class CompilerStatistics {
     output_size: usize;
 
     constructor() {
-        self.tokensCount = 0;
-        self.astNodesCount = 0;
-        self.compilationTime = 0;
+        self.tokens_count = 0;
+        self.ast_nodes_count = 0;
+        self.compilation_time = 0;
         self.output_size = 0;
     }
 }

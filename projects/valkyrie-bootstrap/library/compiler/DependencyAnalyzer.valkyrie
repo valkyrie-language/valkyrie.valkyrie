@@ -71,13 +71,9 @@ micro resolve_symbol(manager: NamespaceManager, symbol_name: String, current_nam
     };
 }
 
-# 递归解析表达式中的标识符
-micro resolve_identifiers_in_expression(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>) -> Node {
-    return resolve_identifiers_in_expression_with_options(expr, manager, function_statements, variable_statements, class_statements, null);
-}
 
 # 带选项的递归解析表达式中的标识符
-micro resolve_identifiers_in_expression_with_options(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
+micro resolve_identifiers_in_expression(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
     if expr == null {
         return expr;
     }
@@ -158,16 +154,16 @@ micro resolve_identifiers_in_expression_with_options(expr: Node, manager: Namesp
             }
             
             if !found_function {
-                resolved_expr.callee = resolve_identifiers_in_expression_with_options(expr.callee, manager, function_statements, variable_statements, class_statements, options);
+                resolved_expr.callee = resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements, options);
             }
         } else {
-            resolved_expr.callee = resolve_identifiers_in_expression_with_options(expr.callee, manager, function_statements, variable_statements, class_statements, options);
+            resolved_expr.callee = resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements, options);
         }
         
         let resolved_args = [];
         let k = 0;
         while k < expr.arguments.length {
-            resolved_args.push(resolve_identifiers_in_expression_with_options(expr.arguments[k], manager, function_statements, variable_statements, class_statements, options));
+            resolved_args.push(resolve_identifiers_in_expression(expr.arguments[k], manager, function_statements, variable_statements, class_statements, options));
             k = k + 1;
         }
         resolved_expr.arguments = resolved_args;
@@ -176,21 +172,21 @@ micro resolve_identifiers_in_expression_with_options(expr: Node, manager: Namesp
     
     if expr.type == "BinaryOp" {
         let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left = resolve_identifiers_in_expression_with_options(expr.left, manager, function_statements, variable_statements, class_statements, options);
-        resolved_expr.right = resolve_identifiers_in_expression_with_options(expr.right, manager, function_statements, variable_statements, class_statements, options);
+        resolved_expr.left = resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements, options);
+        resolved_expr.right = resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements, options);
         return resolved_expr;
     }
     
     if expr.type == "Assignment" {
         let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left = resolve_identifiers_in_expression_with_options(expr.left, manager, function_statements, variable_statements, class_statements, options);
-        resolved_expr.right = resolve_identifiers_in_expression_with_options(expr.right, manager, function_statements, variable_statements, class_statements, options);
+        resolved_expr.left = resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements, options);
+        resolved_expr.right = resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements, options);
         return resolved_expr;
     }
     
     if expr.type == "PropertyAccess" {
         let resolved_expr = Object.assign({}, expr);
-        resolved_expr.object = resolve_identifiers_in_expression_with_options(expr.object, manager, function_statements, variable_statements, class_statements, options);
+        resolved_expr.object = resolve_identifiers_in_expression(expr.object, manager, function_statements, variable_statements, class_statements, options);
         return resolved_expr;
     }
     
@@ -213,7 +209,7 @@ micro resolve_identifiers_in_expression_with_options(expr: Node, manager: Namesp
         if expr.arguments != null {
             let n = 0;
             while n < expr.arguments.length {
-                resolved_args.push(resolve_identifiers_in_expression_with_options(expr.arguments[n], manager, function_statements, variable_statements, class_statements, options));
+                resolved_args.push(resolve_identifiers_in_expression(expr.arguments[n], manager, function_statements, variable_statements, class_statements, options));
                 n = n + 1;
             }
         }
@@ -224,58 +220,53 @@ micro resolve_identifiers_in_expression_with_options(expr: Node, manager: Namesp
     return expr;
 }
 
-# 递归解析语句中的标识符
-micro resolve_identifiers_in_statement(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>) -> Node {
-    return resolve_identifiers_in_statement_with_options(stmt, manager, function_statements, variable_statements, class_statements, null);
-}
-
 # 带选项的递归解析语句中的标识符
-micro resolve_identifiers_in_statement_with_options(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
+micro resolve_identifiers_in_statement(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
     if stmt == null {
         return stmt;
     }
     
     if stmt.type == "LetStatement" {
         let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.value = resolve_identifiers_in_expression_with_options(stmt.value, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.value = resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements, options);
         return resolved_stmt;
     }
     
     if stmt.type == "ExpressionStatement" {
         let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.expression = resolve_identifiers_in_expression_with_options(stmt.expression, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.expression = resolve_identifiers_in_expression(stmt.expression, manager, function_statements, variable_statements, class_statements, options);
         return resolved_stmt;
     }
     
     if stmt.type == "ReturnStatement" {
         let resolved_stmt = Object.assign({}, stmt);
         if stmt.value != null {
-            resolved_stmt.value = resolve_identifiers_in_expression_with_options(stmt.value, manager, function_statements, variable_statements, class_statements, options);
+            resolved_stmt.value = resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements, options);
         }
         return resolved_stmt;
     }
     
     if stmt.type == "IfStatement" {
         let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition = resolve_identifiers_in_expression_with_options(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
-        resolved_stmt.thenBranch = resolve_identifiers_in_statement_with_options(stmt.thenBranch, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.thenBranch = resolve_identifiers_in_statement(stmt.thenBranch, manager, function_statements, variable_statements, class_statements, options);
         if stmt.elseBranch != null {
-            resolved_stmt.elseBranch = resolve_identifiers_in_statement_with_options(stmt.elseBranch, manager, function_statements, variable_statements, class_statements, options);
+            resolved_stmt.elseBranch = resolve_identifiers_in_statement(stmt.elseBranch, manager, function_statements, variable_statements, class_statements, options);
         }
         return resolved_stmt;
     }
     
     if stmt.type == "WhileStatement" {
         let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition = resolve_identifiers_in_expression_with_options(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
-        resolved_stmt.body = resolve_identifiers_in_statement_with_options(stmt.body, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.body = resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements, options);
         return resolved_stmt;
     }
     
     if stmt.type == "UntilStatement" {
         let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition = resolve_identifiers_in_expression_with_options(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
-        resolved_stmt.body = resolve_identifiers_in_statement_with_options(stmt.body, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.body = resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements, options);
         return resolved_stmt;
     }
     
@@ -284,7 +275,7 @@ micro resolve_identifiers_in_statement_with_options(stmt: Node, manager: Namespa
         let resolved_statements = [];
         let i = 0;
         while i < stmt.statements.length {
-            resolved_statements.push(resolve_identifiers_in_statement_with_options(stmt.statements[i], manager, function_statements, variable_statements, class_statements, options));
+            resolved_statements.push(resolve_identifiers_in_statement(stmt.statements[i], manager, function_statements, variable_statements, class_statements, options));
             i = i + 1;
         }
         resolved_stmt.statements = resolved_statements;
