@@ -1,45 +1,16 @@
-export function package_compiler_topological_sort(analyzer, file_contents) {
-    let file_names = Object.keys(file_contents);
-    let visited = {};
-    let sorted = [];
-    let i = 0;
-    while (i < file_names.length) {
-        visited[file_names[i]] = false;
-        i = i + 1;
-    }
-    let j = 0;
-    while (j < file_names.length) {
-        package_compiler_simple_dfs_visit(
-            file_names[j],
-            analyzer,
-            visited,
-            sorted
-        );
-        j = j + 1;
-    }
-    return { sorted: sorted, error: null };
-}
-export function package_compiler_compile_asts(file_contents, mode) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        mode,
-        null
-    );
-}
-export function package_compiler_compile_asts_with_options(
-    file_contents,
-    mode,
-    options
+export function package_compiler_compile_with_compiler(
+    compiler,
+    file_contents
 ) {
-    let manager = new package_compiler_NamespaceManager();
-    package_compiler_set_compile_mode(manager, mode || "repl");
-    let analyzer = new package_compiler_DependencyAnalyzer();
+    compiler.diagnostics.clear_diagnostics();
+    compiler.namespace_manager = new package_compiler_NamespaceManager();
+    compiler.dependency_analyzer = new package_compiler_DependencyAnalyzer();
     let file_names = Object.keys(file_contents);
     let i = 0;
     while (i < file_names.length) {
         let file_name = file_names[i];
         let content = file_contents[file_name];
-        analyzer.dependencies[file_name] = [];
+        compiler.dependency_analyzer.dependencies[file_name] = [];
         let lexer_instance = new package_lexer_ValkyrieLexer(content);
         let tokens = lexer_instance.tokenize();
         if (tokens.length > 0) {
@@ -49,7 +20,7 @@ export function package_compiler_compile_asts_with_options(
                 while (j < ast.statements.length) {
                     let stmt = ast.statements[j];
                     if (stmt.type == "UsingStatement") {
-                        let using_path = package_compiler_join_path(
+                        let using_path = package_codegen_join_name_path(
                             stmt.path,
                             "::"
                         );
@@ -62,23 +33,39 @@ export function package_compiler_compile_asts_with_options(
                             provider_file != null &&
                             provider_file != file_name
                         ) {
-                            analyzer.dependencies[file_name].push(
-                                provider_file
-                            );
+                            compiler.dependency_analyzer.dependencies[
+                                file_name
+                            ].push(provider_file);
                         }
                     }
                     j = j + 1;
                 }
+            } else {
+                compiler.diagnostics.add_error(
+                    "Failed to parse " + file_name + ": " + JSON.stringify(ast),
+                    0,
+                    0,
+                    file_name
+                );
             }
+        } else {
+            compiler.diagnostics.add_error(
+                "Lexical analysis failed for " + file_name,
+                0,
+                0,
+                file_name
+            );
         }
         i = i + 1;
     }
-    let sort_result = package_compiler_topological_sort(
-        analyzer,
-        file_contents
-    );
+    let sort_result =
+        compiler.dependency_analyzer.topological_sort(file_contents);
     if (sort_result.error != null) {
-        return { success: false, error: sort_result.error };
+        compiler.diagnostics.add_error(sort_result.error, 0, 0, "");
+        return package_compiler_create_compilation_result_with_diagnostics(
+            compiler,
+            null
+        );
     }
     let sorted_files = sort_result.sorted;
     let js_import_statements = [];
@@ -90,73 +77,83 @@ export function package_compiler_compile_asts_with_options(
     while (k < sorted_files.length) {
         let file_name = sorted_files[k];
         let content = file_contents[file_name];
-        manager.current_file = file_name;
+        compiler.namespace_manager.current_file = file_name;
         let lexer_instance = new package_lexer_ValkyrieLexer(content);
         let tokens = lexer_instance.tokenize();
         if (tokens.length == 0) {
+            compiler.diagnostics.add_error(
+                "Empty or invalid file",
+                0,
+                0,
+                file_name
+            );
             k = k + 1;
             continue;
         }
         let ast = package_parser_parse(tokens);
         if (ast.type != "Program") {
-            return {
-                success: false,
-                error:
-                    "Failed to parse " +
-                    file_name +
-                    " at " +
-                    JSON.stringify(ast),
-            };
+            compiler.diagnostics.add_error(
+                "Failed to parse " + file_name + " at " + JSON.stringify(ast),
+                0,
+                0,
+                file_name
+            );
+            k = k + 1;
+            continue;
         }
         let validation_result = package_compiler_validate_namespace_rules(
             ast,
-            mode
+            compiler.options.mode
         );
         if (!validation_result.success) {
-            return validation_result;
+            compiler.diagnostics.add_error(
+                validation_result.error,
+                0,
+                0,
+                file_name
+            );
         }
         let current_namespace = "";
         let l = 0;
         while (l < ast.statements.length) {
             let stmt = ast.statements[l];
             if (stmt.type == "NamespaceStatement") {
-                current_namespace = package_compiler_join_path(stmt.path, "::");
+                current_namespace = package_codegen_join_name_path(
+                    stmt.path,
+                    "::"
+                );
                 if (stmt.isMainNamespace) {
                     current_namespace = current_namespace + "!";
-                    if (mode == "standard") {
-                        console.log("🔍 检查主命名空间: " + current_namespace);
-                        console.log(
-                            "📋 当前管理器中的命名空间: " +
-                                Object.keys(manager.namespaces).join(", ")
-                        );
-                        if (manager.namespaces[current_namespace] != null) {
+                    if (compiler.options.mode == "standard") {
+                        if (
+                            compiler.namespace_manager.namespaces[
+                                current_namespace
+                            ] != null
+                        ) {
                             let clean_name = current_namespace.substring(
                                 0,
                                 current_namespace.length - 1
                             );
-                            console.log(
-                                "❌ 发现重复的主命名空间: " + clean_name
-                            );
-                            return {
-                                success: false,
-                                error:
-                                    "Duplicate main namespace '" +
+                            compiler.diagnostics.add_error(
+                                "Duplicate main namespace '" +
                                     clean_name +
                                     "' found. Each main namespace must have a unique name.",
-                            };
-                        } else {
-                            console.log(
-                                "✅ 主命名空间检查通过: " + current_namespace
+                                0,
+                                0,
+                                file_name
                             );
                         }
                     }
                 }
-                manager.current_namespace = current_namespace;
+                compiler.namespace_manager.current_namespace =
+                    current_namespace;
             } else if (stmt.type == "UsingStatement") {
-                let using_path = package_compiler_join_path(stmt.path, "::");
+                let using_path = package_codegen_join_name_path(
+                    stmt.path,
+                    "::"
+                );
                 let is_global = package_compiler_is_main_namespace(using_path);
-                package_compiler_add_using_import(
-                    manager,
+                compiler.namespace_manager.add_using_import(
                     using_path,
                     is_global
                 );
@@ -165,8 +162,7 @@ export function package_compiler_compile_asts_with_options(
             } else if (stmt.type == "LetStatement") {
                 stmt.sourceNamespace = current_namespace;
                 variable_statements.push(stmt);
-                package_compiler_add_symbol_to_namespace(
-                    manager,
+                compiler.namespace_manager.add_symbol_to_namespace(
                     current_namespace,
                     stmt.name,
                     "variable",
@@ -176,8 +172,7 @@ export function package_compiler_compile_asts_with_options(
             } else if (stmt.type == "MicroDeclaration") {
                 stmt.sourceNamespace = current_namespace;
                 function_statements.push(stmt);
-                package_compiler_add_symbol_to_namespace(
-                    manager,
+                compiler.namespace_manager.add_symbol_to_namespace(
                     current_namespace,
                     stmt.name,
                     "function",
@@ -187,8 +182,7 @@ export function package_compiler_compile_asts_with_options(
             } else if (stmt.type == "ClassDeclaration") {
                 stmt.sourceNamespace = current_namespace;
                 class_statements.push(stmt);
-                package_compiler_add_symbol_to_namespace(
-                    manager,
+                compiler.namespace_manager.add_symbol_to_namespace(
                     current_namespace,
                     stmt.name,
                     "class",
@@ -202,69 +196,111 @@ export function package_compiler_compile_asts_with_options(
         }
         k = k + 1;
     }
-    if (mode == "standard") {
-        let main_namespaces = [];
-        let main_namespace_names = [];
-        let namespace_keys = Object.keys(manager.namespaces);
-        let ns_index = 0;
-        while (ns_index < namespace_keys.length) {
-            let ns_name = namespace_keys[ns_index];
-            if (ns_name.endsWith("!")) {
-                main_namespaces.push(ns_name);
-                let clean_name = ns_name.substring(0, ns_name.length - 1);
-                main_namespace_names.push(clean_name);
-            }
-            ns_index = ns_index + 1;
-        }
-        let duplicate_index = 0;
-        while (duplicate_index < main_namespace_names.length) {
-            let current_name = main_namespace_names[duplicate_index];
-            let check_index = duplicate_index + 1;
-            while (check_index < main_namespace_names.length) {
-                if (main_namespace_names[check_index] == current_name) {
-                    return {
-                        success: false,
-                        error:
-                            "Duplicate main namespace '" +
-                            current_name +
-                            "' found. Each main namespace must have a unique name.",
-                    };
-                }
-                check_index = check_index + 1;
-            }
-            duplicate_index = duplicate_index + 1;
-        }
+    if (compiler.options.mode == "standard") {
+        package_compiler_check_duplicate_main_namespaces_with_compiler(
+            compiler
+        );
     }
+    package_compiler_generate_unique_names_with_compiler(
+        compiler,
+        function_statements,
+        class_statements,
+        variable_statements
+    );
+    let integrated_ast = package_compiler_create_integrated_ast_with_compiler(
+        compiler,
+        js_import_statements,
+        variable_statements,
+        function_statements,
+        class_statements,
+        execution_statements
+    );
+    return package_compiler_create_compilation_result_with_diagnostics(
+        compiler,
+        integrated_ast
+    );
+}
+export function package_compiler_check_duplicate_main_namespaces_with_compiler(
+    compiler
+) {
+    let main_namespaces = [];
+    let main_namespace_names = [];
+    let namespace_keys = Object.keys(compiler.namespace_manager.namespaces);
+    let ns_index = 0;
+    while (ns_index < namespace_keys.length) {
+        let ns_name = namespace_keys[ns_index];
+        if (ns_name.endsWith("!")) {
+            main_namespaces.push(ns_name);
+            let clean_name = ns_name.substring(0, ns_name.length - 1);
+            main_namespace_names.push(clean_name);
+        }
+        ns_index = ns_index + 1;
+    }
+    let duplicate_index = 0;
+    while (duplicate_index < main_namespace_names.length) {
+        let current_name = main_namespace_names[duplicate_index];
+        let check_index = duplicate_index + 1;
+        while (check_index < main_namespace_names.length) {
+            if (main_namespace_names[check_index] == current_name) {
+                compiler.diagnostics.add_error(
+                    "Duplicate main namespace '" +
+                        current_name +
+                        "' found. Each main namespace must have a unique name.",
+                    0,
+                    0,
+                    ""
+                );
+            }
+            check_index = check_index + 1;
+        }
+        duplicate_index = duplicate_index + 1;
+    }
+}
+export function package_compiler_generate_unique_names_with_compiler(
+    compiler,
+    function_statements,
+    class_statements,
+    variable_statements
+) {
     let m = 0;
     while (m < function_statements.length) {
         let func_stmt = function_statements[m];
-        func_stmt.uniqueName = package_compiler_get_fully_qualified_name(
-            manager,
-            func_stmt.name,
-            func_stmt.sourceNamespace
-        );
+        func_stmt.uniqueName =
+            compiler.namespace_manager.get_fully_qualified_name(
+                func_stmt.name,
+                func_stmt.sourceNamespace
+            );
         m = m + 1;
     }
     let n = 0;
     while (n < class_statements.length) {
         let class_stmt = class_statements[n];
-        class_stmt.uniqueName = package_compiler_get_fully_qualified_name(
-            manager,
-            class_stmt.name,
-            class_stmt.sourceNamespace
-        );
+        class_stmt.uniqueName =
+            compiler.namespace_manager.get_fully_qualified_name(
+                class_stmt.name,
+                class_stmt.sourceNamespace
+            );
         n = n + 1;
     }
     let o = 0;
     while (o < variable_statements.length) {
         let var_stmt = variable_statements[o];
-        var_stmt.uniqueName = package_compiler_get_fully_qualified_name(
-            manager,
-            var_stmt.name,
-            var_stmt.sourceNamespace
-        );
+        var_stmt.uniqueName =
+            compiler.namespace_manager.get_fully_qualified_name(
+                var_stmt.name,
+                var_stmt.sourceNamespace
+            );
         o = o + 1;
     }
+}
+export function package_compiler_create_integrated_ast_with_compiler(
+    compiler,
+    js_import_statements,
+    variable_statements,
+    function_statements,
+    class_statements,
+    execution_statements
+) {
     let integrated_ast = { type: "Program", statements: [] };
     let p = 0;
     while (p < js_import_statements.length) {
@@ -289,35 +325,23 @@ export function package_compiler_compile_asts_with_options(
     let r = 0;
     while (r < function_statements.length) {
         let func_stmt = function_statements[r];
+        let modified_stmt = Object.assign({}, func_stmt);
         if (
             func_stmt.uniqueName != null &&
             func_stmt.uniqueName != func_stmt.name
         ) {
-            let modified_stmt = Object.assign({}, func_stmt);
             modified_stmt.name = func_stmt.uniqueName;
-            modified_stmt.body =
-                package_compiler_resolve_identifiers_in_statement(
-                    func_stmt.body,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-            integrated_ast.statements.push(modified_stmt);
-        } else {
-            let modified_stmt = Object.assign({}, func_stmt);
-            modified_stmt.body =
-                package_compiler_resolve_identifiers_in_statement(
-                    func_stmt.body,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-            integrated_ast.statements.push(modified_stmt);
         }
+        modified_stmt.body =
+            compiler.namespace_manager.resolve_identifiers_in_statement(
+                func_stmt.body,
+                function_statements,
+                variable_statements,
+                class_statements,
+                compiler.options,
+                compiler.diagnostics
+            );
+        integrated_ast.statements.push(modified_stmt);
         r = r + 1;
     }
     let s = 0;
@@ -342,13 +366,13 @@ export function package_compiler_compile_asts_with_options(
                     member.body != null
                 ) {
                     resolved_member.body =
-                        package_compiler_resolve_identifiers_in_statement(
+                        compiler.namespace_manager.resolve_identifiers_in_statement(
                             member.body,
-                            manager,
                             function_statements,
                             variable_statements,
                             class_statements,
-                            options
+                            compiler.options,
+                            compiler.diagnostics
                         );
                 }
                 resolved_members.push(resolved_member);
@@ -361,516 +385,46 @@ export function package_compiler_compile_asts_with_options(
     }
     let t = 0;
     while (t < execution_statements.length) {
-        let resolved_stmt = package_compiler_resolve_identifiers_in_statement(
-            execution_statements[t],
-            manager,
-            function_statements,
-            variable_statements,
-            class_statements,
-            options
-        );
+        let resolved_stmt =
+            compiler.namespace_manager.resolve_identifiers_in_statement(
+                execution_statements[t],
+                function_statements,
+                variable_statements,
+                class_statements,
+                compiler.options,
+                compiler.diagnostics
+            );
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
-    let generator = new package_codegen_JsCodeGeneration("    ");
-    let generated = generator.generate(integrated_ast);
-    return { success: true, code: generated, error: null };
+    return integrated_ast;
 }
-export function package_compiler_resolve_multiple_namespaces(ast) {
-    let manager = new package_compiler_NamespaceManager();
-    let i = 0;
-    while (i < ast.statements.length) {
-        let stmt = ast.statements[i];
-        if (stmt.type == "NamespaceStatement") {
-            let namespace_path = package_compiler_join_path(stmt.path, "::");
-            if (stmt.isMainNamespace) {
-                namespace_path = namespace_path + "!";
-            }
-            manager.current_namespace = namespace_path;
-        } else if (stmt.type == "UsingStatement") {
-            let using_path = package_compiler_join_path(stmt.path, "::");
-            let is_global = package_compiler_is_main_namespace(using_path);
-            package_compiler_add_using_import(manager, using_path, is_global);
-        } else if (stmt.type == "MicroDeclaration") {
-            package_compiler_add_symbol_to_namespace(
-                manager,
-                manager.current_namespace,
-                stmt.name,
-                "function",
-                stmt,
-                manager.current_file
-            );
-        } else if (stmt.type == "ClassDeclaration") {
-            package_compiler_add_symbol_to_namespace(
-                manager,
-                manager.current_namespace,
-                stmt.name,
-                "class",
-                stmt,
-                manager.current_file
-            );
-        } else if (stmt.type == "LetStatement") {
-            package_compiler_add_symbol_to_namespace(
-                manager,
-                manager.current_namespace,
-                stmt.name,
-                "variable",
-                stmt,
-                manager.current_file
-            );
-        }
-        i = i + 1;
-    }
-    let j = 0;
-    while (j < ast.statements.length) {
-        let stmt = ast.statements[j];
-        if (stmt.type == "MicroDeclaration") {
-            stmt.uniqueName = package_compiler_get_fully_qualified_name(
-                manager,
-                stmt.name,
-                manager.current_namespace
-            );
-        } else if (stmt.type == "ClassDeclaration") {
-            stmt.uniqueName = package_compiler_get_fully_qualified_name(
-                manager,
-                stmt.name,
-                manager.current_namespace
-            );
-        } else if (stmt.type == "LetStatement") {
-            stmt.uniqueName = package_compiler_get_fully_qualified_name(
-                manager,
-                stmt.name,
-                manager.current_namespace
-            );
-        }
-        j = j + 1;
-    }
-    return ast;
-}
-export function package_compiler_resolve_symbol(
-    manager,
-    symbol_name,
-    current_namespace,
-    current_file
+export function package_compiler_create_compilation_result_with_diagnostics(
+    compiler,
+    integrated_ast
 ) {
-    let current_namespace_data = manager.namespaces[current_namespace];
-    if (
-        current_namespace_data != null &&
-        current_namespace_data.symbols != null
-    ) {
-        let symbol = current_namespace_data.symbols[symbol_name];
-        if (symbol != null) {
-            return {
-                found: true,
-                symbol: symbol,
-                namespace: current_namespace,
-            };
-        }
+    if (compiler.diagnostics.has_errors()) {
+        return {
+            success: false,
+            code: null,
+            diagnostics: compiler.diagnostics.get_all_diagnostics(),
+        };
     }
-    let file_usings = manager.usings[current_file];
-    if (file_usings != null) {
-        let i = 0;
-        while (i < file_usings.length) {
-            let using_info = file_usings[i];
-            let using_namespace = using_info["namespace"];
-            let using_namespace_data = manager.namespaces[using_namespace];
-            if (
-                using_namespace_data != null &&
-                using_namespace_data.symbols != null
-            ) {
-                let symbol = using_namespace_data.symbols[symbol_name];
-                if (symbol != null) {
-                    return {
-                        found: true,
-                        symbol: symbol,
-                        namespace: using_namespace,
-                    };
-                }
-            }
-            i = i + 1;
-        }
+    if (integrated_ast != null) {
+        let generator = new package_codegen_JsCodeGeneration("    ");
+        let generated = generator.generate(integrated_ast);
+        return {
+            success: true,
+            code: generated,
+            diagnostics: compiler.diagnostics.get_all_diagnostics(),
+        };
+    } else {
+        return {
+            success: false,
+            code: null,
+            diagnostics: compiler.diagnostics.get_all_diagnostics(),
+        };
     }
-    let global_namespace_data = manager.namespaces[""];
-    if (
-        global_namespace_data != null &&
-        global_namespace_data.symbols != null
-    ) {
-        let symbol = global_namespace_data.symbols[symbol_name];
-        if (symbol != null) {
-            return { found: true, symbol: symbol, namespace: "" };
-        }
-    }
-    return { found: false, symbol: null, namespace: null };
-}
-export function package_compiler_resolve_identifiers_in_expression(
-    expr,
-    manager,
-    function_statements,
-    variable_statements,
-    class_statements,
-    options
-) {
-    if (expr == null) {
-        return expr;
-    }
-    if (expr.type == "Identifier") {
-        let i = 0;
-        while (i < function_statements.length) {
-            let func_stmt = function_statements[i];
-            if (func_stmt.name == expr.name && func_stmt.uniqueName != null) {
-                let resolved_expr = Object.assign({}, expr);
-                resolved_expr.name = func_stmt.uniqueName;
-                return resolved_expr;
-            }
-            i = i + 1;
-        }
-        let j = 0;
-        while (j < variable_statements.length) {
-            let var_stmt = variable_statements[j];
-            if (var_stmt.name == expr.name && var_stmt.uniqueName != null) {
-                let resolved_expr = Object.assign({}, expr);
-                resolved_expr.name = var_stmt.uniqueName;
-                return resolved_expr;
-            }
-            j = j + 1;
-        }
-        return expr;
-    }
-    if (expr.type == "MicroCall") {
-        let resolved_expr = Object.assign({}, expr);
-        if (expr.callee.type == "Identifier") {
-            let function_name = expr.callee.name;
-            let found_function = false;
-            let i = 0;
-            while (i < function_statements.length) {
-                let func_stmt = function_statements[i];
-                if (
-                    func_stmt.name == function_name &&
-                    func_stmt.uniqueName != null
-                ) {
-                    let resolved_callee = Object.assign({}, expr.callee);
-                    resolved_callee.name = func_stmt.uniqueName;
-                    resolved_expr.callee = resolved_callee;
-                    found_function = true;
-                    break;
-                }
-                i = i + 1;
-            }
-            if (
-                !found_function &&
-                options != null &&
-                options.implicit_member_call == "warning"
-            ) {
-                let k = 0;
-                while (k < class_statements.length) {
-                    let class_stmt = class_statements[k];
-                    if (class_stmt.members != null) {
-                        let m = 0;
-                        while (m < class_stmt.members.length) {
-                            let member = class_stmt.members[m];
-                            if (
-                                member.type == "MemberStatement" &&
-                                member.name == function_name
-                            ) {
-                                let warning = package_compiler_create_warning(
-                                    "Implicit member call detected for '" +
-                                        function_name +
-                                        "'. Consider using 'Self::" +
-                                        function_name +
-                                        "()' for static methods or 'self." +
-                                        function_name +
-                                        "()' for instance methods.",
-                                    expr.line || 0,
-                                    expr.column || 0
-                                );
-                                package_compiler_report_warning(warning);
-                                break;
-                            }
-                            m = m + 1;
-                        }
-                    }
-                    k = k + 1;
-                }
-            }
-            if (!found_function) {
-                resolved_expr.callee =
-                    package_compiler_resolve_identifiers_in_expression(
-                        expr.callee,
-                        manager,
-                        function_statements,
-                        variable_statements,
-                        class_statements,
-                        options
-                    );
-            }
-        } else {
-            resolved_expr.callee =
-                package_compiler_resolve_identifiers_in_expression(
-                    expr.callee,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-        }
-        let resolved_args = [];
-        let k = 0;
-        while (k < expr.arguments.length) {
-            resolved_args.push(
-                package_compiler_resolve_identifiers_in_expression(
-                    expr.arguments[k],
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                )
-            );
-            k = k + 1;
-        }
-        resolved_expr.arguments = resolved_args;
-        return resolved_expr;
-    }
-    if (expr.type == "BinaryOp") {
-        let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left = package_compiler_resolve_identifiers_in_expression(
-            expr.left,
-            manager,
-            function_statements,
-            variable_statements,
-            class_statements,
-            options
-        );
-        resolved_expr.right =
-            package_compiler_resolve_identifiers_in_expression(
-                expr.right,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        return resolved_expr;
-    }
-    if (expr.type == "Assignment") {
-        let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left = package_compiler_resolve_identifiers_in_expression(
-            expr.left,
-            manager,
-            function_statements,
-            variable_statements,
-            class_statements,
-            options
-        );
-        resolved_expr.right =
-            package_compiler_resolve_identifiers_in_expression(
-                expr.right,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        return resolved_expr;
-    }
-    if (expr.type == "PropertyAccess") {
-        let resolved_expr = Object.assign({}, expr);
-        resolved_expr.object =
-            package_compiler_resolve_identifiers_in_expression(
-                expr.object,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        return resolved_expr;
-    }
-    if (expr.type == "NewExpression") {
-        let resolved_expr = Object.assign({}, expr);
-        let m = 0;
-        while (m < class_statements.length) {
-            let class_stmt = class_statements[m];
-            if (
-                class_stmt.name == expr.className &&
-                class_stmt.uniqueName != null
-            ) {
-                resolved_expr.className = class_stmt.uniqueName;
-                break;
-            }
-            m = m + 1;
-        }
-        let resolved_args = [];
-        if (expr.arguments != null) {
-            let n = 0;
-            while (n < expr.arguments.length) {
-                resolved_args.push(
-                    package_compiler_resolve_identifiers_in_expression(
-                        expr.arguments[n],
-                        manager,
-                        function_statements,
-                        variable_statements,
-                        class_statements,
-                        options
-                    )
-                );
-                n = n + 1;
-            }
-        }
-        resolved_expr.arguments = resolved_args;
-        return resolved_expr;
-    }
-    return expr;
-}
-export function package_compiler_resolve_identifiers_in_statement(
-    stmt,
-    manager,
-    function_statements,
-    variable_statements,
-    class_statements,
-    options
-) {
-    if (stmt == null) {
-        return stmt;
-    }
-    if (stmt.type == "LetStatement") {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.value =
-            package_compiler_resolve_identifiers_in_expression(
-                stmt.value,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        return resolved_stmt;
-    }
-    if (stmt.type == "ExpressionStatement") {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.expression =
-            package_compiler_resolve_identifiers_in_expression(
-                stmt.expression,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        return resolved_stmt;
-    }
-    if (stmt.type == "ReturnStatement") {
-        let resolved_stmt = Object.assign({}, stmt);
-        if (stmt.value != null) {
-            resolved_stmt.value =
-                package_compiler_resolve_identifiers_in_expression(
-                    stmt.value,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-        }
-        return resolved_stmt;
-    }
-    if (stmt.type == "IfStatement") {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition =
-            package_compiler_resolve_identifiers_in_expression(
-                stmt.condition,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        resolved_stmt.thenBranch =
-            package_compiler_resolve_identifiers_in_statement(
-                stmt.thenBranch,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        if (stmt.elseBranch != null) {
-            resolved_stmt.elseBranch =
-                package_compiler_resolve_identifiers_in_statement(
-                    stmt.elseBranch,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-        }
-        return resolved_stmt;
-    }
-    if (stmt.type == "WhileStatement") {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition =
-            package_compiler_resolve_identifiers_in_expression(
-                stmt.condition,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        resolved_stmt.body = package_compiler_resolve_identifiers_in_statement(
-            stmt.body,
-            manager,
-            function_statements,
-            variable_statements,
-            class_statements,
-            options
-        );
-        return resolved_stmt;
-    }
-    if (stmt.type == "UntilStatement") {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition =
-            package_compiler_resolve_identifiers_in_expression(
-                stmt.condition,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        resolved_stmt.body = package_compiler_resolve_identifiers_in_statement(
-            stmt.body,
-            manager,
-            function_statements,
-            variable_statements,
-            class_statements,
-            options
-        );
-        return resolved_stmt;
-    }
-    if (stmt.type == "Block") {
-        let resolved_stmt = Object.assign({}, stmt);
-        let resolved_statements = [];
-        let i = 0;
-        while (i < stmt.statements.length) {
-            resolved_statements.push(
-                package_compiler_resolve_identifiers_in_statement(
-                    stmt.statements[i],
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                )
-            );
-            i = i + 1;
-        }
-        resolved_stmt.statements = resolved_statements;
-        return resolved_stmt;
-    }
-    return stmt;
 }
 export function package_compiler_is_main_namespace(namespace_path) {
     if (namespace_path == null) {
@@ -883,79 +437,6 @@ export function package_compiler_get_main_namespace_name(namespace_path) {
         return namespace_path.substring(0, namespace_path.length - 1);
     }
     return namespace_path;
-}
-export function package_compiler_add_symbol_to_namespace(
-    manager,
-    namespace_path,
-    symbol_name,
-    symbol_type,
-    symbol_data,
-    file_path
-) {
-    if (manager.namespaces[namespace_path] == null) {
-        manager.namespaces[namespace_path] = { symbols: {}, files: [] };
-    }
-    let namespace_data = manager.namespaces[namespace_path];
-    namespace_data.symbols[symbol_name] = {
-        type: symbol_type,
-        data: symbol_data,
-        filePath: file_path,
-    };
-    let file_exists = false;
-    let i = 0;
-    while (i < namespace_data.files.length) {
-        if (namespace_data.files[i] == file_path) {
-            file_exists = true;
-            break;
-        }
-        i = i + 1;
-    }
-    if (!file_exists) {
-        namespace_data.files.push(file_path);
-    }
-}
-export function package_compiler_add_using_import(
-    manager,
-    using_path,
-    is_global
-) {
-    if (manager.usings[manager.current_file] == null) {
-        manager.usings[manager.current_file] = [];
-    }
-    let using_info = { namespace: using_path, isGlobal: is_global };
-    manager.usings[manager.current_file].push(using_info);
-}
-export function package_compiler_find_symbol_namespace(
-    manager,
-    symbol_name,
-    symbol_type
-) {
-    let namespace_keys = Object.keys(manager.namespaces);
-    let i = 0;
-    while (i < namespace_keys.length) {
-        let namespace_name = namespace_keys[i];
-        let namespace_data = manager.namespaces[namespace_name];
-        if (namespace_data != null && namespace_data.symbols != null) {
-            let symbol = namespace_data.symbols[symbol_name];
-            if (symbol != null && symbol.type == symbol_type) {
-                return namespace_name;
-            }
-        }
-        i = i + 1;
-    }
-    return "";
-}
-export function package_compiler_get_fully_qualified_name(
-    manager,
-    symbol_name,
-    namespace_path
-) {
-    if (namespace_path == "" || namespace_path == null) {
-        return symbol_name;
-    }
-    let clean_namespace =
-        package_compiler_get_main_namespace_name(namespace_path);
-    return clean_namespace.replace("::", "_") + "_" + symbol_name;
 }
 export function package_compiler_validate_namespace_rules(ast, mode) {
     let has_namespace = false;
@@ -1097,33 +578,12 @@ export function package_compiler_join_path(path_array, separator) {
     }
     return result;
 }
-export function package_compiler_set_compile_mode(manager, mode) {
-    manager.mode = mode;
-}
-export function package_compiler_simple_dfs_visit(
-    file_path,
-    analyzer,
-    visited,
-    sorted
-) {
-    if (visited[file_path]) {
-        return;
-    }
-    visited[file_path] = true;
-    let dependencies = analyzer.dependencies[file_path];
-    if (dependencies != null) {
-        let i = 0;
-        while (i < dependencies.length) {
-            package_compiler_simple_dfs_visit(
-                dependencies[i],
-                analyzer,
-                visited,
-                sorted
-            );
-            i = i + 1;
-        }
-    }
-    sorted.push(file_path);
+export function package_compiler_compile_asts(file_contents, mode) {
+    return package_compiler_compile_asts_with_options(
+        file_contents,
+        mode,
+        null
+    );
 }
 export function package_compiler_generate_single_js(file_contents) {
     return package_compiler_compile_asts(file_contents, "repl");
@@ -1165,6 +625,105 @@ export function package_compiler_package_compiler_compile_text_with_options(
         "repl",
         options
     );
+}
+export function package_compiler_compile_asts_with_options(
+    file_contents,
+    mode,
+    options
+) {
+    if (options == null) {
+        options = new package_compiler_CompilerOptions(
+            "js",
+            false,
+            false,
+            "warning",
+            mode || "repl"
+        );
+    } else if (options.mode == null) {
+        options.mode = mode || "repl";
+    }
+    let compiler = new package_compiler_Compiler(options);
+    return package_compiler_compile_with_compiler(compiler, file_contents);
+}
+export function package_compiler_resolve_multiple_namespaces(ast) {
+    let manager = new package_compiler_NamespaceManager();
+    let i = 0;
+    while (i < ast.statements.length) {
+        let stmt = ast.statements[i];
+        if (stmt.type == "NamespaceStatement") {
+            let namespace_path = package_codegen_join_name_path(
+                stmt.path,
+                "::"
+            );
+            if (stmt.isMainNamespace) {
+                namespace_path = namespace_path + "!";
+            }
+            manager.current_namespace = namespace_path;
+        } else if (stmt.type == "UsingStatement") {
+            let using_path = package_codegen_join_name_path(stmt.path, "::");
+            let is_global = package_compiler_is_main_namespace(using_path);
+            manager.add_using_import(using_path, is_global);
+        } else if (stmt.type == "MicroDeclaration") {
+            manager.add_symbol_to_namespace(
+                manager.current_namespace,
+                stmt.name,
+                "function",
+                stmt,
+                manager.current_file
+            );
+        } else if (stmt.type == "ClassDeclaration") {
+            manager.add_symbol_to_namespace(
+                manager.current_namespace,
+                stmt.name,
+                "class",
+                stmt,
+                manager.current_file
+            );
+        } else if (stmt.type == "LetStatement") {
+            manager.add_symbol_to_namespace(
+                manager.current_namespace,
+                stmt.name,
+                "variable",
+                stmt,
+                manager.current_file
+            );
+        }
+        i = i + 1;
+    }
+    let j = 0;
+    while (j < ast.statements.length) {
+        let stmt = ast.statements[j];
+        if (stmt.type == "MicroDeclaration") {
+            stmt.uniqueName = manager.get_fully_qualified_name(
+                stmt.name,
+                manager.current_namespace
+            );
+        } else if (stmt.type == "ClassDeclaration") {
+            stmt.uniqueName = manager.get_fully_qualified_name(
+                stmt.name,
+                manager.current_namespace
+            );
+        } else if (stmt.type == "LetStatement") {
+            stmt.uniqueName = manager.get_fully_qualified_name(
+                stmt.name,
+                manager.current_namespace
+            );
+        }
+        j = j + 1;
+    }
+    return ast;
+}
+export function package_codegen_join_name_path(names, separator) {
+    let result = "";
+    let i = 0;
+    while (i < names.length) {
+        if (i > 0) {
+            result = result + separator;
+        }
+        result = result + names[i];
+        i = i + 1;
+    }
+    return result;
 }
 export function package_lexer_is_whitespace(ch) {
     return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
@@ -2750,12 +2309,77 @@ export function package_parser_parse(tokens) {
     let parser = new package_parser_ValkyrieParser(tokens);
     return package_parser_parseProgram(parser);
 }
+class package_compiler_Compiler {
+    constructor(options) {
+        this.options = options || new package_compiler_CompilerOptions();
+        this.diagnostics = new package_compiler_CompilerDiagnostics();
+        this.namespace_manager = new package_compiler_NamespaceManager();
+        this.dependency_analyzer = new package_compiler_DependencyAnalyzer();
+    }
+}
+class package_compiler_CompilerDiagnostics {
+    constructor() {
+        this.errors = [];
+        this.warnings = [];
+    }
+
+    get_all_diagnostics() {
+        let result = [];
+        let i = 0;
+        while (i < this.errors.length) {
+            result.push(this.errors[i]);
+            i = i + 1;
+        }
+        let j = 0;
+        while (j < this.warnings.length) {
+            result.push(this.warnings[j]);
+            j = j + 1;
+        }
+        return result;
+    }
+
+    add_error(message, line, column, file) {
+        let error = {
+            type: "error",
+            message: message,
+            line: line || 0,
+            column: column || 0,
+            file: file || "",
+        };
+        this.errors.push(error);
+    }
+
+    add_warning(message, line, column, file) {
+        let warning = {
+            type: "warning",
+            message: message,
+            line: line || 0,
+            column: column || 0,
+            file: file || "",
+        };
+        this.warnings.push(warning);
+    }
+
+    has_errors() {
+        return this.errors.length > 0;
+    }
+
+    has_warnings() {
+        return this.warnings.length > 0;
+    }
+
+    clear_diagnostics() {
+        this.errors = [];
+        this.warnings = [];
+    }
+}
 class package_compiler_CompilerOptions {
-    constructor(output_format, optimize, debug, implicit_member_call) {
+    constructor(output_format, optimize, debug, implicit_member_call, mode) {
         this.output_format = output_format || "js";
         this.optimize = optimize || false;
         this.debug = debug || false;
         this.implicit_member_call = implicit_member_call || "warning";
+        this.mode = mode || "repl";
     }
 }
 class package_compiler_CompilerStatistics {
@@ -2770,7 +2394,40 @@ class package_compiler_CompilerStatistics {
 class package_compiler_DependencyAnalyzer {
     constructor() {
         this.dependencies = {};
-        this.reverseDependencies = {};
+        this.reverse_dependencies = {};
+    }
+
+    topological_sort(file_contents) {
+        let file_names = Object.keys(file_contents);
+        let visited = {};
+        let sorted = [];
+        let i = 0;
+        while (i < file_names.length) {
+            visited[file_names[i]] = false;
+            i = i + 1;
+        }
+        let j = 0;
+        while (j < file_names.length) {
+            this.simple_dfs_visit(file_names[j], visited, sorted);
+            j = j + 1;
+        }
+        return { sorted: sorted, error: null };
+    }
+
+    simple_dfs_visit(file_path, visited, sorted) {
+        if (visited[file_path]) {
+            return;
+        }
+        visited[file_path] = true;
+        let dependencies = this.dependencies[file_path];
+        if (dependencies != null) {
+            let i = 0;
+            while (i < dependencies.length) {
+                this.simple_dfs_visit(dependencies[i], visited, sorted);
+                i = i + 1;
+            }
+        }
+        sorted.push(file_path);
     }
 }
 class package_compiler_NamespaceManager {
@@ -2779,7 +2436,485 @@ class package_compiler_NamespaceManager {
         this.usings = {};
         this.current_namespace = "";
         this.current_file = "";
-        this.mode = "repl";
+    }
+
+    resolve_identifiers_in_expression(
+        expr,
+        function_statements,
+        variable_statements,
+        class_statements,
+        options,
+        diagnostics
+    ) {
+        if (expr == null) {
+            return expr;
+        }
+        if (expr.type == "Identifier") {
+            let i = 0;
+            while (i < function_statements.length) {
+                let func_stmt = function_statements[i];
+                if (
+                    func_stmt.name == expr.name &&
+                    func_stmt.uniqueName != null
+                ) {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = func_stmt.uniqueName;
+                    return resolved_expr;
+                }
+                i = i + 1;
+            }
+            let j = 0;
+            while (j < variable_statements.length) {
+                let var_stmt = variable_statements[j];
+                if (var_stmt.name == expr.name && var_stmt.uniqueName != null) {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = var_stmt.uniqueName;
+                    return resolved_expr;
+                }
+                j = j + 1;
+            }
+            return expr;
+        }
+        if (expr.type == "MicroCall") {
+            let resolved_expr = Object.assign({}, expr);
+            if (expr.callee.type == "Identifier") {
+                let function_name = expr.callee.name;
+                let found_function = false;
+                let i = 0;
+                while (i < function_statements.length) {
+                    let func_stmt = function_statements[i];
+                    if (
+                        func_stmt.name == function_name &&
+                        func_stmt.uniqueName != null
+                    ) {
+                        let resolved_callee = Object.assign({}, expr.callee);
+                        resolved_callee.name = func_stmt.uniqueName;
+                        resolved_expr.callee = resolved_callee;
+                        found_function = true;
+                        break;
+                    }
+                    i = i + 1;
+                }
+                if (
+                    !found_function &&
+                    options != null &&
+                    options.implicit_member_call == "warning"
+                ) {
+                    let k = 0;
+                    while (k < class_statements.length) {
+                        let class_stmt = class_statements[k];
+                        if (class_stmt.members != null) {
+                            let m = 0;
+                            while (m < class_stmt.members.length) {
+                                let member = class_stmt.members[m];
+                                if (
+                                    member.type == "MemberStatement" &&
+                                    member.name == function_name
+                                ) {
+                                    diagnostics.add_warning(
+                                        "Implicit member call detected for '" +
+                                            function_name +
+                                            "'. Consider using 'Self::" +
+                                            function_name +
+                                            "()' for static methods or 'self." +
+                                            function_name +
+                                            "()' for instance methods.",
+                                        expr.line || 0,
+                                        expr.column || 0,
+                                        ""
+                                    );
+                                    break;
+                                }
+                                m = m + 1;
+                            }
+                        }
+                        k = k + 1;
+                    }
+                }
+                if (!found_function) {
+                    resolved_expr.callee =
+                        this.resolve_identifiers_in_expression(
+                            expr.callee,
+                            function_statements,
+                            variable_statements,
+                            class_statements,
+                            options,
+                            diagnostics
+                        );
+                }
+            } else {
+                resolved_expr.callee = this.resolve_identifiers_in_expression(
+                    expr.callee,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options,
+                    diagnostics
+                );
+            }
+            let resolved_args = [];
+            let k = 0;
+            while (k < expr.arguments.length) {
+                resolved_args.push(
+                    this.resolve_identifiers_in_expression(
+                        expr.arguments[k],
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    )
+                );
+                k = k + 1;
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+        if (expr.type == "BinaryOp") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = this.resolve_identifiers_in_expression(
+                expr.left,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_expr.right = this.resolve_identifiers_in_expression(
+                expr.right,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (expr.type == "Assignment") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = this.resolve_identifiers_in_expression(
+                expr.left,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_expr.right = this.resolve_identifiers_in_expression(
+                expr.right,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (expr.type == "PropertyAccess") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.object = this.resolve_identifiers_in_expression(
+                expr.object,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (expr.type == "NewExpression") {
+            let resolved_expr = Object.assign({}, expr);
+            let m = 0;
+            while (m < class_statements.length) {
+                let class_stmt = class_statements[m];
+                if (
+                    class_stmt.name == expr.className &&
+                    class_stmt.uniqueName != null
+                ) {
+                    resolved_expr.className = class_stmt.uniqueName;
+                    break;
+                }
+                m = m + 1;
+            }
+            let resolved_args = [];
+            if (expr.arguments != null) {
+                let n = 0;
+                while (n < expr.arguments.length) {
+                    resolved_args.push(
+                        this.resolve_identifiers_in_expression(
+                            expr.arguments[n],
+                            function_statements,
+                            variable_statements,
+                            class_statements,
+                            options,
+                            diagnostics
+                        )
+                    );
+                    n = n + 1;
+                }
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+        return expr;
+    }
+
+    resolve_identifiers_in_statement(
+        stmt,
+        function_statements,
+        variable_statements,
+        class_statements,
+        options,
+        diagnostics
+    ) {
+        if (stmt == null) {
+            return stmt;
+        }
+        if (stmt.type == "LetStatement") {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.value = this.resolve_identifiers_in_expression(
+                stmt.value,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        }
+        if (stmt.type == "ExpressionStatement") {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.expression = this.resolve_identifiers_in_expression(
+                stmt.expression,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        }
+        if (stmt.type == "ReturnStatement") {
+            let resolved_stmt = Object.assign({}, stmt);
+            if (stmt.value != null) {
+                resolved_stmt.value = this.resolve_identifiers_in_expression(
+                    stmt.value,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options,
+                    diagnostics
+                );
+            }
+            return resolved_stmt;
+        }
+        if (stmt.type == "IfStatement") {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = this.resolve_identifiers_in_expression(
+                stmt.condition,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_stmt.thenBranch = this.resolve_identifiers_in_statement(
+                stmt.thenBranch,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            if (stmt.elseBranch != null) {
+                resolved_stmt.elseBranch =
+                    this.resolve_identifiers_in_statement(
+                        stmt.elseBranch,
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    );
+            }
+            return resolved_stmt;
+        }
+        if (stmt.type == "WhileStatement") {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = this.resolve_identifiers_in_expression(
+                stmt.condition,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_stmt.body = this.resolve_identifiers_in_statement(
+                stmt.body,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        }
+        if (stmt.type == "UntilStatement") {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = this.resolve_identifiers_in_expression(
+                stmt.condition,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_stmt.body = this.resolve_identifiers_in_statement(
+                stmt.body,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        }
+        if (stmt.type == "Block") {
+            let resolved_stmt = Object.assign({}, stmt);
+            let resolved_statements = [];
+            let i = 0;
+            while (i < stmt.statements.length) {
+                resolved_statements.push(
+                    this.resolve_identifiers_in_statement(
+                        stmt.statements[i],
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    )
+                );
+                i = i + 1;
+            }
+            resolved_stmt.statements = resolved_statements;
+            return resolved_stmt;
+        }
+        return stmt;
+    }
+
+    add_symbol_to_namespace(
+        namespace_path,
+        symbol_name,
+        symbol_type,
+        symbol_data,
+        file_path
+    ) {
+        if (this.namespaces[namespace_path] == null) {
+            this.namespaces[namespace_path] = { symbols: {}, files: [] };
+        }
+        let namespace_data = this.namespaces[namespace_path];
+        namespace_data.symbols[symbol_name] = {
+            type: symbol_type,
+            data: symbol_data,
+            filePath: file_path,
+        };
+        let file_exists = false;
+        let i = 0;
+        while (i < namespace_data.files.length) {
+            if (namespace_data.files[i] == file_path) {
+                file_exists = true;
+                break;
+            }
+            i = i + 1;
+        }
+        if (!file_exists) {
+            namespace_data.files.push(file_path);
+        }
+    }
+
+    add_using_import(using_path, is_global) {
+        if (this.usings[this.current_file] == null) {
+            this.usings[this.current_file] = [];
+        }
+        let using_info = { namespace: using_path, isGlobal: is_global };
+        this.usings[this.current_file].push(using_info);
+    }
+
+    find_symbol_namespace(symbol_name, symbol_type) {
+        let namespace_keys = Object.keys(this.namespaces);
+        let i = 0;
+        while (i < namespace_keys.length) {
+            let namespace_name = namespace_keys[i];
+            let namespace_data = this.namespaces[namespace_name];
+            if (namespace_data != null && namespace_data.symbols != null) {
+                let symbol = namespace_data.symbols[symbol_name];
+                if (symbol != null && symbol.type == symbol_type) {
+                    return namespace_name;
+                }
+            }
+            i = i + 1;
+        }
+        return "";
+    }
+
+    get_fully_qualified_name(symbol_name, namespace_path) {
+        if (namespace_path == "" || namespace_path == null) {
+            return symbol_name;
+        }
+        let clean_namespace =
+            package_compiler_get_main_namespace_name(namespace_path);
+        return clean_namespace.replace("::", "_") + "_" + symbol_name;
+    }
+
+    resolve_symbol(symbol_name, current_namespace, current_file) {
+        let current_namespace_data = this.namespaces[current_namespace];
+        if (
+            current_namespace_data != null &&
+            current_namespace_data.symbols != null
+        ) {
+            let symbol = current_namespace_data.symbols[symbol_name];
+            if (symbol != null) {
+                return {
+                    found: true,
+                    symbol: symbol,
+                    namespace: current_namespace,
+                };
+            }
+        }
+        let file_usings = this.usings[current_file];
+        if (file_usings != null) {
+            let i = 0;
+            while (i < file_usings.length) {
+                let using_info = file_usings[i];
+                let using_namespace = using_info["namespace"];
+                let using_namespace_data = this.namespaces[using_namespace];
+                if (
+                    using_namespace_data != null &&
+                    using_namespace_data.symbols != null
+                ) {
+                    let symbol = using_namespace_data.symbols[symbol_name];
+                    if (symbol != null) {
+                        return {
+                            found: true,
+                            symbol: symbol,
+                            namespace: using_namespace,
+                        };
+                    }
+                }
+                i = i + 1;
+            }
+        }
+        let global_namespace_data = this.namespaces[""];
+        if (
+            global_namespace_data != null &&
+            global_namespace_data.symbols != null
+        ) {
+            let symbol = global_namespace_data.symbols[symbol_name];
+            if (symbol != null) {
+                return { found: true, symbol: symbol, namespace: "" };
+            }
+        }
+        return { found: false, symbol: null, namespace: null };
     }
 }
 class package_codegen_JsCodeGeneration {
@@ -2828,19 +2963,6 @@ class package_codegen_JsCodeGeneration {
                 result = result + str[i];
                 i = i + 1;
             }
-        }
-        return result;
-    }
-
-    join_name_path(names, separator) {
-        let result = "";
-        let i = 0;
-        while (i < names.length) {
-            if (i > 0) {
-                result = result + separator;
-            }
-            result = result + names[i];
-            i = i + 1;
         }
         return result;
     }

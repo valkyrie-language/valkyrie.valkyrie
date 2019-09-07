@@ -1,6 +1,7 @@
 namespace package::codegen;
 
 using package::parser::Node;
+using package::codegen::join_name_path;
 
 # JavaScript Code Generation Write Buffer with proper indentation management
 class JsCodeGeneration {
@@ -54,19 +55,7 @@ class JsCodeGeneration {
         return result;
     }
     
-    # 工具方法：连接名称路径
-    micro join_name_path(self, names: Array<String>, separator: String) -> String {
-        let result = "";
-        let i = 0;
-        while i < names.length {
-            if i > 0 {
-                result = result + separator;
-            }
-            result = result + names[i];
-            i = i + 1;
-        }
-        return result;
-    }
+
     
     # 生成表达式代码
     micro generate_expression(self, node: Node) -> String {
@@ -619,4 +608,18 @@ class JsCodeGeneration {
 
         return self.generate_statement(ast);
     }
+}
+
+# 工具方法：连接名称路径
+micro join_name_path(names: Array<String>, separator: String) -> String {
+    let result = "";
+    let i = 0;
+    while i < names.length {
+        if i > 0 {
+            result = result + separator;
+        }
+        result = result + names[i];
+        i = i + 1;
+    }
+    return result;
 }

@@ -1,0 +1,357 @@
+namespace package::compiler;
+
+using package::lexer::ValkyrieLexer;
+using package::parser::parse;
+using package::codegen::JsCodeGeneration;
+using package::parser::Node;
+using package::compiler::DependencyAnalyzer;
+using package::compiler::CompilerOptions;
+using package::compiler::CompilerDiagnostics;
+using package::compiler::NamespaceManager;
+using package::compiler::NamespaceUtils;
+using package::compiler::IdentifierResolver;
+using package::codegen::join_name_path;
+
+class Compiler {
+    constructor(options: CompilerOptions) {
+        self.options = options || new CompilerOptions();
+        self.diagnostics = new CompilerDiagnostics();
+        self.namespace_manager = new NamespaceManager();
+        self.dependency_analyzer = new DependencyAnalyzer();
+    }
+}
+
+# Main compilation function with multiple diagnostics support
+micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, String>) -> Map<String, String> {
+    # Reset state
+    compiler.diagnostics.clear_diagnostics();
+    compiler.namespace_manager = new NamespaceManager();
+    compiler.dependency_analyzer = new DependencyAnalyzer();
+
+    # Analyze dependencies - first pass: collect using dependencies
+    let file_names = Object.keys(file_contents);
+    let i = 0;
+    while i < file_names.length {
+        let file_name = file_names[i];
+        let content = file_contents[file_name];
+
+        compiler.dependency_analyzer.dependencies[file_name] = [];
+
+        let lexer_instance = new ValkyrieLexer(content);
+        let tokens = lexer_instance.tokenize();
+
+        if tokens.length > 0 {
+            let ast = parse(tokens);
+
+            if ast.type == "Program" {
+                let j = 0;
+                while j < ast.statements.length {
+                    let stmt = ast.statements[j];
+
+                    if stmt.type == "UsingStatement" {
+                        let using_path = join_name_path(stmt.path, "::");
+                        let provider_file = find_namespace_provider(using_path, file_contents);
+                        if provider_file != null && provider_file != file_name {
+                            compiler.dependency_analyzer.dependencies[file_name].push(provider_file);
+                        }
+                    }
+
+                    j = j + 1;
+                }
+            } else {
+                # Add parsing error to diagnostics instead of returning immediately
+                compiler.diagnostics.add_error("Failed to parse " + file_name + ": " + JSON.stringify(ast), 0, 0, file_name);
+            }
+        } else {
+            # Add lexing error to diagnostics instead of returning immediately
+            compiler.diagnostics.add_error("Lexical analysis failed for " + file_name, 0, 0, file_name);
+        }
+
+
+        i = i + 1;
+    }
+
+    # Topological sort
+    let sort_result = compiler.dependency_analyzer.topological_sort(file_contents);
+    if sort_result.error != null {
+        compiler.diagnostics.add_error(sort_result.error, 0, 0, "");
+        return create_compilation_result_with_diagnostics(compiler, null);
+    }
+
+    let sorted_files = sort_result.sorted;
+
+    # Collect statements by type
+    let js_import_statements = [];
+    let variable_statements = [];
+    let function_statements = [];
+    let class_statements = [];
+    let execution_statements = [];
+
+    # Process files in dependency order - continue even if errors occur
+    let k = 0;
+    while k < sorted_files.length {
+        let file_name = sorted_files[k];
+        let content = file_contents[file_name];
+
+        compiler.namespace_manager.current_file = file_name;
+
+        let lexer_instance = new ValkyrieLexer(content);
+        let tokens = lexer_instance.tokenize();
+
+        if tokens.length == 0 {
+            compiler.diagnostics.add_error("Empty or invalid file", 0, 0, file_name);
+            k = k + 1;
+            continue;
+        }
+
+        let ast = parse(tokens);
+        if ast.type != "Program" {
+            compiler.diagnostics.add_error("Failed to parse " + file_name + " at " + JSON.stringify(ast), 0, 0, file_name);
+            k = k + 1;
+            continue;
+        }
+
+        let validation_result = validate_namespace_rules(ast, compiler.options.mode);
+        if !validation_result.success {
+            compiler.diagnostics.add_error(validation_result.error, 0, 0, file_name);
+            # Continue processing instead of returning
+        }
+
+        let current_namespace = "";
+        let l = 0;
+        while l < ast.statements.length {
+            let stmt = ast.statements[l];
+
+            if stmt.type == "NamespaceStatement" {
+                current_namespace = join_name_path(stmt.path, "::");
+                if stmt.isMainNamespace {
+                    current_namespace = current_namespace + "!";
+
+                    # In standard mode, check for duplicate main namespaces
+                    if compiler.options.mode == "standard" {
+                        if compiler.namespace_manager.namespaces[current_namespace] != null {
+                            let clean_name = current_namespace.substring(0, current_namespace.length - 1);
+                            compiler.diagnostics.add_error("Duplicate main namespace '" + clean_name + "' found. Each main namespace must have a unique name.", 0, 0, file_name);
+                        }
+                    }
+                }
+                compiler.namespace_manager.current_namespace = current_namespace;
+
+            } else if stmt.type == "UsingStatement" {
+                let using_path = join_name_path(stmt.path, "::");
+                let is_global = is_main_namespace(using_path);
+                compiler.namespace_manager.add_using_import(using_path, is_global);
+
+            } else if stmt.type == "JSImportStatement" {
+                js_import_statements.push(stmt);
+
+            } else if stmt.type == "LetStatement" {
+                stmt.sourceNamespace = current_namespace;
+                variable_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "variable", stmt, file_name);
+
+            } else if stmt.type == "MicroDeclaration" {
+                stmt.sourceNamespace = current_namespace;
+                function_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "function", stmt, file_name);
+
+            } else if stmt.type == "ClassDeclaration" {
+                stmt.sourceNamespace = current_namespace;
+                class_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "class", stmt, file_name);
+
+            } else {
+                execution_statements.push(stmt);
+            }
+
+            l = l + 1;
+        }
+
+        k = k + 1;
+    }
+
+    # Additional duplicate main namespace check (only in standard mode)
+    if compiler.options.mode == "standard" {
+        check_duplicate_main_namespaces_with_compiler(compiler);
+    }
+
+    # Generate unique names
+    generate_unique_names_with_compiler(compiler, function_statements, class_statements, variable_statements);
+
+    # Create integrated AST
+    let integrated_ast = create_integrated_ast_with_compiler(compiler, js_import_statements, variable_statements, function_statements, class_statements, execution_statements);
+
+    return create_compilation_result_with_diagnostics(compiler, integrated_ast);
+}
+
+# Check for duplicate main namespaces
+micro check_duplicate_main_namespaces_with_compiler(compiler: Compiler) {
+    let main_namespaces = [];
+    let main_namespace_names = [];
+    
+    # Collect all main namespaces
+    let namespace_keys = Object.keys(compiler.namespace_manager.namespaces);
+    let ns_index = 0;
+    while ns_index < namespace_keys.length {
+        let ns_name = namespace_keys[ns_index];
+        if ns_name.endsWith("!") {
+            main_namespaces.push(ns_name);
+            # Extract clean namespace name (remove !)
+            let clean_name = ns_name.substring(0, ns_name.length - 1);
+            main_namespace_names.push(clean_name);
+        }
+        ns_index = ns_index + 1;
+    }
+    
+    # Check for duplicate main namespace names
+    let duplicate_index = 0;
+    while duplicate_index < main_namespace_names.length {
+        let current_name = main_namespace_names[duplicate_index];
+        let check_index = duplicate_index + 1;
+        while check_index < main_namespace_names.length {
+            if main_namespace_names[check_index] == current_name {
+                compiler.diagnostics.add_error("Duplicate main namespace '" + current_name + "' found. Each main namespace must have a unique name.", 0, 0, "");
+            }
+            check_index = check_index + 1;
+        }
+        duplicate_index = duplicate_index + 1;
+    }
+}
+
+# Generate unique names for statements
+micro generate_unique_names_with_compiler(compiler: Compiler, function_statements: Array<Node>, class_statements: Array<Node>, variable_statements: Array<Node>) {
+    let m = 0;
+    while m < function_statements.length {
+        let func_stmt = function_statements[m];
+        func_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(func_stmt.name, func_stmt.sourceNamespace);
+        m = m + 1;
+    }
+    
+    let n = 0;
+    while n < class_statements.length {
+        let class_stmt = class_statements[n];
+        class_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(class_stmt.name, class_stmt.sourceNamespace);
+        n = n + 1;
+    }
+    
+    let o = 0;
+    while o < variable_statements.length {
+        let var_stmt = variable_statements[o];
+        var_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(var_stmt.name, var_stmt.sourceNamespace);
+        o = o + 1;
+    }
+}
+
+# Create integrated AST with resolved identifiers
+micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statements: Array<Node>, variable_statements: Array<Node>, function_statements: Array<Node>, class_statements: Array<Node>, execution_statements: Array<Node>) -> Node {
+    let integrated_ast = {
+        "type": "Program",
+        "statements": []
+    };
+    
+    # Add JS imports
+    let p = 0;
+    while p < js_import_statements.length {
+        integrated_ast.statements.push(js_import_statements[p]);
+        p = p + 1;
+    }
+    
+    # Add variables with unique names
+    let q = 0;
+    while q < variable_statements.length {
+        let var_stmt = variable_statements[q];
+        if var_stmt.uniqueName != null && var_stmt.uniqueName != var_stmt.name {
+            let modified_stmt = Object.assign({}, var_stmt);
+            modified_stmt.name = var_stmt.uniqueName;
+            integrated_ast.statements.push(modified_stmt);
+        } else {
+            integrated_ast.statements.push(var_stmt);
+        }
+        q = q + 1;
+    }
+    
+    # Add functions with unique names and resolved identifiers
+    let r = 0;
+    while r < function_statements.length {
+        let func_stmt = function_statements[r];
+        let modified_stmt = Object.assign({}, func_stmt);
+        
+        if func_stmt.uniqueName != null && func_stmt.uniqueName != func_stmt.name {
+            modified_stmt.name = func_stmt.uniqueName;
+        }
+        
+        # Resolve identifiers in function body using IdentifierResolver functions
+        modified_stmt.body = compiler.namespace_manager.resolve_identifiers_in_statement(func_stmt.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+        integrated_ast.statements.push(modified_stmt);
+        r = r + 1;
+    }
+    
+    # Add classes with unique names and resolved identifiers
+    let s = 0;
+    while s < class_statements.length {
+        let class_stmt = class_statements[s];
+        let modified_stmt = Object.assign({}, class_stmt);
+        
+        if class_stmt.uniqueName != null && class_stmt.uniqueName != class_stmt.name {
+            modified_stmt.name = class_stmt.uniqueName;
+        }
+        
+        # Resolve identifiers in class members
+        if class_stmt.members != null {
+            let resolved_members = [];
+            let m = 0;
+            while m < class_stmt.members.length {
+                let member = class_stmt.members[m];
+                let resolved_member = Object.assign({}, member);
+                # Only resolve for methods and constructors that have bodies
+                if (member.type == "MemberStatement" || member.type == "ConstructorStatement") && member.body != null {
+                    resolved_member.body = compiler.namespace_manager.resolve_identifiers_in_statement(member.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+                }
+                resolved_members.push(resolved_member);
+                m = m + 1;
+            }
+            modified_stmt.members = resolved_members;
+        }
+        
+        integrated_ast.statements.push(modified_stmt);
+        s = s + 1;
+    }
+    
+    # Add execution statements with resolved identifiers
+    let t = 0;
+    while t < execution_statements.length {
+        let resolved_stmt = compiler.namespace_manager.resolve_identifiers_in_statement(execution_statements[t], function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+        integrated_ast.statements.push(resolved_stmt);
+        t = t + 1;
+    }
+    
+    return integrated_ast;
+}
+
+# Create compilation result with diagnostics
+micro create_compilation_result_with_diagnostics(compiler: Compiler, integrated_ast: Node) -> Map<String, String> {
+    if compiler.diagnostics.has_errors() {
+        return {
+            "success": false,
+            "code": null,
+            "diagnostics": compiler.diagnostics.get_all_diagnostics()
+        };
+    }
+    
+    if integrated_ast != null {
+        let generator = new JsCodeGeneration("    ");
+        let generated = generator.generate(integrated_ast);
+        
+        return {
+            "success": true,
+            "code": generated,
+            "diagnostics": compiler.diagnostics.get_all_diagnostics()
+        };
+    } else {
+        return {
+            "success": false,
+            "code": null,
+            "diagnostics": compiler.diagnostics.get_all_diagnostics()
+        };
+    }
+}

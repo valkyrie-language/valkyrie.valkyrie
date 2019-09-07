@@ -7,280 +7,50 @@ using package::compiler::CompilerOptions;
 class DependencyAnalyzer {
     constructor() {
         self.dependencies = {};
-        self.reverseDependencies = {};
+        self.reverse_dependencies = {};
     }
-}
 
+    # Topological sort (simplified version, no cycle detection)
+    micro topological_sort(self, file_contents: Map<String, String>) -> Map<String, String> {
+        let file_names = Object.keys(file_contents);
+        let visited = {};
+        let sorted = [];
 
-# 解析符号
-micro resolve_symbol(manager: NamespaceManager, symbol_name: String, current_namespace: Array<String>, current_file: String) -> Map<String, String> {
-    # 首先在当前命名空间中查找
-    let current_namespace_data = manager.namespaces[current_namespace];
-    if current_namespace_data != null && current_namespace_data.symbols != null {
-        let symbol = current_namespace_data.symbols[symbol_name];
-        if symbol != null {
-            return {
-                "found": true,
-                "symbol": symbol,
-                "namespace": current_namespace
-            };
-        }
-    }
-    
-    # 然后在using导入中查找
-    let file_usings = manager.usings[current_file];
-    if file_usings != null {
         let i = 0;
-        while i < file_usings.length {
-            let using_info = file_usings[i];
-            let using_namespace = using_info["namespace"];
-            
-            let using_namespace_data = manager.namespaces[using_namespace];
-            if using_namespace_data != null && using_namespace_data.symbols != null {
-                let symbol = using_namespace_data.symbols[symbol_name];
-                if symbol != null {
-                    return {
-                        "found": true,
-                        "symbol": symbol,
-                        "namespace": using_namespace
-                    };
-                }
-            }
-            
+        while i < file_names.length {
+            visited[file_names[i]] = false;
             i = i + 1;
         }
-    }
-    
-    # 最后在全局命名空间中查找
-    let global_namespace_data = manager.namespaces[""];
-    if global_namespace_data != null && global_namespace_data.symbols != null {
-        let symbol = global_namespace_data.symbols[symbol_name];
-        if symbol != null {
-            return {
-                "found": true,
-                "symbol": symbol,
-                "namespace": ""
-            };
-        }
-    }
-    
-    return {
-        "found": false,
-        "symbol": null,
-        "namespace": null
-    };
-}
 
-
-# 带选项的递归解析表达式中的标识符
-micro resolve_identifiers_in_expression(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
-    if expr == null {
-        return expr;
-    }
-    
-    if expr.type == "Identifier" {
-        # 查找是否是函数调用
-        let i = 0;
-        while i < function_statements.length {
-            let func_stmt = function_statements[i];
-            if func_stmt.name == expr.name && func_stmt.uniqueName != null {
-                let resolved_expr = Object.assign({}, expr);
-                resolved_expr.name = func_stmt.uniqueName;
-                return resolved_expr;
-            }
-            i = i + 1;
-        }
-        
-        # 查找是否是变量
         let j = 0;
-        while j < variable_statements.length {
-            let var_stmt = variable_statements[j];
-            if var_stmt.name == expr.name && var_stmt.uniqueName != null {
-                let resolved_expr = Object.assign({}, expr);
-                resolved_expr.name = var_stmt.uniqueName;
-                return resolved_expr;
-            }
+        while j < file_names.length {
+            self.simple_dfs_visit(file_names[j], visited, sorted);
             j = j + 1;
         }
-        
-        return expr;
+
+        return {
+            "sorted": sorted,
+            "error": null
+        };
     }
-    
-    if expr.type == "MicroCall" {
-        let resolved_expr = Object.assign({}, expr);
-        
-        # 特殊处理函数名的 namespace 解析
-        if expr.callee.type == "Identifier" {
-            let function_name = expr.callee.name;
-            let found_function = false;
+
+    # Simple depth-first search visit
+    micro simple_dfs_visit(self, file_path: String, visited: Map<String, Bool>, sorted: Array<String>) {
+        if visited[file_path] {
+            return;
+        }
+
+        visited[file_path] = true;
+
+        let dependencies = self.dependencies[file_path];
+        if dependencies != null {
             let i = 0;
-            while i < function_statements.length {
-                let func_stmt = function_statements[i];
-                if func_stmt.name == function_name && func_stmt.uniqueName != null {
-                    let resolved_callee = Object.assign({}, expr.callee);
-                    resolved_callee.name = func_stmt.uniqueName;
-                    resolved_expr.callee = resolved_callee;
-                    found_function = true;
-                    break;
-                }
+            while i < dependencies.length {
+                self.simple_dfs_visit(dependencies[i], visited, sorted);
                 i = i + 1;
             }
-            
-            # 检查implicit_member_call
-            if !found_function && options != null && options.implicit_member_call == "warning" {
-                # 检查是否可能是静态方法调用或实例方法调用
-                let k = 0;
-                while k < class_statements.length {
-                    let class_stmt = class_statements[k];
-                    if class_stmt.members != null {
-                        let m = 0;
-                        while m < class_stmt.members.length {
-                            let member = class_stmt.members[m];
-                            if member.type == "MemberStatement" && member.name == function_name {
-                                # 发出警告：建议使用显式的Self::或self.语法
-                                let warning = create_warning(
-                                    "Implicit member call detected for '" + function_name + "'. Consider using 'Self::" + function_name + "()' for static methods or 'self." + function_name + "()' for instance methods.",
-                                    expr.line || 0,
-                                    expr.column || 0
-                                );
-                                report_warning(warning);
-                                break;
-                            }
-                            m = m + 1;
-                        }
-                    }
-                    k = k + 1;
-                }
-            }
-            
-            if !found_function {
-                resolved_expr.callee = resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements, options);
-            }
-        } else {
-            resolved_expr.callee = resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements, options);
         }
-        
-        let resolved_args = [];
-        let k = 0;
-        while k < expr.arguments.length {
-            resolved_args.push(resolve_identifiers_in_expression(expr.arguments[k], manager, function_statements, variable_statements, class_statements, options));
-            k = k + 1;
-        }
-        resolved_expr.arguments = resolved_args;
-        return resolved_expr;
-    }
-    
-    if expr.type == "BinaryOp" {
-        let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left = resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements, options);
-        resolved_expr.right = resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_expr;
-    }
-    
-    if expr.type == "Assignment" {
-        let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left = resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements, options);
-        resolved_expr.right = resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_expr;
-    }
-    
-    if expr.type == "PropertyAccess" {
-        let resolved_expr = Object.assign({}, expr);
-        resolved_expr.object = resolve_identifiers_in_expression(expr.object, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_expr;
-    }
-    
-    if expr.type == "NewExpression" {
-        let resolved_expr = Object.assign({}, expr);
 
-        # 解析 className，查找是否需要添加 namespace 前缀
-        let m = 0;
-        while m < class_statements.length {
-            let class_stmt = class_statements[m];
-            if class_stmt.name == expr.className && class_stmt.uniqueName != null {
-                resolved_expr.className = class_stmt.uniqueName;
-                break;
-            }
-            m = m + 1;
-        }
-        
-        # 解析参数
-        let resolved_args = [];
-        if expr.arguments != null {
-            let n = 0;
-            while n < expr.arguments.length {
-                resolved_args.push(resolve_identifiers_in_expression(expr.arguments[n], manager, function_statements, variable_statements, class_statements, options));
-                n = n + 1;
-            }
-        }
-        resolved_expr.arguments = resolved_args;
-        return resolved_expr;
+        sorted.push(file_path);
     }
-    
-    return expr;
-}
-
-# 带选项的递归解析语句中的标识符
-micro resolve_identifiers_in_statement(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
-    if stmt == null {
-        return stmt;
-    }
-    
-    if stmt.type == "LetStatement" {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.value = resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_stmt;
-    }
-    
-    if stmt.type == "ExpressionStatement" {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.expression = resolve_identifiers_in_expression(stmt.expression, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_stmt;
-    }
-    
-    if stmt.type == "ReturnStatement" {
-        let resolved_stmt = Object.assign({}, stmt);
-        if stmt.value != null {
-            resolved_stmt.value = resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements, options);
-        }
-        return resolved_stmt;
-    }
-    
-    if stmt.type == "IfStatement" {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
-        resolved_stmt.thenBranch = resolve_identifiers_in_statement(stmt.thenBranch, manager, function_statements, variable_statements, class_statements, options);
-        if stmt.elseBranch != null {
-            resolved_stmt.elseBranch = resolve_identifiers_in_statement(stmt.elseBranch, manager, function_statements, variable_statements, class_statements, options);
-        }
-        return resolved_stmt;
-    }
-    
-    if stmt.type == "WhileStatement" {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
-        resolved_stmt.body = resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_stmt;
-    }
-    
-    if stmt.type == "UntilStatement" {
-        let resolved_stmt = Object.assign({}, stmt);
-        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
-        resolved_stmt.body = resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements, options);
-        return resolved_stmt;
-    }
-    
-    if stmt.type == "Block" {
-        let resolved_stmt = Object.assign({}, stmt);
-        let resolved_statements = [];
-        let i = 0;
-        while i < stmt.statements.length {
-            resolved_statements.push(resolve_identifiers_in_statement(stmt.statements[i], manager, function_statements, variable_statements, class_statements, options));
-            i = i + 1;
-        }
-        resolved_stmt.statements = resolved_statements;
-        return resolved_stmt;
-    }
-    
-    return stmt;
 }

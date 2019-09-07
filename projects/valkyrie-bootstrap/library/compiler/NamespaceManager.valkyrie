@@ -1,6 +1,10 @@
 namespace package::compiler;
 
+using package::compiler::NamespaceManager;
+using package::compiler::CompilerOptions;
+using package::compiler::CompilerDiagnostics;
 using package::parser::Node;
+using package::compiler::NamespaceManager;
 
 class NamespaceManager {
     constructor(source) {
@@ -8,155 +12,430 @@ class NamespaceManager {
         self.usings = {};
         self.current_namespace = "";
         self.current_file = "";
-        self.mode = "repl";
+    }
+
+    # Resolve identifiers in expression with options and diagnostics
+    micro resolve_identifiers_in_expression(self, expr: Node, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions, diagnostics: CompilerDiagnostics) -> Node {
+        if expr == null {
+            return expr;
+        }
+
+        if expr.type == "Identifier" {
+            # Check if it's a function call
+            let i = 0;
+            while i < function_statements.length {
+                let func_stmt = function_statements[i];
+                if func_stmt.name == expr.name && func_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = func_stmt.uniqueName;
+                    return resolved_expr;
+                }
+                i = i + 1;
+            }
+
+            # Check if it's a variable
+            let j = 0;
+            while j < variable_statements.length {
+                let var_stmt = variable_statements[j];
+                if var_stmt.name == expr.name && var_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = var_stmt.uniqueName;
+                    return resolved_expr;
+                }
+                j = j + 1;
+            }
+
+            return expr;
+        }
+
+        if expr.type == "MicroCall" {
+            let resolved_expr = Object.assign({}, expr);
+
+            # Special handling for function name namespace resolution
+            if expr.callee.type == "Identifier" {
+                let function_name = expr.callee.name;
+                let found_function = false;
+                let i = 0;
+                while i < function_statements.length {
+                    let func_stmt = function_statements[i];
+                    if func_stmt.name == function_name && func_stmt.uniqueName != null {
+                        let resolved_callee = Object.assign({}, expr.callee);
+                        resolved_callee.name = func_stmt.uniqueName;
+                        resolved_expr.callee = resolved_callee;
+                        found_function = true;
+                        break;
+                    }
+                    i = i + 1;
+                }
+
+                # Check implicit_member_call
+                if !found_function && options != null && options.implicit_member_call == "warning" {
+                    # Check if it might be a static method call or instance method call
+                    let k = 0;
+                    while k < class_statements.length {
+                        let class_stmt = class_statements[k];
+                        if class_stmt.members != null {
+                            let m = 0;
+                            while m < class_stmt.members.length {
+                                let member = class_stmt.members[m];
+                                if member.type == "MemberStatement" && member.name == function_name {
+                                    # Issue warning: suggest using explicit Self:: or self. syntax
+                                    diagnostics.add_warning(
+                                        "Implicit member call detected for '" + function_name + "'. Consider using 'Self::" + function_name + "()' for static methods or 'self." + function_name + "()' for instance methods.",
+                                        expr.line || 0,
+                                        expr.column || 0,
+                                        ""
+                                    );
+                                    break;
+                                }
+                                m = m + 1;
+                            }
+                        }
+                        k = k + 1;
+                    }
+                }
+
+                if !found_function {
+                    resolved_expr.callee = self.resolve_identifiers_in_expression(expr.callee, function_statements, variable_statements, class_statements, options, diagnostics);
+                }
+            } else {
+                resolved_expr.callee = self.resolve_identifiers_in_expression(expr.callee, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+
+            let resolved_args = [];
+            let k = 0;
+            while k < expr.arguments.length {
+                resolved_args.push(self.resolve_identifiers_in_expression(expr.arguments[k], function_statements, variable_statements, class_statements, options, diagnostics));
+                k = k + 1;
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        if expr.type == "BinaryOp" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = self.resolve_identifiers_in_expression(expr.left, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.right = self.resolve_identifiers_in_expression(expr.right, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.type == "Assignment" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = self.resolve_identifiers_in_expression(expr.left, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.right = self.resolve_identifiers_in_expression(expr.right, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.type == "PropertyAccess" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.object = self.resolve_identifiers_in_expression(expr.object, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.type == "NewExpression" {
+            let resolved_expr = Object.assign({}, expr);
+
+            # Resolve className, check if namespace prefix needs to be added
+            let m = 0;
+            while m < class_statements.length {
+                let class_stmt = class_statements[m];
+                if class_stmt.name == expr.className && class_stmt.uniqueName != null {
+                    resolved_expr.className = class_stmt.uniqueName;
+                    break;
+                }
+                m = m + 1;
+            }
+
+            # Resolve arguments
+            let resolved_args = [];
+            if expr.arguments != null {
+                let n = 0;
+                while n < expr.arguments.length {
+                    resolved_args.push(self.resolve_identifiers_in_expression(expr.arguments[n], function_statements, variable_statements, class_statements, options, diagnostics));
+                    n = n + 1;
+                }
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        return expr;
+    }
+
+    # Resolve identifiers in statement with options and diagnostics
+    micro resolve_identifiers_in_statement(self, stmt: Node, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions, diagnostics: CompilerDiagnostics) -> Node {
+        if stmt == null {
+            return stmt;
+        }
+
+        if stmt.type == "LetStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.value = self.resolve_identifiers_in_expression(stmt.value, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "ExpressionStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.expression = self.resolve_identifiers_in_expression(stmt.expression, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "ReturnStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            if stmt.value != null {
+                resolved_stmt.value = self.resolve_identifiers_in_expression(stmt.value, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+            return resolved_stmt;
+        }
+
+        if stmt.type == "IfStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = self.resolve_identifiers_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_stmt.thenBranch = self.resolve_identifiers_in_statement(stmt.thenBranch, function_statements, variable_statements, class_statements, options, diagnostics);
+            if stmt.elseBranch != null {
+                resolved_stmt.elseBranch = self.resolve_identifiers_in_statement(stmt.elseBranch, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+            return resolved_stmt;
+        }
+
+        if stmt.type == "WhileStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = self.resolve_identifiers_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_stmt.body = self.resolve_identifiers_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "UntilStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = self.resolve_identifiers_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_stmt.body = self.resolve_identifiers_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "Block" {
+            let resolved_stmt = Object.assign({}, stmt);
+            let resolved_statements = [];
+            let i = 0;
+            while i < stmt.statements.length {
+                resolved_statements.push(self.resolve_identifiers_in_statement(stmt.statements[i], function_statements, variable_statements, class_statements, options, diagnostics));
+                i = i + 1;
+            }
+            resolved_stmt.statements = resolved_statements;
+            return resolved_stmt;
+        }
+
+        return stmt;
+    }
+    # Add symbol to namespace
+    micro add_symbol_to_namespace(self, namespace_path: String, symbol_name: String, symbol_type: String, symbol_data: Node, file_path: String) {
+        if self.namespaces[namespace_path] == null {
+            self.namespaces[namespace_path] = {
+                "symbols": {},
+                "files": []
+            };
+        }
+
+        let namespace_data = self.namespaces[namespace_path];
+
+        # Add symbol
+        namespace_data.symbols[symbol_name] = {
+            "type": symbol_type,
+            "data": symbol_data,
+            "filePath": file_path
+        };
+
+        # Add file to namespace (if not exists)
+        let file_exists = false;
+        let i = 0;
+        while i < namespace_data.files.length {
+            if namespace_data.files[i] == file_path {
+                file_exists = true;
+                break;
+            }
+            i = i + 1;
+        }
+
+        if !file_exists {
+            namespace_data.files.push(file_path);
+        }
+    }
+    # Add using import
+    micro add_using_import(self, using_path: String, is_global: Bool) {
+        if self.usings[self.current_file] == null {
+            self.usings[self.current_file] = [];
+        }
+
+        let using_info = {
+            "namespace": using_path,
+            "isGlobal": is_global
+        };
+
+        self.usings[self.current_file].push(using_info);
+    }
+    # Find symbol namespace
+    micro find_symbol_namespace(self, symbol_name: String, symbol_type: String) -> String {
+        let namespace_keys = Object.keys(self.namespaces);
+        let i = 0;
+        while i < namespace_keys.length {
+            let namespace_name = namespace_keys[i];
+            let namespace_data = self.namespaces[namespace_name];
+            if namespace_data != null && namespace_data.symbols != null {
+                let symbol = namespace_data.symbols[symbol_name];
+                if symbol != null && symbol.type == symbol_type {
+                    return namespace_name;
+                }
+            }
+            i = i + 1;
+        }
+        return "";
+    }
+    # Get fully qualified name
+    micro get_fully_qualified_name(self, symbol_name: String, namespace_path: String) -> String {
+        if namespace_path == "" || namespace_path == null {
+            return symbol_name;
+        }
+
+        let clean_namespace = get_main_namespace_name(namespace_path);
+        return clean_namespace.replace("::", "_") + "_" + symbol_name;
+    }
+
+    # Resolve symbol
+    micro resolve_symbol(self, symbol_name: String, current_namespace: String, current_file: String) -> Map<String, String> {
+        # First search in current namespace
+        let current_namespace_data = self.namespaces[current_namespace];
+        if current_namespace_data != null && current_namespace_data.symbols != null {
+            let symbol = current_namespace_data.symbols[symbol_name];
+            if symbol != null {
+                return {
+                    "found": true,
+                    "symbol": symbol,
+                    "namespace": current_namespace
+                };
+            }
+        }
+
+        # Then search in using imports
+        let file_usings = self.usings[current_file];
+        if file_usings != null {
+            let i = 0;
+            while i < file_usings.length {
+                let using_info = file_usings[i];
+                let using_namespace = using_info["namespace"];
+
+                let using_namespace_data = self.namespaces[using_namespace];
+                if using_namespace_data != null && using_namespace_data.symbols != null {
+                    let symbol = using_namespace_data.symbols[symbol_name];
+                    if symbol != null {
+                        return {
+                            "found": true,
+                            "symbol": symbol,
+                            "namespace": using_namespace
+                        };
+                    }
+                }
+
+                i = i + 1;
+            }
+        }
+
+        # Finally search in global namespace
+        let global_namespace_data = self.namespaces[""];
+        if global_namespace_data != null && global_namespace_data.symbols != null {
+            let symbol = global_namespace_data.symbols[symbol_name];
+            if symbol != null {
+                return {
+                    "found": true,
+                    "symbol": symbol,
+                    "namespace": ""
+                };
+            }
+        }
+
+        return {
+            "found": false,
+            "symbol": null,
+            "namespace": null
+        };
     }
 }
 
 
-# 检查是否为主命名空间
-micro is_main_namespace(namespace_path: Array<String>) -> Bool {
+
+# Check if a namespace is a main namespace (ends with !)
+micro is_main_namespace(namespace_path: String) -> Bool {
     if namespace_path == null {
         return false;
     }
     return namespace_path.endsWith("!");
 }
 
-# 获取主命名空间名称
-micro get_main_namespace_name(namespace_path: Array<String>) -> String {
+# Get main namespace name (remove the ! suffix)
+micro get_main_namespace_name(namespace_path: String) -> String {
     if is_main_namespace(namespace_path) {
         return namespace_path.substring(0, namespace_path.length - 1);
     }
     return namespace_path;
 }
 
-# 添加符号到命名空间
-micro add_symbol_to_namespace(manager: NamespaceManager, namespace_path: Array<String>, symbol_name: String, symbol_type: String, symbol_data: Node, file_path: String) {
-    if manager.namespaces[namespace_path] == null {
-        manager.namespaces[namespace_path] = {
-            "symbols": {},
-            "files": []
-        };
-    }
-    
-    let namespace_data = manager.namespaces[namespace_path];
-    
-    # 添加符号
-    namespace_data.symbols[symbol_name] = {
-        "type": symbol_type,
-        "data": symbol_data,
-        "filePath": file_path
-    };
-    
-    # 添加文件到命名空间（如果不存在）
-    let file_exists = false;
-    let i = 0;
-    while i < namespace_data.files.length {
-        if namespace_data.files[i] == file_path {
-            file_exists = true;
-            break;
-        }
-        i = i + 1;
-    }
-    
-    if !file_exists {
-        namespace_data.files.push(file_path);
-    }
-}
 
-# 添加using导入
-micro add_using_import(manager: NamespaceManager, using_path: Array<String>, is_global: bool) {
-    if manager.usings[manager.current_file] == null {
-        manager.usings[manager.current_file] = [];
-    }
-    
-    let using_info = {
-        "namespace": using_path,
-        "isGlobal": is_global
-    };
-    
-    manager.usings[manager.current_file].push(using_info);
-}
 
-# 查找符号所属的命名空间
-micro find_symbol_namespace(manager: NamespaceManager, symbol_name: String, symbol_type: String) -> Array<String> {
-    let namespace_keys = Object.keys(manager.namespaces);
-    let i = 0;
-    while i < namespace_keys.length {
-        let namespace_name = namespace_keys[i];
-        let namespace_data = manager.namespaces[namespace_name];
-        if namespace_data != null && namespace_data.symbols != null {
-            let symbol = namespace_data.symbols[symbol_name];
-            if symbol != null && symbol.type == symbol_type {
-                return namespace_name;
-            }
-        }
-        i = i + 1;
-    }
-    return "";
-}
 
-# 获取完全限定名称
-micro get_fully_qualified_name(manager: NamespaceManager, symbol_name: String, namespace_path: Array<String>) -> String {
-    if namespace_path == "" || namespace_path == null {
-        return symbol_name;
-    }
-    
-    let clean_namespace = get_main_namespace_name(namespace_path);
-    return clean_namespace.replace("::", "_") + "_" + symbol_name;
-}
 
-# 验证命名空间规则
+
+
+
+# Validate namespace rules
 micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
     let has_namespace = false;
     let has_main_namespace = false;
-    
+
     let i = 0;
     while i < ast.statements.length {
         let stmt = ast.statements[i];
-        
+
         if stmt.type == "NamespaceStatement" {
             has_namespace = true;
             if stmt.isMainNamespace {
                 has_main_namespace = true;
             }
         }
-        
+
         i = i + 1;
     }
-    
+
     if mode == "standard" && !has_namespace {
         return {
             "success": false,
             "error": "Standard mode requires at least one namespace declaration"
         };
     }
-    
+
     if mode == "standard" && !has_main_namespace {
         return {
             "success": false,
             "error": "Standard mode requires exactly one main namespace (ending with !)"
         };
     }
-    
+
     return {
         "success": true,
         "error": null
     };
 }
 
-# 查找命名空间提供者
-micro find_namespace_provider(namespace_path: Array<String>, file_contents: Map<String, String>) -> String {
+# Find namespace provider
+micro find_namespace_provider(namespace_path: String, file_contents: Map<String, String>) -> String {
     let file_names = Object.keys(file_contents);
     let i = 0;
     while i < file_names.length {
         let file_name = file_names[i];
         let content = file_contents[file_name];
-        
-        # 简单检查是否包含命名空间声明
+
+        # Simple check if contains namespace declaration
         if content.indexOf("namespace " + namespace_path) >= 0 {
             return file_name;
         }
-        
+
         i = i + 1;
     }
     return null;
