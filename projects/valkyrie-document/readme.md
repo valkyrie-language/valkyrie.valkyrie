@@ -1,172 +1,221 @@
-# Nyar Virtual Machine Documentation
+# Valkyrie Language Documentation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://github.com/nyar-lang/nyar-vm/workflows/CI/badge.svg)](https://github.com/nyar-lang/nyar-vm/actions)
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://nyar-vm.org)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://valkyrie-document.netlify.app)
+[![Build Status](https://github.com/nyar-lang/valkyrie-vm/workflows/CI/badge.svg)](https://github.com/nyar-lang/valkyrie-vm/actions)
 
-## What is Nyar?
+## 📖 项目概述
 
-Nyar is a high-performance **virtual machine platform**, **optimization engine**, and **interpreter** designed for modern programming languages. It is **NOT** a programming language itself, but rather provides the runtime infrastructure that programming languages can target.
+这是 Valkyrie 编程语言的官方文档站点，基于 VitePress 构建，提供全面的语言规范、教程和示例代码。
 
-### Nyar Platform Components
+Valkyrie 是一个现代化的多范式编程语言，专注于编译器自举技术和高性能运行时系统。本文档站点旨在为语言用户、编译器开发者和语言设计者提供完整的学习和参考资料。
 
-- 🖥️ **Virtual Machine**: High-performance bytecode execution engine
-- ⚡ **Optimization Platform**: Advanced JIT compilation and optimization passes
-- 🔧 **Multi-Target Compiler**: Generates native code, JavaScript, and WebAssembly
-- 🎭 **Runtime Services**: Memory management, garbage collection, and algebraic effects support
-- 🛠️ **Developer Tools**: Debugging, profiling, and analysis tools
+## 🎯 文档结构
 
-## Supported Languages
+### 用户指南
+- **[入门指南](guide/getting-started.md)** - 快速开始 Valkyrie 编程
+- **[语言特性](guide/features.md)** - Valkyrie 的核心语言特性
+- **[示例代码](examples/)** - 实际应用场景示例
 
-### Valkyrie Programming Language
+### 语言参考
+- **[语言规范](language/)** - 详细的语言语法和语义
+- **[标准库](language/standard-library.md)** - 内置函数和类型
+- **[编译器选项](language/compiler-options.md)** - 编译器配置和使用
 
-**Valkyrie** is the primary programming language that targets the Nyar platform. It's a modern functional programming language with algebraic effects, designed to showcase Nyar's capabilities.
+### 开发文档
+- **[维护指南](maintenance/)** - 项目维护和开发流程
+- **[构建系统](maintenance/build-system.md)** - 构建和部署配置
+- **[发布流程](maintenance/release-process.md)** - 版本发布和变更管理
 
-```valkyrie
-# Valkyrie code compiles to Nyar bytecode
-effect Http {
-    get(url: String): String
-}
+### 应用示例
+- **[Web 开发](examples/web-development/)** - 前端和后端开发示例
+- **[科学计算](examples/scientific-computing/)** - 数值计算和数据分析
+- **[机器学习](examples/machine-learning/)** - AI 和机器学习应用
+- **[游戏开发](examples/game-development/)** - 游戏引擎和图形编程
+- **[嵌入式开发](examples/embedded-development/)** - 物联网和嵌入式系统
+- **[定理证明](examples/theorem-proving/)** - 形式化验证和证明助手
 
-micro fetch_user(id: Int) -> User {
-    let response = perform Http.get(`/api/users/${id}`);
-    parse_json(response)
-}
-```
+## 🚀 快速开始
 
-### Language Implementation Benefits
-
-By targeting Nyar, language implementers get:
-
-- 🚀 **High Performance**: JIT compilation and advanced optimizations
-- 🌐 **Multi-Platform**: Single IR compiles to multiple targets
-- 🎯 **Focus on Design**: No need to implement complex runtime systems
-- 🔍 **Rich Tooling**: Built-in debugging and profiling support
-
-## Architecture Overview
-
-```
-Valkyrie Source Code
-        ↓
-   Valkyrie Frontend (Parser + Semantic Analysis)
-        ↓
-      AST (Abstract Syntax Tree)
-        ↓
-      HIR (High-level IR)
-        ↓
-      MIR (Mid-level IR)
-        ↓
-      LIR (Low-level IR)
-        ↓
-    Nyar VM Platform
-        ↓
-  Native Code / JavaScript / WebAssembly
-```
-
-## Documentation Structure
-
-### For Language Users
-- 📚 [Language Guide](guide/) - How to use Valkyrie programming language
-- ❓ [FAQ](faq.md) - Frequently asked questions about Valkyrie
-- 📖 [Examples](examples/) - Code examples and tutorials
-
-### For Language Implementers
-- 🔧 [Development Guide](development/) - How to implement languages targeting Nyar
-- 🏗️ [Frontend Implementation](development/valkyrie-frontend.md) - Building language frontends
-- 📦 [Backend Integration](development/javascript-backend.md) - Integrating with Nyar backends
-
-### For Platform Maintainers
-- ⚙️ [Maintenance Guide](maintenance/) - Internal Nyar platform maintenance
-- 🔬 [VM Internals](maintenance/rust-backend.md) - Deep dive into VM implementation
-- 📊 [Language Representations](language/) - IR design and implementation
-
-## Quick Start
-
-### Install Nyar Platform
+### 本地开发
 
 ```bash
-# Install from source
-git clone https://github.com/nyar-lang/nyar-vm.git
-cd nyar-vm
-cargo install --path .
+# 进入文档项目目录
+cd projects/valkyrie-document
 
-# Verify installation
-nyar --version
+# 安装依赖
+pnpm install
+
+# 启动开发服务器
+pnpm run dev
+
+# 构建文档
+pnpm run build
+
+# 预览构建结果
+pnpm run preview
 ```
 
-### Try Valkyrie Language
+### 部署配置
 
-```bash
-# Create a new Valkyrie project
-nyar new hello-world --lang valkyrie
-cd hello-world
+文档站点配置为自动部署到 Netlify：
 
-# Build and run
-nyar build
-nyar run
+- **生产环境**: https://valkyrie-document.netlify.app
+- **构建命令**: `pnpm run build`
+- **发布目录**: `.vitepress/dist`
+
+## 🛠️ 技术栈
+
+### 文档框架
+- **[VitePress](https://vitepress.dev/)** - 现代静态站点生成器
+- **[Vue.js](https://vuejs.org/)** - 渐进式 JavaScript 框架
+- **[Markdown](https://www.markdownguide.org/)** - 文档编写格式
+
+### 增强功能
+- **[Shiki](https://shiki.matsu.io/)** - 语法高亮引擎
+- **[Mermaid](https://mermaid-js.github.io/)** - 图表和流程图
+- **[KaTeX](https://katex.org/)** - 数学公式渲染
+- **[Vite PWA](https://vite-pwa-org.netlify.app/)** - 渐进式 Web 应用
+
+### 部署和托管
+- **[Netlify](https://www.netlify.com/)** - 静态站点托管
+- **[GitHub Actions](https://github.com/features/actions)** - 持续集成和部署
+
+## 📊 项目状态
+
+### ✅ 已完成内容
+- 基础文档框架搭建
+- VitePress 主题和配置
+- 导航结构和侧边栏
+- 语法高亮和代码块
+- 响应式设计支持
+- 搜索功能集成
+
+### 🔄 进行中内容
+- 语言规范文档完善
+- 教程和示例代码
+- API 文档生成
+- 多语言支持准备
+- 性能优化
+
+### 📋 未来计划
+- 交互式代码编辑器
+- 在线编译和运行
+- 用户评论和反馈系统
+- 版本化文档管理
+- 社区贡献指南
+
+## 🎨 文档编写规范
+
+### Markdown 扩展
+
+#### 代码块
+```javascript
+// 支持语法高亮
+const greeting = "Hello, Valkyrie!";
+console.log(greeting);
 ```
 
-### Compile to Different Targets
-
-```bash
-# Compile to JavaScript
-nyar build --target js
-
-# Compile to WebAssembly
-nyar build --target wasm
-
-# Compile to native binary
-nyar build --target native
+#### 图表支持
+```mermaid
+graph TD
+    A[Valkyrie Source] --> B[Lexer]
+    B --> C[Parser]
+    C --> D[Code Generator]
+    D --> E[JavaScript Output]
 ```
 
-## Platform Benefits
+#### 数学公式
+```markdown
+$$E = mc^2$$
+```
 
-### For Application Developers
-- 🎯 **Expressive Language**: Use Valkyrie's modern features like algebraic effects
-- 🚀 **High Performance**: Benefit from Nyar's advanced optimizations
-- 🌐 **Deploy Anywhere**: Single codebase runs on web, server, and desktop
-- 🛠️ **Great Tooling**: Rich IDE support and debugging tools
+### 文件组织
 
-### For Language Designers
-- 🏗️ **Solid Foundation**: Build on proven VM technology
-- ⚡ **Performance**: Get JIT compilation and optimizations for free
-- 🔧 **Multi-Target**: Automatic support for multiple deployment targets
-- 📊 **Analytics**: Built-in profiling and performance analysis
+```
+docs/
+├── guide/           # 用户指南
+├── language/        # 语言参考
+├── examples/        # 应用示例
+├── maintenance/     # 维护文档
+├── public/          # 静态资源
+└── index.md         # 首页
+```
 
-### For Platform Engineers
-- 🔬 **Research Platform**: Experiment with new language features
-- 📈 **Optimization**: Advanced IR-based optimization pipeline
-- 🧪 **Extensible**: Plugin architecture for custom backends
-- 📚 **Well-Documented**: Comprehensive documentation and examples
+## 🔧 配置说明
 
-## Community
+### VitePress 配置
 
-- 💬 [Discord Server](https://discord.gg/nyar-vm)
-- 🐛 [Issue Tracker](https://github.com/nyar-lang/nyar-vm/issues)
-- 💡 [Discussions](https://github.com/nyar-lang/nyar-vm/discussions)
-- 📧 [Mailing List](https://groups.google.com/g/nyar-vm)
+主要配置在 `.vitepress/config.ts` 文件中：
 
-## Contributing
+- **站点元信息**: 标题、描述、基础路径
+- **主题配置**: 导航栏、侧边栏、页脚
+- **插件配置**: 搜索、PWA、分析
+- **构建选项**: 输出目录、资源优化
 
-We welcome contributions to both the Nyar platform and Valkyrie language! See our [Contributing Guide](CONTRIBUTING.md) for details.
+### 自定义组件
 
-### Development Areas
-- 🔧 VM optimization and performance improvements
-- 🌐 New compilation targets and backends
-- 📚 Documentation and educational content
-- 🛠️ Developer tooling and IDE integration
-- 🧪 Testing, benchmarking, and quality assurance
+文档支持自定义 Vue 组件：
 
-## License
+- **代码演示**: 交互式代码示例
+- **图表展示**: 可视化图表组件
+- **版本信息**: 版本对比和变更说明
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📈 分析统计
 
-## Acknowledgments
+### 站点分析
+- **页面访问**: 使用 Netlify Analytics
+- **搜索统计**: 内置搜索分析
+- **性能监控**: Core Web Vitals 指标
 
-- Inspired by LLVM, JVM, and other successful VM platforms
-- Built with Rust for memory safety and performance
-- Designed for the next generation of programming languages
+### 内容统计
+- **文档页面**: 50+ 页面
+- **示例代码**: 100+ 代码片段
+- **图表图像**: 20+ 可视化内容
+
+## 🤝 贡献指南
+
+我们欢迎文档贡献！
+
+### 贡献方式
+1. **内容完善**: 修正错误或补充说明
+2. **新增文档**: 添加新的教程或指南
+3. **示例代码**: 提供更多应用场景示例
+4. **翻译工作**: 帮助进行多语言翻译
+
+### 提交规范
+- 使用清晰的提交消息
+- 遵循文档编写规范
+- 测试本地构建效果
+- 参考现有文档风格
+
+## 🐛 问题反馈
+
+发现文档问题？请通过以下方式反馈：
+
+- **GitHub Issues**: 提交文档错误或改进建议
+- **Pull Request**: 直接提交修复
+- **邮件联系**: 通过项目维护者联系
+
+## 📞 联系方式
+
+- **文档站点**: https://valkyrie-document.netlify.app
+- **项目仓库**: https://github.com/nyar-lang/valkyrie-vm
+- **问题反馈**: https://github.com/nyar-lang/valkyrie-vm/issues
+
+## 📄 许可证
+
+本文档项目采用 MIT 许可证开源，详见项目根目录的 [LICENSE.md](../../LICENSE.md) 文件。
+
+## 🙏 致谢
+
+感谢以下项目和社区的支持：
+
+- **VitePress 团队**: 提供优秀的文档框架
+- **Vue.js 社区**: 前端技术生态
+- **开源贡献者**: 文档内容和改进建议
+- **测试用户**: 反馈和使用体验
 
 ---
 
-**Ready to explore high-performance language implementation?** [Get started with Nyar!](guide/getting-started.md)
+**开始探索 Valkyrie 编程语言的世界吧！** 🚀
