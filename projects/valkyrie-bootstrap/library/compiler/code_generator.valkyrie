@@ -5,7 +5,7 @@ using package::parser::parse;
 using package::codegen::generate;
 
 # 拓扑排序 (简化版，不检测循环依赖)
-micro topological_sort(analyzer, file_contents) {
+micro topological_sort(analyzer: Object, file_contents: Object) -> Array {
     let file_names = Object.keys(file_contents);
     let visited = {};
     let sorted = [];
@@ -29,12 +29,12 @@ micro topological_sort(analyzer, file_contents) {
 }
 
 # 生成单一JS文件的主函数
-micro compile_asts(file_contents, mode) {
+micro compile_asts(file_contents: Object, mode: String) -> String {
     return compile_asts_with_options(file_contents, mode, null);
 }
 
 # 带选项的生成单一JS文件的主函数
-micro compile_asts_with_options(file_contents, mode, options) {
+micro compile_asts_with_options(file_contents: Object, mode: String, options: Object) -> String {
     let manager = new NamespaceManager();
     set_compile_mode(manager, mode || "repl");
     
@@ -319,7 +319,7 @@ micro compile_asts_with_options(file_contents, mode, options) {
 }
 
 # 解析多个命名空间
-micro resolve_multiple_namespaces(ast) {
+micro resolve_multiple_namespaces(ast: Object) -> Object {
     let manager = new NamespaceManager();
     
     # 第一遍：收集所有命名空间和符号

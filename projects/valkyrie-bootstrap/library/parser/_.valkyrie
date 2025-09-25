@@ -1,6 +1,6 @@
 namespace package::parser;
 
-micro parseStatement(parser) {
+micro parseStatement(parser: Object) -> Object {
     # 检查 EOF
     if parser.current_token.type == "EOF" {
         let error = {};
@@ -78,7 +78,7 @@ micro parseStatement(parser) {
     return stmt;
 }
 
-micro parseLetStatement(parser) {
+micro parseLetStatement(parser: Object) -> Object {
     parser.advance(); # skip 'let'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -106,7 +106,7 @@ micro parseLetStatement(parser) {
     return node;
 }
 
-micro parseNamespaceStatement(parser) {
+micro parseNamespaceStatement(parser: Object) -> Object {
     parser.advance(); # skip 'namespace'
     let path = [];
     let isMainNamespace = false;
@@ -137,7 +137,7 @@ micro parseNamespaceStatement(parser) {
     return node;
 }
 
-micro parseUsingStatement(parser) {
+micro parseUsingStatement(parser: Object) -> Object {
     parser.advance(); # skip 'using'
     let path = [];
 
@@ -160,7 +160,7 @@ micro parseUsingStatement(parser) {
     return node;
 }
 
-micro parseAttributeStatement(parser) {
+micro parseAttributeStatement(parser: Object) -> Object {
     parser.advance(); # skip '↯'
 
     # 期望 js 标识符
@@ -238,7 +238,7 @@ micro parseAttributeStatement(parser) {
 }
 
 # 解析顶级 micro function 语法: micro name(params) { ... }
-micro parseMicroFunctionDeclaration(parser) {
+micro parseMicroFunctionDeclaration(parser: Object) -> Object {
     parser.advance(); # skip 'micro'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -294,7 +294,7 @@ micro parseMicroFunctionDeclaration(parser) {
     return node;
 }
 
-micro parseClassDeclaration(parser) {
+micro parseClassDeclaration(parser: Object) -> Object {
     parser.advance(); # skip 'class'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -339,7 +339,7 @@ micro parseClassDeclaration(parser) {
     return node;
 }
 
-micro parseClassMember(parser) {
+micro parseClassMember(parser: Object) -> Object {
     # 检查是否是构造函数
     if parser.current_token.type == "CONSTRUCTOR" {
         parser.advance(); # skip 'constructor'
@@ -472,7 +472,7 @@ micro parseClassMember(parser) {
     return error;
 }
 
-micro parseFunctionDeclaration(parser) {
+micro parseFunctionDeclaration(parser: Object) -> Object {
     parser.advance(); # skip 'micro'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -506,7 +506,7 @@ micro parseFunctionDeclaration(parser) {
     return node;
 }
 
-micro parseIfStatement(parser) {
+micro parseIfStatement(parser: Object) -> Object {
     parser.advance(); # skip 'if'
     let condition = parseExpression(parser);
     if condition && condition.type == "ParseError" {
@@ -535,7 +535,7 @@ micro parseIfStatement(parser) {
     return node;
 }
 
-micro parseWhileStatement(parser) {
+micro parseWhileStatement(parser: Object) -> Object {
     parser.advance(); # skip 'while'
     let condition = parseExpression(parser);
     if condition && condition.type == "ParseError" {
@@ -553,7 +553,7 @@ micro parseWhileStatement(parser) {
     return node;
 }
 
-micro parseReturnStatement(parser) {
+micro parseReturnStatement(parser: Object) -> Object {
     parser.advance(); # skip 'return'
 
     let node = new Node("ReturnStatement");
@@ -576,7 +576,7 @@ micro parseReturnStatement(parser) {
     return node;
 }
 
-micro parseFunctionBlock(parser) {
+micro parseFunctionBlock(parser: Object) -> Object {
     let lbrace = parser.expect("LBRACE");
     if lbrace && lbrace.type == "ParseError" {
         return lbrace;
@@ -602,7 +602,7 @@ micro parseFunctionBlock(parser) {
     return node;
 }
 
-micro parseProgram(parser) {
+micro parseProgram(parser: Object) -> Object {
     let statements = [];
 
     while parser.current_token.type != "EOF" {
@@ -618,7 +618,7 @@ micro parseProgram(parser) {
     return node;
 }
 
-micro parse(tokens) {
+micro parse(tokens: Array) -> Object {
     let parser = new ValkyrieParser(tokens);
     return parseProgram(parser);
 }

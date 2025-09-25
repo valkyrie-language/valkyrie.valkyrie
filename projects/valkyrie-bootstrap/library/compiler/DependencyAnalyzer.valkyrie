@@ -9,7 +9,7 @@ class DependencyAnalyzer {
 
 
 # 解析符号
-micro resolve_symbol(manager, symbol_name, current_namespace, current_file) {
+micro resolve_symbol(manager: Object, symbol_name: String, current_namespace: Array, current_file: String) -> Object {
     # 首先在当前命名空间中查找
     let current_namespace_data = manager.namespaces[current_namespace];
     if current_namespace_data != null && current_namespace_data.symbols != null {
@@ -68,12 +68,12 @@ micro resolve_symbol(manager, symbol_name, current_namespace, current_file) {
 }
 
 # 递归解析表达式中的标识符
-micro resolve_identifiers_in_expression(expr, manager, function_statements, variable_statements, class_statements) {
+micro resolve_identifiers_in_expression(expr: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array) -> Object {
     return resolve_identifiers_in_expression_with_options(expr, manager, function_statements, variable_statements, class_statements, null);
 }
 
 # 带选项的递归解析表达式中的标识符
-micro resolve_identifiers_in_expression_with_options(expr, manager, function_statements, variable_statements, class_statements, options) {
+micro resolve_identifiers_in_expression_with_options(expr: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array, options: Object) -> Object {
     if expr == null {
         return expr;
     }
@@ -235,12 +235,12 @@ micro resolve_identifiers_in_expression_with_options(expr, manager, function_sta
 }
 
 # 递归解析语句中的标识符
-micro resolve_identifiers_in_statement(stmt, manager, function_statements, variable_statements, class_statements) {
+micro resolve_identifiers_in_statement(stmt: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array) -> Object {
     return resolve_identifiers_in_statement_with_options(stmt, manager, function_statements, variable_statements, class_statements, null);
 }
 
 # 带选项的递归解析语句中的标识符
-micro resolve_identifiers_in_statement_with_options(stmt, manager, function_statements, variable_statements, class_statements, options) {
+micro resolve_identifiers_in_statement_with_options(stmt: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array, options: Object) -> Object {
     if stmt == null {
         return stmt;
     }
