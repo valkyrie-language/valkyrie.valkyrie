@@ -331,6 +331,12 @@ micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
 
     # 解析类成员
     while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+        # 跳过空的分号
+        if parser.current_token.type == "SEMICOLON" {
+            parser.advance();
+            continue;
+        }
+        
         let member = parseClassMember(parser);
         if member && member.type != "ParseError" {
             node.members.push(member);
@@ -401,6 +407,26 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             return rparen;
         }
 
+        # Parse optional return type: -> Type
+        let returnType = null;
+        if parser.current_token.type == "ARROW" {
+            parser.advance(); # skip '->'
+            returnType = parseTypeExpression(parser);
+            if returnType && returnType.type == "ParseError" {
+                return returnType;
+            }
+        }
+
+        # Parse optional effect type: / Type
+        let effectType = null;
+        if parser.current_token.type == "DIVIDE" {
+            parser.advance(); # skip '/'
+            effectType = parseTypeExpression(parser);
+            if effectType && effectType.type == "ParseError" {
+                return effectType;
+            }
+        }
+
         let body = parse_function_block(parser);
         if body && body.type == "ParseError" {
             return body;
@@ -431,24 +457,37 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
         let methodNode = new Node("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
+        methodNode.returnType = returnType;
+        methodNode.effectType = effectType;
         methodNode.body = body;
         methodNode.isInstanceMethod = isInstanceMethod;
         methodNode.isStatic = !isInstanceMethod;
         return methodNode;
     }
 
-    # 检查是否是 field（标识符后面可能跟 = 或 ;）
+    # 检查是否是 field（标识符后面可能跟 : 类型, = 值, 或 ;）
     if parser.current_token.type == "IDENTIFIER" {
         let nextIndex = parser.position + 1;
         if nextIndex < parser.tokens.length {
             let next_token = parser.tokens[nextIndex];
-            if next_token.type == "ASSIGN" || next_token.type == "SEMICOLON" {
+            if next_token.type == "COLON" || next_token.type == "ASSIGN" || next_token.type == "SEMICOLON" {
                 # 这是一个 field
                 let name = parser.expect("IDENTIFIER");
                 if name && name.type == "ParseError" {
                     return name;
                 }
 
+                # Parse optional type annotation: : Type
+                let typeAnnotation = null;
+                if parser.current_token.type == "COLON" {
+                    parser.advance(); # skip ':'
+                    typeAnnotation = parseTypeExpression(parser);
+                    if typeAnnotation && typeAnnotation.type == "ParseError" {
+                        return typeAnnotation;
+                    }
+                }
+
+                # Parse optional default value: = value
                 let initValue = null;
                 if parser.current_token.type == "ASSIGN" {
                     parser.advance(); # skip '='
@@ -465,6 +504,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
 
                 let node = new Node("Property");
                 node.name = name.value;
+                node.typeAnnotation = typeAnnotation;
                 node.initializer = initValue;
                 return node;
             }

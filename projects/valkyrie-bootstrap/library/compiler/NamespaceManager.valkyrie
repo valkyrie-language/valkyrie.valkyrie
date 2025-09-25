@@ -6,8 +6,8 @@ class NamespaceManager {
     constructor(source) {
         self.namespaces = {};
         self.usings = {};
-        self.currentNamespace = "";
-        self.currentFile = "";
+        self.current_namespace = "";
+        self.current_file = "";
         self.mode = "repl";
     }
 }
@@ -65,8 +65,8 @@ micro add_symbol_to_namespace(manager: NamespaceManager, namespace_path: Array<S
 
 # 添加using导入
 micro add_using_import(manager: NamespaceManager, using_path: Array<String>, is_global: bool) {
-    if manager.usings[manager.currentFile] == null {
-        manager.usings[manager.currentFile] = [];
+    if manager.usings[manager.current_file] == null {
+        manager.usings[manager.current_file] = [];
     }
     
     let using_info = {
@@ -74,7 +74,7 @@ micro add_using_import(manager: NamespaceManager, using_path: Array<String>, is_
         "isGlobal": is_global
     };
     
-    manager.usings[manager.currentFile].push(using_info);
+    manager.usings[manager.current_file].push(using_info);
 }
 
 # 查找符号所属的命名空间
@@ -125,14 +125,23 @@ micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
     }
     
     if mode == "standard" && !has_namespace {
-        return "Error: Standard mode requires at least one namespace declaration";
+        return {
+            "success": false,
+            "error": "Standard mode requires at least one namespace declaration"
+        };
     }
     
     if mode == "standard" && !has_main_namespace {
-        return "Error: Standard mode requires exactly one main namespace (ending with !)";
+        return {
+            "success": false,
+            "error": "Standard mode requires exactly one main namespace (ending with !)"
+        };
     }
     
-    return "OK";
+    return {
+        "success": true,
+        "error": null
+    };
 }
 
 # 查找命名空间提供者
