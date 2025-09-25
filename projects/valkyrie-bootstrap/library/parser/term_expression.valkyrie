@@ -491,36 +491,67 @@ micro parseTermParameters(parser) {
     let params = [];
 
     if parser.current_token.type != "RPAREN" {
-        let param = null;
-        if parser.current_token.type == "IDENTIFIER" {
-            param = parser.expect("IDENTIFIER");
-        } else if parser.current_token.type == "SELF" {
-            param = parser.expect("SELF");
-        } else {
-            param = parser.expect("IDENTIFIER");
-        }
+        # 解析第一个参数
+        let param = parseTypedParameter(parser);
         if param && param.type == "ParseError" {
             return param;
         }
-        params.push(param.value);
+        params.push(param);
 
         while parser.current_token.type == "COMMA" {
-            parser.advance();
-            if parser.current_token.type == "IDENTIFIER" {
-                param = parser.expect("IDENTIFIER");
-            } else if parser.current_token.type == "SELF" {
-                param = parser.expect("SELF");
-            } else {
-                param = parser.expect("IDENTIFIER");
-            }
+            parser.advance(); # skip comma
+            param = parseTypedParameter(parser);
             if param && param.type == "ParseError" {
                 return param;
             }
-            params.push(param.value);
+            params.push(param);
         }
     }
 
     return params;
+}
+
+# 解析带类型注解的参数: name: Type = defaultValue
+micro parseTypedParameter(parser) {
+    let paramName = null;
+    if parser.current_token.type == "IDENTIFIER" {
+        paramName = parser.expect("IDENTIFIER");
+    } else if parser.current_token.type == "SELF" {
+        paramName = parser.expect("SELF");
+    } else {
+        paramName = parser.expect("IDENTIFIER");
+    }
+    
+    if paramName && paramName.type == "ParseError" {
+        return paramName;
+    }
+
+    let node = new Node("Parameter");
+    node.name = paramName.value;
+    node.typeAnnotation = null;
+    node.defaultValue = null;
+
+    # 检查类型注解 : Type
+    if parser.current_token.type == "COLON" {
+        parser.advance(); # skip ':'
+        let typeExpr = parseTypeExpression(parser);
+        if typeExpr && typeExpr.type == "ParseError" {
+            return typeExpr;
+        }
+        node.typeAnnotation = typeExpr;
+    }
+
+    # 检查默认值 = value
+    if parser.current_token.type == "ASSIGN" {
+        parser.advance(); # skip '='
+        let defaultExpr = parseExpression(parser);
+        if defaultExpr && defaultExpr.type == "ParseError" {
+            return defaultExpr;
+        }
+        node.defaultValue = defaultExpr;
+    }
+
+    return node;
 }
 
 
