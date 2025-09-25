@@ -130,6 +130,52 @@ micro generateExpression(node) {
         }
     }
     
+    if node.type == "StaticMethodCall" {
+        let className = "";
+        if node.namespacePath {
+            # 使用新的namespacePath支持多级命名空间
+            if node.namespacePath.length >= 2 {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if node.className.type {
+            className = generateExpression(node.className);
+        } else {
+            className = node.className;
+        }
+        
+        let args = "";
+        let i = 0;
+        while i < node.arguments.length {
+            if i > 0 {
+                args = args + ", ";
+            }
+            args = args + generateExpression(node.arguments[i]);
+            i = i + 1;
+        }
+        
+        return className + "." + node.methodName + "(" + args + ")";
+    }
+    
+    if node.type == "StaticPropertyAccess" {
+        let className = "";
+        if node.namespacePath {
+            # 使用新的namespacePath支持多级命名空间
+            if node.namespacePath.length >= 2 {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if node.className.type {
+            className = generateExpression(node.className);
+        } else {
+            className = node.className;
+        }
+        
+        return className + "." + node.property;
+    }
+    
     if node.type == "ArrayAccess" {
         let obj = "";
         if node.object.type {
@@ -415,7 +461,12 @@ micro generateStatement(node) {
                     j = j + 1;
                 }
                 let body = generateStatement(member.body);
-                result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
+                # 根据是否为静态方法生成不同的代码
+                if member.isStatic {
+                    result = result + "  static " + methodName + "(" + params + ") " + body + "\n\n";
+                } else {
+                    result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
+                }
             }
             i = i + 1;
         }
