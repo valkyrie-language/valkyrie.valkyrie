@@ -286,6 +286,13 @@ micro resolve_identifiers_in_statement_with_options(stmt: Node, manager: Namespa
         return resolved_stmt;
     }
     
+    if stmt.type == "UntilStatement" {
+        let resolved_stmt = Object.assign({}, stmt);
+        resolved_stmt.condition = resolve_identifiers_in_expression_with_options(stmt.condition, manager, function_statements, variable_statements, class_statements, options);
+        resolved_stmt.body = resolve_identifiers_in_statement_with_options(stmt.body, manager, function_statements, variable_statements, class_statements, options);
+        return resolved_stmt;
+    }
+    
     if stmt.type == "Block" {
         let resolved_stmt = Object.assign({}, stmt);
         let resolved_statements = [];

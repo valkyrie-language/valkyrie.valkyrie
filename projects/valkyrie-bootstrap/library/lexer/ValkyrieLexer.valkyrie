@@ -263,6 +263,7 @@ micro get_keyword_type(value: String) -> String {
     if value == "if" { return "IF"; }
     if value == "else" { return "ELSE"; }
     if value == "while" { return "WHILE"; }
+    if value == "until" { return "UNTIL"; }
     if value == "return" { return "RETURN"; }
     if value == "true" { return "BOOLEAN"; }
     if value == "false" { return "BOOLEAN"; }
