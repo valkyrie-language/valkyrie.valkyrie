@@ -1,0 +1,78 @@
+namespace package::codegen;
+
+using package::parser::Node;
+
+# Utility functions (moved from the main codegen file for better organization)
+micro replace_all(str, search, replace) {
+    let result = "";
+    let i = 0;
+    while i < str.length {
+        if str[i] == search {
+            result = result + replace;
+            i = i + search.length;
+        } else {
+            result = result + str[i];
+            i = i + 1;
+        }
+    }
+    return result;
+}
+
+micro join_path(pathArray, separator) {
+    let result = "";
+    let i = 0;
+    while i < pathArray.length {
+        if i > 0 {
+            result = result + separator;
+        }
+        result = result + pathArray[i];
+        i = i + 1;
+    }
+    return result;
+}
+
+# JavaScript Code Generation Write Buffer
+class JsCodeGeneration {
+    constructor(indent_text) {
+        self.buffer = [];
+        self.indent_level = 0;
+        self.indent_text = indent_text || "    ";
+    }
+    
+    member indent(self) {
+        self.indent_level = self.indent_level + 1;
+    }
+    
+    member dedent(self) {
+        if self.indent_level > 0 {
+            self.indent_level = self.indent_level - 1;
+        }
+    }
+    
+    member write(self, text) {
+        self.buffer.push(text);
+    }
+    
+    member write_line(self, text) {
+        let current_indent = "";
+        let i = 0;
+        while i < self.indent_level {
+            current_indent = current_indent + self.indent_text;
+            i = i + 1;
+        }
+        if text == null {
+            text = "";
+        }
+        self.buffer.push(current_indent + text + "\n");
+    }
+    
+    member toString(self) {
+        let result = "";
+        let i = 0;
+        while i < self.buffer.length {
+            result = result + self.buffer[i];
+            i = i + 1;
+        }
+        return result;
+    }
+}
