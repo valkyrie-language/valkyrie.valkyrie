@@ -164,7 +164,14 @@ class ValkyrieLexer {
                 return new Token("ASSIGN", ch, line, column);
             }
             if ch == "+" { return new Token("PLUS", ch, line, column); }
-            if ch == "-" { return new Token("MINUS", ch, line, column); }
+            if ch == "-" { 
+                # 检查是否是 ->
+                if self.position < self.source.length && self.source.charAt(self.position) == ">" {
+                    self.advance(); # 跳过 >
+                    return new Token("ARROW", "->", line, column);
+                }
+                return new Token("MINUS", ch, line, column); 
+            }
             if ch == "*" { return new Token("MULTIPLY", ch, line, column); }
             if ch == "/" { return new Token("DIVIDE", ch, line, column); }
             if ch == "%" { return new Token("MODULO", ch, line, column); }
@@ -234,23 +241,23 @@ class ValkyrieLexer {
     }
 }
 
-micro is_whitespace(ch) {
+micro is_whitespace(ch: String) -> Bool {
     return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
 }
 
-micro is_alpha_numeric(ch) {
+micro is_alpha_numeric(ch: String) -> Bool {
     return is_alpha(ch) || is_digit(ch);
 }
 
-micro is_alpha(ch) {
+micro is_alpha(ch: String) -> Bool {
     return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
 }
 
-micro is_digit(ch) {
+micro is_digit(ch: String) -> Bool {
     return ch >= "0" && ch <= "9";
 }
 
-micro get_keyword_type(value) {
+micro get_keyword_type(value: String) -> String {
     if value == "micro" { return "MICRO"; }
     if value == "let" { return "LET"; }
     if value == "if" { return "IF"; }

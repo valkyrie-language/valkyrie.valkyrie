@@ -496,443 +496,6 @@ export function package_codegen_generate(ast) {
     }
     return package_codegen_generateStatement(ast);
 }
-export function package_compiler_topological_sort(analyzer, file_contents) {
-    let file_names = Object.keys(file_contents);
-    let visited = {};
-    let sorted = [];
-    let i = 0;
-    while (i < file_names.length) {
-        visited[file_names[i]] = false;
-        i = i + 1;
-    }
-    let j = 0;
-    while (j < file_names.length) {
-        package_compiler_simple_dfs_visit(
-            file_names[j],
-            analyzer,
-            visited,
-            sorted
-        );
-        j = j + 1;
-    }
-    return { sorted: sorted, error: null };
-}
-export function package_compiler_compile_asts(file_contents, mode) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        mode,
-        null
-    );
-}
-export function package_compiler_compile_asts_with_options(
-    file_contents,
-    mode,
-    options
-) {
-    let manager = new package_compiler_NamespaceManager();
-    package_compiler_set_compile_mode(manager, mode || "repl");
-    let analyzer = new package_compiler_DependencyAnalyzer();
-    let file_names = Object.keys(file_contents);
-    let i = 0;
-    while (i < file_names.length) {
-        let file_name = file_names[i];
-        let content = file_contents[file_name];
-        analyzer.dependencies[file_name] = [];
-        let lexer_instance = new package_lexer_ValkyrieLexer(content);
-        let tokens = lexer_instance.tokenize();
-        if (tokens.length > 0) {
-            let ast = package_parser_parse(tokens);
-            if (ast.type == "Program") {
-                let j = 0;
-                while (j < ast.statements.length) {
-                    let stmt = ast.statements[j];
-                    if (stmt.type == "UsingStatement") {
-                        let using_path = package_compiler_join_path(
-                            stmt.path,
-                            "::"
-                        );
-                        let provider_file =
-                            package_compiler_find_namespace_provider(
-                                using_path,
-                                file_contents
-                            );
-                        if (
-                            provider_file != null &&
-                            provider_file != file_name
-                        ) {
-                            analyzer.dependencies[file_name].push(
-                                provider_file
-                            );
-                        }
-                    }
-                    j = j + 1;
-                }
-            }
-        }
-        i = i + 1;
-    }
-    let sort_result = package_compiler_topological_sort(
-        analyzer,
-        file_contents
-    );
-    if (sort_result.error != null) {
-        return "Error: " + sort_result.error;
-    }
-    let sorted_files = sort_result.sorted;
-    let js_import_statements = [];
-    let variable_statements = [];
-    let function_statements = [];
-    let class_statements = [];
-    let execution_statements = [];
-    let k = 0;
-    while (k < sorted_files.length) {
-        let file_name = sorted_files[k];
-        let content = file_contents[file_name];
-        manager.currentFile = file_name;
-        let lexer_instance = new package_lexer_ValkyrieLexer(content);
-        let tokens = lexer_instance.tokenize();
-        if (tokens.length == 0) {
-            k = k + 1;
-            continue;
-        }
-        let ast = package_parser_parse(tokens);
-        if (ast.type != "Program") {
-            return "Error: Failed to parse " + file_name;
-        }
-        let validation_result = package_compiler_validate_namespace_rules(
-            ast,
-            mode
-        );
-        if (validation_result != "OK") {
-            return validation_result;
-        }
-        let current_namespace = "";
-        let l = 0;
-        while (l < ast.statements.length) {
-            let stmt = ast.statements[l];
-            if (stmt.type == "NamespaceStatement") {
-                current_namespace = package_compiler_join_path(stmt.path, "::");
-                if (stmt.isMainNamespace) {
-                    current_namespace = current_namespace + "!";
-                    if (mode == "standard") {
-                        console.log("🔍 检查主命名空间: " + current_namespace);
-                        console.log(
-                            "📋 当前管理器中的命名空间: " +
-                                Object.keys(manager.namespaces).join(", ")
-                        );
-                        if (manager.namespaces[current_namespace] != null) {
-                            let clean_name = current_namespace.substring(
-                                0,
-                                current_namespace.length - 1
-                            );
-                            console.log(
-                                "❌ 发现重复的主命名空间: " + clean_name
-                            );
-                            return (
-                                "Error: Duplicate main namespace '" +
-                                clean_name +
-                                "' found. Each main namespace must have a unique name."
-                            );
-                        } else {
-                            console.log(
-                                "✅ 主命名空间检查通过: " + current_namespace
-                            );
-                        }
-                    }
-                }
-                manager.currentNamespace = current_namespace;
-            } else if (stmt.type == "UsingStatement") {
-                let using_path = package_compiler_join_path(stmt.path, "::");
-                let is_global = package_compiler_is_main_namespace(using_path);
-                package_compiler_add_using_import(
-                    manager,
-                    using_path,
-                    is_global
-                );
-            } else if (stmt.type == "JSImportStatement") {
-                js_import_statements.push(stmt);
-            } else if (stmt.type == "LetStatement") {
-                stmt.sourceNamespace = current_namespace;
-                variable_statements.push(stmt);
-                package_compiler_add_symbol_to_namespace(
-                    manager,
-                    current_namespace,
-                    stmt.name,
-                    "variable",
-                    stmt,
-                    file_name
-                );
-            } else if (stmt.type == "MicroDeclaration") {
-                stmt.sourceNamespace = current_namespace;
-                function_statements.push(stmt);
-                package_compiler_add_symbol_to_namespace(
-                    manager,
-                    current_namespace,
-                    stmt.name,
-                    "function",
-                    stmt,
-                    file_name
-                );
-            } else if (stmt.type == "ClassDeclaration") {
-                stmt.sourceNamespace = current_namespace;
-                class_statements.push(stmt);
-                package_compiler_add_symbol_to_namespace(
-                    manager,
-                    current_namespace,
-                    stmt.name,
-                    "class",
-                    stmt,
-                    file_name
-                );
-            } else {
-                execution_statements.push(stmt);
-            }
-            l = l + 1;
-        }
-        k = k + 1;
-    }
-    if (mode == "standard") {
-        let main_namespaces = [];
-        let main_namespace_names = [];
-        let namespace_keys = Object.keys(manager.namespaces);
-        let ns_index = 0;
-        while (ns_index < namespace_keys.length) {
-            let ns_name = namespace_keys[ns_index];
-            if (ns_name.endsWith("!")) {
-                main_namespaces.push(ns_name);
-                let clean_name = ns_name.substring(0, ns_name.length - 1);
-                main_namespace_names.push(clean_name);
-            }
-            ns_index = ns_index + 1;
-        }
-        let duplicate_index = 0;
-        while (duplicate_index < main_namespace_names.length) {
-            let current_name = main_namespace_names[duplicate_index];
-            let check_index = duplicate_index + 1;
-            while (check_index < main_namespace_names.length) {
-                if (main_namespace_names[check_index] == current_name) {
-                    return (
-                        "Error: Duplicate main namespace '" +
-                        current_name +
-                        "' found. Each main namespace must have a unique name."
-                    );
-                }
-                check_index = check_index + 1;
-            }
-            duplicate_index = duplicate_index + 1;
-        }
-    }
-    let m = 0;
-    while (m < function_statements.length) {
-        let func_stmt = function_statements[m];
-        func_stmt.uniqueName = package_compiler_get_fully_qualified_name(
-            manager,
-            func_stmt.name,
-            func_stmt.sourceNamespace
-        );
-        m = m + 1;
-    }
-    let n = 0;
-    while (n < class_statements.length) {
-        let class_stmt = class_statements[n];
-        class_stmt.uniqueName = package_compiler_get_fully_qualified_name(
-            manager,
-            class_stmt.name,
-            class_stmt.sourceNamespace
-        );
-        n = n + 1;
-    }
-    let o = 0;
-    while (o < variable_statements.length) {
-        let var_stmt = variable_statements[o];
-        var_stmt.uniqueName = package_compiler_get_fully_qualified_name(
-            manager,
-            var_stmt.name,
-            var_stmt.sourceNamespace
-        );
-        o = o + 1;
-    }
-    let integrated_ast = { type: "Program", statements: [] };
-    let p = 0;
-    while (p < js_import_statements.length) {
-        integrated_ast.statements.push(js_import_statements[p]);
-        p = p + 1;
-    }
-    let q = 0;
-    while (q < variable_statements.length) {
-        let var_stmt = variable_statements[q];
-        if (
-            var_stmt.uniqueName != null &&
-            var_stmt.uniqueName != var_stmt.name
-        ) {
-            let modified_stmt = Object.assign({}, var_stmt);
-            modified_stmt.name = var_stmt.uniqueName;
-            integrated_ast.statements.push(modified_stmt);
-        } else {
-            integrated_ast.statements.push(var_stmt);
-        }
-        q = q + 1;
-    }
-    let r = 0;
-    while (r < function_statements.length) {
-        let func_stmt = function_statements[r];
-        if (
-            func_stmt.uniqueName != null &&
-            func_stmt.uniqueName != func_stmt.name
-        ) {
-            let modified_stmt = Object.assign({}, func_stmt);
-            modified_stmt.name = func_stmt.uniqueName;
-            modified_stmt.body =
-                package_compiler_resolve_identifiers_in_statement_with_options(
-                    func_stmt.body,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-            integrated_ast.statements.push(modified_stmt);
-        } else {
-            let modified_stmt = Object.assign({}, func_stmt);
-            modified_stmt.body =
-                package_compiler_resolve_identifiers_in_statement_with_options(
-                    func_stmt.body,
-                    manager,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options
-                );
-            integrated_ast.statements.push(modified_stmt);
-        }
-        r = r + 1;
-    }
-    let s = 0;
-    while (s < class_statements.length) {
-        let class_stmt = class_statements[s];
-        let modified_stmt = Object.assign({}, class_stmt);
-        if (
-            class_stmt.uniqueName != null &&
-            class_stmt.uniqueName != class_stmt.name
-        ) {
-            modified_stmt.name = class_stmt.uniqueName;
-        }
-        if (class_stmt.members != null) {
-            let resolved_members = [];
-            let m = 0;
-            while (m < class_stmt.members.length) {
-                let member = class_stmt.members[m];
-                let resolved_member = Object.assign({}, member);
-                if (
-                    (member.type == "MemberStatement" ||
-                        member.type == "ConstructorStatement") &&
-                    member.body != null
-                ) {
-                    resolved_member.body =
-                        package_compiler_resolve_identifiers_in_statement_with_options(
-                            member.body,
-                            manager,
-                            function_statements,
-                            variable_statements,
-                            class_statements,
-                            options
-                        );
-                }
-                resolved_members.push(resolved_member);
-                m = m + 1;
-            }
-            modified_stmt.members = resolved_members;
-        }
-        integrated_ast.statements.push(modified_stmt);
-        s = s + 1;
-    }
-    let t = 0;
-    while (t < execution_statements.length) {
-        let resolved_stmt =
-            package_compiler_resolve_identifiers_in_statement_with_options(
-                execution_statements[t],
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
-        integrated_ast.statements.push(resolved_stmt);
-        t = t + 1;
-    }
-    return package_codegen_generate(integrated_ast);
-}
-export function package_compiler_resolve_multiple_namespaces(ast) {
-    let manager = new package_compiler_NamespaceManager();
-    let i = 0;
-    while (i < ast.statements.length) {
-        let stmt = ast.statements[i];
-        if (stmt.type == "NamespaceStatement") {
-            let namespace_path = package_compiler_join_path(stmt.path, "::");
-            if (stmt.isMainNamespace) {
-                namespace_path = namespace_path + "!";
-            }
-            manager.currentNamespace = namespace_path;
-        } else if (stmt.type == "UsingStatement") {
-            let using_path = package_compiler_join_path(stmt.path, "::");
-            let is_global = package_compiler_is_main_namespace(using_path);
-            package_compiler_add_using_import(manager, using_path, is_global);
-        } else if (stmt.type == "MicroDeclaration") {
-            package_compiler_add_symbol_to_namespace(
-                manager,
-                manager.currentNamespace,
-                stmt.name,
-                "function",
-                stmt,
-                manager.currentFile
-            );
-        } else if (stmt.type == "ClassDeclaration") {
-            package_compiler_add_symbol_to_namespace(
-                manager,
-                manager.currentNamespace,
-                stmt.name,
-                "class",
-                stmt,
-                manager.currentFile
-            );
-        } else if (stmt.type == "LetStatement") {
-            package_compiler_add_symbol_to_namespace(
-                manager,
-                manager.currentNamespace,
-                stmt.name,
-                "variable",
-                stmt,
-                manager.currentFile
-            );
-        }
-        i = i + 1;
-    }
-    let j = 0;
-    while (j < ast.statements.length) {
-        let stmt = ast.statements[j];
-        if (stmt.type == "MicroDeclaration") {
-            stmt.uniqueName = package_compiler_get_fully_qualified_name(
-                manager,
-                stmt.name,
-                manager.currentNamespace
-            );
-        } else if (stmt.type == "ClassDeclaration") {
-            stmt.uniqueName = package_compiler_get_fully_qualified_name(
-                manager,
-                stmt.name,
-                manager.currentNamespace
-            );
-        } else if (stmt.type == "LetStatement") {
-            stmt.uniqueName = package_compiler_get_fully_qualified_name(
-                manager,
-                stmt.name,
-                manager.currentNamespace
-            );
-        }
-        j = j + 1;
-    }
-    return ast;
-}
 export function package_compiler_resolve_symbol(
     manager,
     symbol_name,
@@ -1515,6 +1078,484 @@ export function package_compiler_find_namespace_provider(
     }
     return null;
 }
+export function package_compiler_generate_single_js(file_contents) {
+    return package_compiler_compile_asts(file_contents, "repl");
+}
+export function package_compiler_generate_single_js_standard(file_contents) {
+    return package_compiler_compile_asts(file_contents, "standard");
+}
+export function package_compiler_generate_single_js_with_options(
+    file_contents,
+    options
+) {
+    return package_compiler_compile_asts_with_options(
+        file_contents,
+        "repl",
+        options
+    );
+}
+export function package_compiler_generate_single_js_standard_with_options(
+    file_contents,
+    options
+) {
+    return package_compiler_compile_asts_with_options(
+        file_contents,
+        "standard",
+        options
+    );
+}
+export function package_compiler_package_compiler_compile_text(source_text) {
+    let file_contents = { "main.valkyrie": source_text };
+    return package_compiler_compile_asts(file_contents, "repl");
+}
+export function package_compiler_package_compiler_compile_text_with_options(
+    source_text,
+    options
+) {
+    let file_contents = { "main.valkyrie": source_text };
+    return package_compiler_compile_asts_with_options(
+        file_contents,
+        "repl",
+        options
+    );
+}
+export function package_compiler_topological_sort(analyzer, file_contents) {
+    let file_names = Object.keys(file_contents);
+    let visited = {};
+    let sorted = [];
+    let i = 0;
+    while (i < file_names.length) {
+        visited[file_names[i]] = false;
+        i = i + 1;
+    }
+    let j = 0;
+    while (j < file_names.length) {
+        package_compiler_simple_dfs_visit(
+            file_names[j],
+            analyzer,
+            visited,
+            sorted
+        );
+        j = j + 1;
+    }
+    return { sorted: sorted, error: null };
+}
+export function package_compiler_compile_asts(file_contents, mode) {
+    return package_compiler_compile_asts_with_options(
+        file_contents,
+        mode,
+        null
+    );
+}
+export function package_compiler_compile_asts_with_options(
+    file_contents,
+    mode,
+    options
+) {
+    let manager = new package_compiler_NamespaceManager();
+    package_compiler_set_compile_mode(manager, mode || "repl");
+    let analyzer = new package_compiler_DependencyAnalyzer();
+    let file_names = Object.keys(file_contents);
+    let i = 0;
+    while (i < file_names.length) {
+        let file_name = file_names[i];
+        let content = file_contents[file_name];
+        analyzer.dependencies[file_name] = [];
+        let lexer_instance = new package_lexer_ValkyrieLexer(content);
+        let tokens = lexer_instance.tokenize();
+        if (tokens.length > 0) {
+            let ast = package_parser_parse(tokens);
+            if (ast.type == "Program") {
+                let j = 0;
+                while (j < ast.statements.length) {
+                    let stmt = ast.statements[j];
+                    if (stmt.type == "UsingStatement") {
+                        let using_path = package_compiler_join_path(
+                            stmt.path,
+                            "::"
+                        );
+                        let provider_file =
+                            package_compiler_find_namespace_provider(
+                                using_path,
+                                file_contents
+                            );
+                        if (
+                            provider_file != null &&
+                            provider_file != file_name
+                        ) {
+                            analyzer.dependencies[file_name].push(
+                                provider_file
+                            );
+                        }
+                    }
+                    j = j + 1;
+                }
+            }
+        }
+        i = i + 1;
+    }
+    let sort_result = package_compiler_topological_sort(
+        analyzer,
+        file_contents
+    );
+    if (sort_result.error != null) {
+        return "Error: " + sort_result.error;
+    }
+    let sorted_files = sort_result.sorted;
+    let js_import_statements = [];
+    let variable_statements = [];
+    let function_statements = [];
+    let class_statements = [];
+    let execution_statements = [];
+    let k = 0;
+    while (k < sorted_files.length) {
+        let file_name = sorted_files[k];
+        let content = file_contents[file_name];
+        manager.currentFile = file_name;
+        let lexer_instance = new package_lexer_ValkyrieLexer(content);
+        let tokens = lexer_instance.tokenize();
+        if (tokens.length == 0) {
+            k = k + 1;
+            continue;
+        }
+        let ast = package_parser_parse(tokens);
+        if (ast.type != "Program") {
+            return "Error: Failed to parse " + file_name;
+        }
+        let validation_result = package_compiler_validate_namespace_rules(
+            ast,
+            mode
+        );
+        if (validation_result != "OK") {
+            return validation_result;
+        }
+        let current_namespace = "";
+        let l = 0;
+        while (l < ast.statements.length) {
+            let stmt = ast.statements[l];
+            if (stmt.type == "NamespaceStatement") {
+                current_namespace = package_compiler_join_path(stmt.path, "::");
+                if (stmt.isMainNamespace) {
+                    current_namespace = current_namespace + "!";
+                    if (mode == "standard") {
+                        console.log("🔍 检查主命名空间: " + current_namespace);
+                        console.log(
+                            "📋 当前管理器中的命名空间: " +
+                                Object.keys(manager.namespaces).join(", ")
+                        );
+                        if (manager.namespaces[current_namespace] != null) {
+                            let clean_name = current_namespace.substring(
+                                0,
+                                current_namespace.length - 1
+                            );
+                            console.log(
+                                "❌ 发现重复的主命名空间: " + clean_name
+                            );
+                            return (
+                                "Error: Duplicate main namespace '" +
+                                clean_name +
+                                "' found. Each main namespace must have a unique name."
+                            );
+                        } else {
+                            console.log(
+                                "✅ 主命名空间检查通过: " + current_namespace
+                            );
+                        }
+                    }
+                }
+                manager.currentNamespace = current_namespace;
+            } else if (stmt.type == "UsingStatement") {
+                let using_path = package_compiler_join_path(stmt.path, "::");
+                let is_global = package_compiler_is_main_namespace(using_path);
+                package_compiler_add_using_import(
+                    manager,
+                    using_path,
+                    is_global
+                );
+            } else if (stmt.type == "JSImportStatement") {
+                js_import_statements.push(stmt);
+            } else if (stmt.type == "LetStatement") {
+                stmt.sourceNamespace = current_namespace;
+                variable_statements.push(stmt);
+                package_compiler_add_symbol_to_namespace(
+                    manager,
+                    current_namespace,
+                    stmt.name,
+                    "variable",
+                    stmt,
+                    file_name
+                );
+            } else if (stmt.type == "MicroDeclaration") {
+                stmt.sourceNamespace = current_namespace;
+                function_statements.push(stmt);
+                package_compiler_add_symbol_to_namespace(
+                    manager,
+                    current_namespace,
+                    stmt.name,
+                    "function",
+                    stmt,
+                    file_name
+                );
+            } else if (stmt.type == "ClassDeclaration") {
+                stmt.sourceNamespace = current_namespace;
+                class_statements.push(stmt);
+                package_compiler_add_symbol_to_namespace(
+                    manager,
+                    current_namespace,
+                    stmt.name,
+                    "class",
+                    stmt,
+                    file_name
+                );
+            } else {
+                execution_statements.push(stmt);
+            }
+            l = l + 1;
+        }
+        k = k + 1;
+    }
+    if (mode == "standard") {
+        let main_namespaces = [];
+        let main_namespace_names = [];
+        let namespace_keys = Object.keys(manager.namespaces);
+        let ns_index = 0;
+        while (ns_index < namespace_keys.length) {
+            let ns_name = namespace_keys[ns_index];
+            if (ns_name.endsWith("!")) {
+                main_namespaces.push(ns_name);
+                let clean_name = ns_name.substring(0, ns_name.length - 1);
+                main_namespace_names.push(clean_name);
+            }
+            ns_index = ns_index + 1;
+        }
+        let duplicate_index = 0;
+        while (duplicate_index < main_namespace_names.length) {
+            let current_name = main_namespace_names[duplicate_index];
+            let check_index = duplicate_index + 1;
+            while (check_index < main_namespace_names.length) {
+                if (main_namespace_names[check_index] == current_name) {
+                    return (
+                        "Error: Duplicate main namespace '" +
+                        current_name +
+                        "' found. Each main namespace must have a unique name."
+                    );
+                }
+                check_index = check_index + 1;
+            }
+            duplicate_index = duplicate_index + 1;
+        }
+    }
+    let m = 0;
+    while (m < function_statements.length) {
+        let func_stmt = function_statements[m];
+        func_stmt.uniqueName = package_compiler_get_fully_qualified_name(
+            manager,
+            func_stmt.name,
+            func_stmt.sourceNamespace
+        );
+        m = m + 1;
+    }
+    let n = 0;
+    while (n < class_statements.length) {
+        let class_stmt = class_statements[n];
+        class_stmt.uniqueName = package_compiler_get_fully_qualified_name(
+            manager,
+            class_stmt.name,
+            class_stmt.sourceNamespace
+        );
+        n = n + 1;
+    }
+    let o = 0;
+    while (o < variable_statements.length) {
+        let var_stmt = variable_statements[o];
+        var_stmt.uniqueName = package_compiler_get_fully_qualified_name(
+            manager,
+            var_stmt.name,
+            var_stmt.sourceNamespace
+        );
+        o = o + 1;
+    }
+    let integrated_ast = { type: "Program", statements: [] };
+    let p = 0;
+    while (p < js_import_statements.length) {
+        integrated_ast.statements.push(js_import_statements[p]);
+        p = p + 1;
+    }
+    let q = 0;
+    while (q < variable_statements.length) {
+        let var_stmt = variable_statements[q];
+        if (
+            var_stmt.uniqueName != null &&
+            var_stmt.uniqueName != var_stmt.name
+        ) {
+            let modified_stmt = Object.assign({}, var_stmt);
+            modified_stmt.name = var_stmt.uniqueName;
+            integrated_ast.statements.push(modified_stmt);
+        } else {
+            integrated_ast.statements.push(var_stmt);
+        }
+        q = q + 1;
+    }
+    let r = 0;
+    while (r < function_statements.length) {
+        let func_stmt = function_statements[r];
+        if (
+            func_stmt.uniqueName != null &&
+            func_stmt.uniqueName != func_stmt.name
+        ) {
+            let modified_stmt = Object.assign({}, func_stmt);
+            modified_stmt.name = func_stmt.uniqueName;
+            modified_stmt.body =
+                package_compiler_resolve_identifiers_in_statement_with_options(
+                    func_stmt.body,
+                    manager,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options
+                );
+            integrated_ast.statements.push(modified_stmt);
+        } else {
+            let modified_stmt = Object.assign({}, func_stmt);
+            modified_stmt.body =
+                package_compiler_resolve_identifiers_in_statement_with_options(
+                    func_stmt.body,
+                    manager,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options
+                );
+            integrated_ast.statements.push(modified_stmt);
+        }
+        r = r + 1;
+    }
+    let s = 0;
+    while (s < class_statements.length) {
+        let class_stmt = class_statements[s];
+        let modified_stmt = Object.assign({}, class_stmt);
+        if (
+            class_stmt.uniqueName != null &&
+            class_stmt.uniqueName != class_stmt.name
+        ) {
+            modified_stmt.name = class_stmt.uniqueName;
+        }
+        if (class_stmt.members != null) {
+            let resolved_members = [];
+            let m = 0;
+            while (m < class_stmt.members.length) {
+                let member = class_stmt.members[m];
+                let resolved_member = Object.assign({}, member);
+                if (
+                    (member.type == "MemberStatement" ||
+                        member.type == "ConstructorStatement") &&
+                    member.body != null
+                ) {
+                    resolved_member.body =
+                        package_compiler_resolve_identifiers_in_statement_with_options(
+                            member.body,
+                            manager,
+                            function_statements,
+                            variable_statements,
+                            class_statements,
+                            options
+                        );
+                }
+                resolved_members.push(resolved_member);
+                m = m + 1;
+            }
+            modified_stmt.members = resolved_members;
+        }
+        integrated_ast.statements.push(modified_stmt);
+        s = s + 1;
+    }
+    let t = 0;
+    while (t < execution_statements.length) {
+        let resolved_stmt =
+            package_compiler_resolve_identifiers_in_statement_with_options(
+                execution_statements[t],
+                manager,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options
+            );
+        integrated_ast.statements.push(resolved_stmt);
+        t = t + 1;
+    }
+    return package_codegen_generate(integrated_ast);
+}
+export function package_compiler_resolve_multiple_namespaces(ast) {
+    let manager = new package_compiler_NamespaceManager();
+    let i = 0;
+    while (i < ast.statements.length) {
+        let stmt = ast.statements[i];
+        if (stmt.type == "NamespaceStatement") {
+            let namespace_path = package_compiler_join_path(stmt.path, "::");
+            if (stmt.isMainNamespace) {
+                namespace_path = namespace_path + "!";
+            }
+            manager.currentNamespace = namespace_path;
+        } else if (stmt.type == "UsingStatement") {
+            let using_path = package_compiler_join_path(stmt.path, "::");
+            let is_global = package_compiler_is_main_namespace(using_path);
+            package_compiler_add_using_import(manager, using_path, is_global);
+        } else if (stmt.type == "MicroDeclaration") {
+            package_compiler_add_symbol_to_namespace(
+                manager,
+                manager.currentNamespace,
+                stmt.name,
+                "function",
+                stmt,
+                manager.currentFile
+            );
+        } else if (stmt.type == "ClassDeclaration") {
+            package_compiler_add_symbol_to_namespace(
+                manager,
+                manager.currentNamespace,
+                stmt.name,
+                "class",
+                stmt,
+                manager.currentFile
+            );
+        } else if (stmt.type == "LetStatement") {
+            package_compiler_add_symbol_to_namespace(
+                manager,
+                manager.currentNamespace,
+                stmt.name,
+                "variable",
+                stmt,
+                manager.currentFile
+            );
+        }
+        i = i + 1;
+    }
+    let j = 0;
+    while (j < ast.statements.length) {
+        let stmt = ast.statements[j];
+        if (stmt.type == "MicroDeclaration") {
+            stmt.uniqueName = package_compiler_get_fully_qualified_name(
+                manager,
+                stmt.name,
+                manager.currentNamespace
+            );
+        } else if (stmt.type == "ClassDeclaration") {
+            stmt.uniqueName = package_compiler_get_fully_qualified_name(
+                manager,
+                stmt.name,
+                manager.currentNamespace
+            );
+        } else if (stmt.type == "LetStatement") {
+            stmt.uniqueName = package_compiler_get_fully_qualified_name(
+                manager,
+                stmt.name,
+                manager.currentNamespace
+            );
+        }
+        j = j + 1;
+    }
+    return ast;
+}
 export function package_compiler_create_error(message, line, column) {
     return {
         type: "CompilerError",
@@ -1639,47 +1680,6 @@ export function package_compiler_simple_dfs_visit(
     }
     sorted.push(file_path);
 }
-export function package_compiler_generate_single_js(file_contents) {
-    return package_compiler_compile_asts(file_contents, "repl");
-}
-export function package_compiler_generate_single_js_standard(file_contents) {
-    return package_compiler_compile_asts(file_contents, "standard");
-}
-export function package_compiler_generate_single_js_with_options(
-    file_contents,
-    options
-) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        "repl",
-        options
-    );
-}
-export function package_compiler_generate_single_js_standard_with_options(
-    file_contents,
-    options
-) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        "standard",
-        options
-    );
-}
-export function package_compiler_package_compiler_compile_text(source_text) {
-    let file_contents = { "main.valkyrie": source_text };
-    return package_compiler_compile_asts(file_contents, "repl");
-}
-export function package_compiler_package_compiler_compile_text_with_options(
-    source_text,
-    options
-) {
-    let file_contents = { "main.valkyrie": source_text };
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        "repl",
-        options
-    );
-}
 export function package_lexer_is_whitespace(ch) {
     return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
 }
@@ -1751,6 +1751,543 @@ export function package_lexer_get_keyword_type(value) {
         return "AWAIT";
     }
     return "IDENTIFIER";
+}
+export function package_parser_parseStatement(parser) {
+    if (parser.current_token.type == "EOF") {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Unexpected EOF in statement";
+        error.line = parser.current_token.line;
+        error.column = parser.current_token.column;
+        return error;
+    }
+    if (parser.current_token.type == "NAMESPACE") {
+        return package_parser_parseNamespaceStatement(parser);
+    }
+    if (parser.current_token.type == "USING") {
+        return package_parser_parseUsingStatement(parser);
+    }
+    if (parser.current_token.type == "ATTRIBUTE") {
+        return package_parser_parseAttributeStatement(parser);
+    }
+    if (parser.current_token.type == "CLASS") {
+        return package_parser_parseClassDeclaration(parser);
+    }
+    if (parser.current_token.type == "LET") {
+        return package_parser_parseLetStatement(parser);
+    }
+    if (parser.current_token.type == "MICRO") {
+        let nextIndex = parser.position + 1;
+        if (
+            nextIndex < parser.tokens.length &&
+            parser.tokens[nextIndex].type == "IDENTIFIER"
+        ) {
+            let afterNameIndex = nextIndex + 1;
+            if (
+                afterNameIndex < parser.tokens.length &&
+                parser.tokens[afterNameIndex].type == "LPAREN"
+            ) {
+                return package_parser_parseMicroFunctionDeclaration(parser);
+            }
+        }
+        return package_parser_parseFunctionDeclaration(parser);
+    }
+    if (parser.current_token.type == "IF") {
+        return package_parser_parseIfStatement(parser);
+    }
+    if (parser.current_token.type == "WHILE") {
+        return package_parser_parseWhileStatement(parser);
+    }
+    if (parser.current_token.type == "RETURN") {
+        return package_parser_parseReturnStatement(parser);
+    }
+    if (parser.current_token.type == "LBRACE") {
+        return package_parser_parseFunctionBlock(parser);
+    }
+    let expr = package_parser_parseExpression(parser);
+    if (expr && expr.type == "ParseError") {
+        return expr;
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon && semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    let stmt = new package_parser_Node("ExpressionStatement");
+    stmt.expression = expr;
+    return stmt;
+}
+export function package_parser_parseLetStatement(parser) {
+    parser.advance();
+    let name = parser.expect("IDENTIFIER");
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let assignToken = parser.expect("ASSIGN");
+    if (assignToken && assignToken.type == "ParseError") {
+        return assignToken;
+    }
+    let value = package_parser_parseExpression(parser);
+    if (value && value.type == "ParseError") {
+        return value;
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon && semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    let node = new package_parser_Node("LetStatement");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+export function package_parser_parseNamespaceStatement(parser) {
+    parser.advance();
+    let path = [];
+    let isMainNamespace = false;
+    if (parser.current_token.type == "BANG") {
+        parser.advance();
+        isMainNamespace = true;
+    }
+    let identifier = parser.expect("IDENTIFIER");
+    if (identifier.type == "ParseError") {
+        return identifier;
+    }
+    path.push(identifier.value);
+    while (parser.current_token.type == "DOUBLE_COLON") {
+        parser.advance();
+        identifier = parser.expect("IDENTIFIER");
+        if (identifier.type == "ParseError") {
+            return identifier;
+        }
+        path.push(identifier.value);
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    let node = new package_parser_Node("NamespaceStatement");
+    node.path = path;
+    node.isMainNamespace = isMainNamespace;
+    return node;
+}
+export function package_parser_parseUsingStatement(parser) {
+    parser.advance();
+    let path = [];
+    let identifier = parser.expect("IDENTIFIER");
+    if (identifier.type == "ParseError") {
+        return identifier;
+    }
+    path.push(identifier.value);
+    while (parser.current_token.type == "DOUBLE_COLON") {
+        parser.advance();
+        identifier = parser.expect("IDENTIFIER");
+        if (identifier.type == "ParseError") {
+            return identifier;
+        }
+        path.push(identifier.value);
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    let node = new package_parser_Node("UsingStatement");
+    node.path = path;
+    return node;
+}
+export function package_parser_parseAttributeStatement(parser) {
+    parser.advance();
+    let jsToken = parser.expect("IDENTIFIER");
+    if (jsToken.type == "ParseError") {
+        return jsToken;
+    }
+    if (jsToken.value != "js") {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Expected 'js' after ↯";
+        error.line = jsToken.line;
+        error.column = jsToken.column;
+        return error;
+    }
+    let lparen = parser.expect("LPAREN");
+    if (lparen.type == "ParseError") {
+        return lparen;
+    }
+    let modulePath = parser.expect("STRING");
+    if (modulePath.type == "ParseError") {
+        return modulePath;
+    }
+    let comma = parser.expect("COMMA");
+    if (comma.type == "ParseError") {
+        return comma;
+    }
+    let importName = parser.expect("STRING");
+    if (importName.type == "ParseError") {
+        return importName;
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen.type == "ParseError") {
+        return rparen;
+    }
+    let microToken = parser.expect("MICRO");
+    if (microToken.type == "ParseError") {
+        return microToken;
+    }
+    let functionName = parser.expect("IDENTIFIER");
+    if (functionName.type == "ParseError") {
+        return functionName;
+    }
+    let paramLparen = parser.expect("LPAREN");
+    if (paramLparen.type == "ParseError") {
+        return paramLparen;
+    }
+    let parameters = [];
+    if (parser.current_token.type != "RPAREN") {
+        let param = parser.expect("IDENTIFIER");
+        if (param.type == "ParseError") {
+            return param;
+        }
+        parameters.push(param.value);
+        while (parser.current_token.type == "COMMA") {
+            parser.advance();
+            param = parser.expect("IDENTIFIER");
+            if (param.type == "ParseError") {
+                return param;
+            }
+            parameters.push(param.value);
+        }
+    }
+    let paramRparen = parser.expect("RPAREN");
+    if (paramRparen.type == "ParseError") {
+        return paramRparen;
+    }
+    let body = package_parser_parseStatement(parser);
+    if (body.type == "ParseError") {
+        return body;
+    }
+    let node = new package_parser_Node("JSAttributeStatement");
+    node.modulePath = modulePath.value;
+    node.importName = importName.value;
+    node.functionName = functionName.value;
+    node.parameters = parameters;
+    node.body = body;
+    return node;
+}
+export function package_parser_parseMicroFunctionDeclaration(parser) {
+    parser.advance();
+    let name = parser.expect("IDENTIFIER");
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lparen = parser.expect("LPAREN");
+    if (lparen && lparen.type == "ParseError") {
+        return lparen;
+    }
+    let params = package_parser_parseTermParameters(parser);
+    if (params && params.type == "ParseError") {
+        return params;
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen && rparen.type == "ParseError") {
+        return rparen;
+    }
+    let returnType = null;
+    if (parser.current_token.type == "ARROW") {
+        parser.advance();
+        returnType = package_parser_parseTypeExpression(parser);
+        if (returnType && returnType.type == "ParseError") {
+            return returnType;
+        }
+    }
+    let effectType = null;
+    if (parser.current_token.type == "DIVIDE") {
+        parser.advance();
+        effectType = package_parser_parseTypeExpression(parser);
+        if (effectType && effectType.type == "ParseError") {
+            return effectType;
+        }
+    }
+    let body = package_parser_parseFunctionBlock(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = new package_parser_Node("MicroDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.returnType = returnType;
+    node.effectType = effectType;
+    node.body = body;
+    return node;
+}
+export function package_parser_parseClassDeclaration(parser) {
+    parser.advance();
+    let name = parser.expect("IDENTIFIER");
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let node = new package_parser_Node("ClassDeclaration");
+    node.name = name.value;
+    node.superClass = null;
+    node.members = [];
+    if (parser.current_token.type == "EXTENDS") {
+        parser.advance();
+        let superName = parser.expect("IDENTIFIER");
+        if (superName && superName.type == "ParseError") {
+            return superName;
+        }
+        node.superClass = superName.value;
+    }
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let member = package_parser_parseClassMember(parser);
+        if (member && member.type != "ParseError") {
+            node.members.push(member);
+        } else if (member && member.type == "ParseError") {
+            return member;
+        }
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    return node;
+}
+export function package_parser_parseClassMember(parser) {
+    if (parser.current_token.type == "CONSTRUCTOR") {
+        parser.advance();
+        let lparen = parser.expect("LPAREN");
+        if (lparen && lparen.type == "ParseError") {
+            return lparen;
+        }
+        let params = package_parser_parseTermParameters(parser);
+        if (params && params.type == "ParseError") {
+            return params;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        let body = package_parser_parseFunctionBlock(parser);
+        if (body && body.type == "ParseError") {
+            return body;
+        }
+        let ctorNode = new package_parser_Node("ConstructorStatement");
+        ctorNode.parameters = params;
+        ctorNode.body = body;
+        return ctorNode;
+    }
+    if (parser.current_token.type == "MICRO") {
+        parser.advance();
+        let name = parser.expect("IDENTIFIER");
+        if (name && name.type == "ParseError") {
+            return name;
+        }
+        let lparen = parser.expect("LPAREN");
+        if (lparen && lparen.type == "ParseError") {
+            return lparen;
+        }
+        let params = package_parser_parseTermParameters(parser);
+        if (params && params.type == "ParseError") {
+            return params;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        let body = package_parser_parseFunctionBlock(parser);
+        if (body && body.type == "ParseError") {
+            return body;
+        }
+        let isInstanceMethod = false;
+        let i = 0;
+        while (i < params.length) {
+            let param = params[i];
+            let paramName = "";
+            if (param && param.name) {
+                paramName = param.name;
+            } else {
+                paramName = param;
+            }
+            if (paramName == "self") {
+                isInstanceMethod = true;
+                break;
+            }
+            i = i + 1;
+        }
+        let methodNode = new package_parser_Node("MemberStatement");
+        methodNode.name = name.value;
+        methodNode.parameters = params;
+        methodNode.body = body;
+        methodNode.isInstanceMethod = isInstanceMethod;
+        methodNode.isStatic = !isInstanceMethod;
+        return methodNode;
+    }
+    if (parser.current_token.type == "IDENTIFIER") {
+        let nextIndex = parser.position + 1;
+        if (nextIndex < parser.tokens.length) {
+            let next_token = parser.tokens[nextIndex];
+            if (next_token.type == "ASSIGN" || next_token.type == "SEMICOLON") {
+                let name = parser.expect("IDENTIFIER");
+                if (name && name.type == "ParseError") {
+                    return name;
+                }
+                let initValue = null;
+                if (parser.current_token.type == "ASSIGN") {
+                    parser.advance();
+                    initValue = package_parser_parseExpression(parser);
+                    if (initValue && initValue.type == "ParseError") {
+                        return initValue;
+                    }
+                }
+                let semicolon = parser.expect("SEMICOLON");
+                if (semicolon && semicolon.type == "ParseError") {
+                    return semicolon;
+                }
+                let node = new package_parser_Node("Property");
+                node.name = name.value;
+                node.initializer = initValue;
+                return node;
+            }
+        }
+    }
+    let error = {};
+    error.type = "ParseError";
+    error.message =
+        "Expected class member (field or method) but got " +
+        parser.current_token.type;
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
+}
+export function package_parser_parseFunctionDeclaration(parser) {
+    parser.advance();
+    let name = parser.expect("IDENTIFIER");
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lparen = parser.expect("LPAREN");
+    if (lparen && lparen.type == "ParseError") {
+        return lparen;
+    }
+    let params = package_parser_parseTermParameters(parser);
+    if (params && params.type == "ParseError") {
+        return params;
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen && rparen.type == "ParseError") {
+        return rparen;
+    }
+    let body = package_parser_parseFunctionBlock(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = new package_parser_Node("MicroDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.body = body;
+    return node;
+}
+export function package_parser_parseIfStatement(parser) {
+    parser.advance();
+    let condition = package_parser_parseExpression(parser);
+    if (condition && condition.type == "ParseError") {
+        return condition;
+    }
+    let thenBranch = package_parser_parseStatement(parser);
+    if (thenBranch && thenBranch.type == "ParseError") {
+        return thenBranch;
+    }
+    let node = new package_parser_Node("IfStatement");
+    node.condition = condition;
+    node.thenBranch = thenBranch;
+    node.elseBranch = null;
+    if (parser.current_token.type == "ELSE") {
+        parser.advance();
+        let elseBranch = package_parser_parseStatement(parser);
+        if (elseBranch && elseBranch.type == "ParseError") {
+            return elseBranch;
+        }
+        node.elseBranch = elseBranch;
+    }
+    return node;
+}
+export function package_parser_parseWhileStatement(parser) {
+    parser.advance();
+    let condition = package_parser_parseExpression(parser);
+    if (condition && condition.type == "ParseError") {
+        return condition;
+    }
+    let body = package_parser_parseFunctionBlock(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = new package_parser_Node("WhileStatement");
+    node.condition = condition;
+    node.body = body;
+    return node;
+}
+export function package_parser_parseReturnStatement(parser) {
+    parser.advance();
+    let node = new package_parser_Node("ReturnStatement");
+    if (parser.current_token.type == "SEMICOLON") {
+        node.value = null;
+    } else {
+        let value = package_parser_parseExpression(parser);
+        if (value && value.type == "ParseError") {
+            return value;
+        }
+        node.value = value;
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon && semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    return node;
+}
+export function package_parser_parseFunctionBlock(parser) {
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let statements = [];
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let stmt = package_parser_parseStatement(parser);
+        if (stmt && stmt.type == "ParseError") {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = new package_parser_Node("Block");
+    node.statements = statements;
+    return node;
+}
+export function package_parser_parseProgram(parser) {
+    let statements = [];
+    while (parser.current_token.type != "EOF") {
+        let stmt = package_parser_parseStatement(parser);
+        if (stmt && stmt.type == "ParseError") {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+    let node = new package_parser_Node("Program");
+    node.statements = statements;
+    return node;
+}
+export function package_parser_parse(tokens) {
+    let parser = new package_parser_ValkyrieParser(tokens);
+    return package_parser_parseProgram(parser);
 }
 export function package_parser_getOperatorPrecedence(tokenType) {
     if (tokenType == "ASSIGN") {
@@ -2565,525 +3102,6 @@ export function package_parser_parseEffectType(parser) {
     }
     return null;
 }
-export function package_parser_parseStatement(parser) {
-    if (parser.current_token.type == "EOF") {
-        let error = {};
-        error.type = "ParseError";
-        error.message = "Unexpected EOF in statement";
-        error.line = parser.current_token.line;
-        error.column = parser.current_token.column;
-        return error;
-    }
-    if (parser.current_token.type == "NAMESPACE") {
-        return package_parser_parseNamespaceStatement(parser);
-    }
-    if (parser.current_token.type == "USING") {
-        return package_parser_parseUsingStatement(parser);
-    }
-    if (parser.current_token.type == "ATTRIBUTE") {
-        return package_parser_parseAttributeStatement(parser);
-    }
-    if (parser.current_token.type == "CLASS") {
-        return package_parser_parseClassDeclaration(parser);
-    }
-    if (parser.current_token.type == "LET") {
-        return package_parser_parseLetStatement(parser);
-    }
-    if (parser.current_token.type == "MICRO") {
-        let nextIndex = parser.position + 1;
-        if (
-            nextIndex < parser.tokens.length &&
-            parser.tokens[nextIndex].type == "IDENTIFIER"
-        ) {
-            let afterNameIndex = nextIndex + 1;
-            if (
-                afterNameIndex < parser.tokens.length &&
-                parser.tokens[afterNameIndex].type == "LPAREN"
-            ) {
-                return package_parser_parseMicroFunctionDeclaration(parser);
-            }
-        }
-        return package_parser_parseFunctionDeclaration(parser);
-    }
-    if (parser.current_token.type == "IF") {
-        return package_parser_parseIfStatement(parser);
-    }
-    if (parser.current_token.type == "WHILE") {
-        return package_parser_parseWhileStatement(parser);
-    }
-    if (parser.current_token.type == "RETURN") {
-        return package_parser_parseReturnStatement(parser);
-    }
-    if (parser.current_token.type == "LBRACE") {
-        return package_parser_parseFunctionBlock(parser);
-    }
-    let expr = package_parser_parseExpression(parser);
-    if (expr && expr.type == "ParseError") {
-        return expr;
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon && semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let stmt = new package_parser_Node("ExpressionStatement");
-    stmt.expression = expr;
-    return stmt;
-}
-export function package_parser_parseLetStatement(parser) {
-    parser.advance();
-    let name = parser.expect("IDENTIFIER");
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let assignToken = parser.expect("ASSIGN");
-    if (assignToken && assignToken.type == "ParseError") {
-        return assignToken;
-    }
-    let value = package_parser_parseExpression(parser);
-    if (value && value.type == "ParseError") {
-        return value;
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon && semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let node = new package_parser_Node("LetStatement");
-    node.name = name.value;
-    node.value = value;
-    return node;
-}
-export function package_parser_parseNamespaceStatement(parser) {
-    parser.advance();
-    let path = [];
-    let isMainNamespace = false;
-    if (parser.current_token.type == "BANG") {
-        parser.advance();
-        isMainNamespace = true;
-    }
-    let identifier = parser.expect("IDENTIFIER");
-    if (identifier.type == "ParseError") {
-        return identifier;
-    }
-    path.push(identifier.value);
-    while (parser.current_token.type == "DOUBLE_COLON") {
-        parser.advance();
-        identifier = parser.expect("IDENTIFIER");
-        if (identifier.type == "ParseError") {
-            return identifier;
-        }
-        path.push(identifier.value);
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let node = new package_parser_Node("NamespaceStatement");
-    node.path = path;
-    node.isMainNamespace = isMainNamespace;
-    return node;
-}
-export function package_parser_parseUsingStatement(parser) {
-    parser.advance();
-    let path = [];
-    let identifier = parser.expect("IDENTIFIER");
-    if (identifier.type == "ParseError") {
-        return identifier;
-    }
-    path.push(identifier.value);
-    while (parser.current_token.type == "DOUBLE_COLON") {
-        parser.advance();
-        identifier = parser.expect("IDENTIFIER");
-        if (identifier.type == "ParseError") {
-            return identifier;
-        }
-        path.push(identifier.value);
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let node = new package_parser_Node("UsingStatement");
-    node.path = path;
-    return node;
-}
-export function package_parser_parseAttributeStatement(parser) {
-    parser.advance();
-    let jsToken = parser.expect("IDENTIFIER");
-    if (jsToken.type == "ParseError") {
-        return jsToken;
-    }
-    if (jsToken.value != "js") {
-        let error = {};
-        error.type = "ParseError";
-        error.message = "Expected 'js' after ↯";
-        error.line = jsToken.line;
-        error.column = jsToken.column;
-        return error;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen.type == "ParseError") {
-        return lparen;
-    }
-    let modulePath = parser.expect("STRING");
-    if (modulePath.type == "ParseError") {
-        return modulePath;
-    }
-    let comma = parser.expect("COMMA");
-    if (comma.type == "ParseError") {
-        return comma;
-    }
-    let importName = parser.expect("STRING");
-    if (importName.type == "ParseError") {
-        return importName;
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen.type == "ParseError") {
-        return rparen;
-    }
-    let microToken = parser.expect("MICRO");
-    if (microToken.type == "ParseError") {
-        return microToken;
-    }
-    let functionName = parser.expect("IDENTIFIER");
-    if (functionName.type == "ParseError") {
-        return functionName;
-    }
-    let paramLparen = parser.expect("LPAREN");
-    if (paramLparen.type == "ParseError") {
-        return paramLparen;
-    }
-    let parameters = [];
-    if (parser.current_token.type != "RPAREN") {
-        let param = parser.expect("IDENTIFIER");
-        if (param.type == "ParseError") {
-            return param;
-        }
-        parameters.push(param.value);
-        while (parser.current_token.type == "COMMA") {
-            parser.advance();
-            param = parser.expect("IDENTIFIER");
-            if (param.type == "ParseError") {
-                return param;
-            }
-            parameters.push(param.value);
-        }
-    }
-    let paramRparen = parser.expect("RPAREN");
-    if (paramRparen.type == "ParseError") {
-        return paramRparen;
-    }
-    let body = package_parser_parseStatement(parser);
-    if (body.type == "ParseError") {
-        return body;
-    }
-    let node = new package_parser_Node("JSAttributeStatement");
-    node.modulePath = modulePath.value;
-    node.importName = importName.value;
-    node.functionName = functionName.value;
-    node.parameters = parameters;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseMicroFunctionDeclaration(parser) {
-    parser.advance();
-    let name = parser.expect("IDENTIFIER");
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen && lparen.type == "ParseError") {
-        return lparen;
-    }
-    let params = package_parser_parseTermParameters(parser);
-    if (params && params.type == "ParseError") {
-        return params;
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen && rparen.type == "ParseError") {
-        return rparen;
-    }
-    let body = package_parser_parseFunctionBlock(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = new package_parser_Node("MicroDeclaration");
-    node.name = name.value;
-    node.parameters = params;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseClassDeclaration(parser) {
-    parser.advance();
-    let name = parser.expect("IDENTIFIER");
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let node = new package_parser_Node("ClassDeclaration");
-    node.name = name.value;
-    node.superClass = null;
-    node.members = [];
-    if (parser.current_token.type == "EXTENDS") {
-        parser.advance();
-        let superName = parser.expect("IDENTIFIER");
-        if (superName && superName.type == "ParseError") {
-            return superName;
-        }
-        node.superClass = superName.value;
-    }
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    while (
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        let member = package_parser_parseClassMember(parser);
-        if (member && member.type != "ParseError") {
-            node.members.push(member);
-        } else if (member && member.type == "ParseError") {
-            return member;
-        }
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    return node;
-}
-export function package_parser_parseClassMember(parser) {
-    if (parser.current_token.type == "CONSTRUCTOR") {
-        parser.advance();
-        let lparen = parser.expect("LPAREN");
-        if (lparen && lparen.type == "ParseError") {
-            return lparen;
-        }
-        let params = package_parser_parseTermParameters(parser);
-        if (params && params.type == "ParseError") {
-            return params;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        let body = package_parser_parseFunctionBlock(parser);
-        if (body && body.type == "ParseError") {
-            return body;
-        }
-        let ctorNode = new package_parser_Node("ConstructorStatement");
-        ctorNode.parameters = params;
-        ctorNode.body = body;
-        return ctorNode;
-    }
-    if (parser.current_token.type == "MICRO") {
-        parser.advance();
-        let name = parser.expect("IDENTIFIER");
-        if (name && name.type == "ParseError") {
-            return name;
-        }
-        let lparen = parser.expect("LPAREN");
-        if (lparen && lparen.type == "ParseError") {
-            return lparen;
-        }
-        let params = package_parser_parseTermParameters(parser);
-        if (params && params.type == "ParseError") {
-            return params;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        let body = package_parser_parseFunctionBlock(parser);
-        if (body && body.type == "ParseError") {
-            return body;
-        }
-        let isInstanceMethod = false;
-        let i = 0;
-        while (i < params.length) {
-            let param = params[i];
-            let paramName = "";
-            if (param && param.name) {
-                paramName = param.name;
-            } else {
-                paramName = param;
-            }
-            if (paramName == "self") {
-                isInstanceMethod = true;
-                break;
-            }
-            i = i + 1;
-        }
-        let methodNode = new package_parser_Node("MemberStatement");
-        methodNode.name = name.value;
-        methodNode.parameters = params;
-        methodNode.body = body;
-        methodNode.isInstanceMethod = isInstanceMethod;
-        methodNode.isStatic = !isInstanceMethod;
-        return methodNode;
-    }
-    if (parser.current_token.type == "IDENTIFIER") {
-        let nextIndex = parser.position + 1;
-        if (nextIndex < parser.tokens.length) {
-            let next_token = parser.tokens[nextIndex];
-            if (next_token.type == "ASSIGN" || next_token.type == "SEMICOLON") {
-                let name = parser.expect("IDENTIFIER");
-                if (name && name.type == "ParseError") {
-                    return name;
-                }
-                let initValue = null;
-                if (parser.current_token.type == "ASSIGN") {
-                    parser.advance();
-                    initValue = package_parser_parseExpression(parser);
-                    if (initValue && initValue.type == "ParseError") {
-                        return initValue;
-                    }
-                }
-                let semicolon = parser.expect("SEMICOLON");
-                if (semicolon && semicolon.type == "ParseError") {
-                    return semicolon;
-                }
-                let node = new package_parser_Node("Property");
-                node.name = name.value;
-                node.initializer = initValue;
-                return node;
-            }
-        }
-    }
-    let error = {};
-    error.type = "ParseError";
-    error.message =
-        "Expected class member (field or method) but got " +
-        parser.current_token.type;
-    error.line = parser.current_token.line;
-    error.column = parser.current_token.column;
-    return error;
-}
-export function package_parser_parseFunctionDeclaration(parser) {
-    parser.advance();
-    let name = parser.expect("IDENTIFIER");
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen && lparen.type == "ParseError") {
-        return lparen;
-    }
-    let params = package_parser_parseTermParameters(parser);
-    if (params && params.type == "ParseError") {
-        return params;
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen && rparen.type == "ParseError") {
-        return rparen;
-    }
-    let body = package_parser_parseFunctionBlock(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = new package_parser_Node("MicroDeclaration");
-    node.name = name.value;
-    node.parameters = params;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseIfStatement(parser) {
-    parser.advance();
-    let condition = package_parser_parseExpression(parser);
-    if (condition && condition.type == "ParseError") {
-        return condition;
-    }
-    let thenBranch = package_parser_parseStatement(parser);
-    if (thenBranch && thenBranch.type == "ParseError") {
-        return thenBranch;
-    }
-    let node = new package_parser_Node("IfStatement");
-    node.condition = condition;
-    node.thenBranch = thenBranch;
-    node.elseBranch = null;
-    if (parser.current_token.type == "ELSE") {
-        parser.advance();
-        let elseBranch = package_parser_parseStatement(parser);
-        if (elseBranch && elseBranch.type == "ParseError") {
-            return elseBranch;
-        }
-        node.elseBranch = elseBranch;
-    }
-    return node;
-}
-export function package_parser_parseWhileStatement(parser) {
-    parser.advance();
-    let condition = package_parser_parseExpression(parser);
-    if (condition && condition.type == "ParseError") {
-        return condition;
-    }
-    let body = package_parser_parseFunctionBlock(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = new package_parser_Node("WhileStatement");
-    node.condition = condition;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseReturnStatement(parser) {
-    parser.advance();
-    let node = new package_parser_Node("ReturnStatement");
-    if (parser.current_token.type == "SEMICOLON") {
-        node.value = null;
-    } else {
-        let value = package_parser_parseExpression(parser);
-        if (value && value.type == "ParseError") {
-            return value;
-        }
-        node.value = value;
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon && semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    return node;
-}
-export function package_parser_parseFunctionBlock(parser) {
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    let statements = [];
-    while (
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        let stmt = package_parser_parseStatement(parser);
-        if (stmt && stmt.type == "ParseError") {
-            return stmt;
-        }
-        statements.push(stmt);
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    let node = new package_parser_Node("Block");
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parseProgram(parser) {
-    let statements = [];
-    while (parser.current_token.type != "EOF") {
-        let stmt = package_parser_parseStatement(parser);
-        if (stmt && stmt.type == "ParseError") {
-            return stmt;
-        }
-        statements.push(stmt);
-    }
-    let node = new package_parser_Node("Program");
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parse(tokens) {
-    let parser = new package_parser_ValkyrieParser(tokens);
-    return package_parser_parseProgram(parser);
-}
 class package_compiler_CompilerOptions {
     constructor(output_format, optimize, debug, implicit_member_call) {
         this.output_format = output_format || "js";
@@ -3307,6 +3325,13 @@ class package_lexer_ValkyrieLexer {
                 return new package_lexer_Token("PLUS", ch, line, column);
             }
             if (ch == "-") {
+                if (
+                    this.position < this.source.length &&
+                    this.source.charAt(this.position) == ">"
+                ) {
+                    this.advance();
+                    return new package_lexer_Token("ARROW", "->", line, column);
+                }
                 return new package_lexer_Token("MINUS", ch, line, column);
             }
             if (ch == "*") {

@@ -1,7 +1,10 @@
 namespace package::parser;
 
+using package::parser::Node;
+using package::parser::ValkyrieParser;
+
 # Pratt 解析器优先级表
-micro getOperatorPrecedence(tokenType) {
+micro getOperatorPrecedence(tokenType: String) -> i32 {
     if tokenType == "ASSIGN" {
         return 1;
     }
@@ -53,12 +56,12 @@ micro getOperatorPrecedence(tokenType) {
     return -1;
 }
 
-micro isRightAssociative(tokenType) {
+micro isRightAssociative(tokenType: String) -> Bool {
     return tokenType == "ASSIGN";
 }
 
 # Pratt 解析器主函数
-micro parseExpressionWithPrecedence(parser, minPrecedence) {
+micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32) -> Node {
     let left = parseUnaryExpression(parser);
 
     if left && left.type == "ParseError" {
@@ -105,11 +108,11 @@ micro parseExpressionWithPrecedence(parser, minPrecedence) {
     return left;
 }
 
-micro parseExpression(parser) {
+micro parseExpression(parser: ValkyrieParser) -> Node {
     return parseExpressionWithPrecedence(parser, 0);
 }
 
-micro parseUnaryExpression(parser) {
+micro parseUnaryExpression(parser: ValkyrieParser) -> Node {
     if parser.current_token.type == "BANG" || parser.current_token.type == "MINUS" {
         let op = parser.current_token.value;
         parser.advance();
@@ -130,7 +133,7 @@ micro parseUnaryExpression(parser) {
     return parsePostfixExpression(parser);
 }
 
-micro parseNewExpression(parser) {
+micro parseNewExpression(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'new'
 
     # 解析类名
@@ -164,7 +167,7 @@ micro parseNewExpression(parser) {
     return node;
 }
 
-micro parsePostfixExpression(parser) {
+micro parsePostfixExpression(parser: ValkyrieParser) -> Node {
     let expr = parseAtomicExpression(parser);
 
     if expr && expr.type == "ParseError" {
@@ -302,7 +305,7 @@ micro parsePostfixExpression(parser) {
     return expr;
 }
 
-micro parseAtomicExpression(parser) {
+micro parseAtomicExpression(parser: ValkyrieParser) -> Node {
     if parser.current_token.type == "NUMBER" {
         let value = parser.current_token.value;
         parser.advance();
@@ -487,7 +490,7 @@ micro parseAtomicExpression(parser) {
 }
 
 # 封装参数解析函数，供 micro function 和 method function 共享
-micro parseTermParameters(parser) {
+micro parseTermParameters(parser: ValkyrieParser) -> Array<Node> {
     let params = [];
 
     if parser.current_token.type != "RPAREN" {
@@ -512,7 +515,7 @@ micro parseTermParameters(parser) {
 }
 
 # 解析带类型注解的参数: name: Type = defaultValue
-micro parseTypedParameter(parser) {
+micro parseTypedParameter(parser: ValkyrieParser) -> Node {
     let paramName = null;
     if parser.current_token.type == "IDENTIFIER" {
         paramName = parser.expect("IDENTIFIER");

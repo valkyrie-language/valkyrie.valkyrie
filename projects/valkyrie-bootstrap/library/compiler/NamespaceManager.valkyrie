@@ -1,5 +1,7 @@
 namespace package::compiler;
 
+using package::parser::Node;
+
 class NamespaceManager {
     constructor(source) {
         self.namespaces = {};
@@ -12,7 +14,7 @@ class NamespaceManager {
 
 
 # 检查是否为主命名空间
-micro is_main_namespace(namespace_path) {
+micro is_main_namespace(namespace_path: Array<String>) -> Bool {
     if namespace_path == null {
         return false;
     }
@@ -20,7 +22,7 @@ micro is_main_namespace(namespace_path) {
 }
 
 # 获取主命名空间名称
-micro get_main_namespace_name(namespace_path) {
+micro get_main_namespace_name(namespace_path: Array<String>) -> String {
     if is_main_namespace(namespace_path) {
         return namespace_path.substring(0, namespace_path.length - 1);
     }
@@ -28,7 +30,7 @@ micro get_main_namespace_name(namespace_path) {
 }
 
 # 添加符号到命名空间
-micro add_symbol_to_namespace(manager, namespace_path, symbol_name, symbol_type, symbol_data, file_path) {
+micro add_symbol_to_namespace(manager: NamespaceManager, namespace_path: Array<String>, symbol_name: String, symbol_type: String, symbol_data: Node, file_path: String) {
     if manager.namespaces[namespace_path] == null {
         manager.namespaces[namespace_path] = {
             "symbols": {},
@@ -62,7 +64,7 @@ micro add_symbol_to_namespace(manager, namespace_path, symbol_name, symbol_type,
 }
 
 # 添加using导入
-micro add_using_import(manager, using_path, is_global) {
+micro add_using_import(manager: NamespaceManager, using_path: Array<String>, is_global: Bool) {
     if manager.usings[manager.currentFile] == null {
         manager.usings[manager.currentFile] = [];
     }
@@ -76,7 +78,7 @@ micro add_using_import(manager, using_path, is_global) {
 }
 
 # 查找符号所属的命名空间
-micro find_symbol_namespace(manager, symbol_name, symbol_type) {
+micro find_symbol_namespace(manager: NamespaceManager, symbol_name: String, symbol_type: String) -> Array<String> {
     let namespace_keys = Object.keys(manager.namespaces);
     let i = 0;
     while i < namespace_keys.length {
@@ -94,7 +96,7 @@ micro find_symbol_namespace(manager, symbol_name, symbol_type) {
 }
 
 # 获取完全限定名称
-micro get_fully_qualified_name(manager, symbol_name, namespace_path) {
+micro get_fully_qualified_name(manager: NamespaceManager, symbol_name: String, namespace_path: Array<String>) -> String {
     if namespace_path == "" || namespace_path == null {
         return symbol_name;
     }
@@ -104,7 +106,7 @@ micro get_fully_qualified_name(manager, symbol_name, namespace_path) {
 }
 
 # 验证命名空间规则
-micro validate_namespace_rules(ast, mode) {
+micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
     let has_namespace = false;
     let has_main_namespace = false;
     
@@ -134,7 +136,7 @@ micro validate_namespace_rules(ast, mode) {
 }
 
 # 查找命名空间提供者
-micro find_namespace_provider(namespace_path, file_contents) {
+micro find_namespace_provider(namespace_path: Array<String>, file_contents: Map<String, String>) -> String {
     let file_names = Object.keys(file_contents);
     let i = 0;
     while i < file_names.length {
