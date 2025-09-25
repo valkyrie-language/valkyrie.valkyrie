@@ -1,7 +1,7 @@
 {
     "name": "@valkyrie-language/valkyrie-bootstrap",
     "author": "Valkyrie Language Team",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Valkyrie Language Bootstrap Compiler",
     "main": "bootstrap/index.js",
     "type": "module",
