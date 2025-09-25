@@ -380,7 +380,18 @@ micro parseClassMember(parser) {
         let isInstanceMethod = false;
         let i = 0;
         while i < params.length {
-            if params[i] == "self" {
+            let param = params[i];
+            let paramName = "";
+            
+            # 处理新的 Parameter 节点结构
+            if param && param.name {
+                paramName = param.name;
+            } else {
+                # 兼容旧的字符串格式
+                paramName = param;
+            }
+            
+            if paramName == "self" {
                 isInstanceMethod = true;
                 break;
             }

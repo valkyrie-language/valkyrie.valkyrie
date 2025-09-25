@@ -263,7 +263,14 @@ micro generateStatement(node) {
             if i > 0 {
                 params = params + ", ";
             }
-            params = params + node.parameters[i];
+            # 处理新的 Parameter 节点结构
+            let param = node.parameters[i];
+            if param && param.name {
+                params = params + param.name;
+            } else {
+                # 兼容旧的字符串格式
+                params = params + param;
+            }
             i = i + 1;
         }
         
@@ -280,7 +287,14 @@ micro generateStatement(node) {
             if i > 0 {
                 params = params + ", ";
             }
-            params = params + node.parameters[i];
+            # 处理新的 Parameter 节点结构
+            let param = node.parameters[i];
+            if param && param.name {
+                params = params + param.name;
+            } else {
+                # 兼容旧的字符串格式
+                params = params + param;
+            }
             i = i + 1;
         }
         
@@ -415,7 +429,14 @@ micro generateStatement(node) {
                 if j > 0 {
                     params = params + ", ";
                 }
-                params = params + explicitConstructor.parameters[j];
+                # 处理新的 Parameter 节点结构
+                let param = explicitConstructor.parameters[j];
+                if param && param.name {
+                    params = params + param.name;
+                } else {
+                    # 兼容旧的字符串格式
+                    params = params + param;
+                }
                 j = j + 1;
             }
             result = result + "  constructor(" + params + ") {\n";
@@ -424,7 +445,7 @@ micro generateStatement(node) {
             }
             result = result + fieldInits;
             let ctorBody = generateStatement(explicitConstructor.body);
-            # 移除外层的大括号，只保留内容
+            # 移格外层的大括号，只保留内容
             if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
                 ctorBody = ctorBody.substring(2, ctorBody.length - 2);
             }
@@ -451,11 +472,22 @@ micro generateStatement(node) {
                 let paramCount = 0;
                 while j < member.parameters.length {
                     # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
-                    if member.parameters[j] != "self" {
+                    let param = member.parameters[j];
+                    let paramName = "";
+                    
+                    # 处理新的 Parameter 节点结构
+                    if param && param.name {
+                        paramName = param.name;
+                    } else {
+                        # 兼容旧的字符串格式
+                        paramName = param;
+                    }
+                    
+                    if paramName != "self" {
                         if paramCount > 0 {
                             params = params + ", ";
                         }
-                        params = params + member.parameters[j];
+                        params = params + paramName;
                         paramCount = paramCount + 1;
                     }
                     j = j + 1;
