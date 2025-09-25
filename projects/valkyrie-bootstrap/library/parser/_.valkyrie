@@ -44,7 +44,7 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
                 return parseMicroFunctionDeclaration(parser);
             }
         }
-        return parseFunctionDeclaration(parser);
+        return parse_function_declaration(parser);
     }
 
     if parser.current_token.type == "IF" {
@@ -64,7 +64,7 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
     }
 
     if parser.current_token.type == "LBRACE" {
-        return parseFunctionBlock(parser);
+        return parse_function_block(parser);
     }
 
     # 表达式语句
@@ -288,7 +288,7 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
         }
     }
 
-    let body = parseFunctionBlock(parser);
+    let body = parse_function_block(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -367,7 +367,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             return rparen;
         }
 
-        let body = parseFunctionBlock(parser);
+        let body = parse_function_block(parser);
         if body && body.type == "ParseError" {
             return body;
         }
@@ -401,7 +401,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             return rparen;
         }
 
-        let body = parseFunctionBlock(parser);
+        let body = parse_function_block(parser);
         if body && body.type == "ParseError" {
             return body;
         }
@@ -480,7 +480,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
     return error;
 }
 
-micro parseFunctionDeclaration(parser: ValkyrieParser) -> Node {
+micro parse_function_declaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -502,7 +502,7 @@ micro parseFunctionDeclaration(parser: ValkyrieParser) -> Node {
         return rparen;
     }
 
-    let body = parseFunctionBlock(parser);
+    let body = parse_function_block(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -516,7 +516,7 @@ micro parseFunctionDeclaration(parser: ValkyrieParser) -> Node {
 
 micro parseIfStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'if'
-    let condition = parseExpression(parser);
+    let condition = parseInlineExpression(parser);
     if condition && condition.type == "ParseError" {
         return condition;
     }
@@ -545,12 +545,12 @@ micro parseIfStatement(parser: ValkyrieParser) -> Node {
 
 micro parseWhileStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'while'
-    let condition = parseExpression(parser);
+    let condition = parseInlineExpression(parser);
     if condition && condition.type == "ParseError" {
         return condition;
     }
 
-    let body = parseFunctionBlock(parser);
+    let body = parse_function_block(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -563,12 +563,12 @@ micro parseWhileStatement(parser: ValkyrieParser) -> Node {
 
 micro parseUntilStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'until'
-    let condition = parseExpression(parser);
+    let condition = parseInlineExpression(parser);
     if condition && condition.type == "ParseError" {
         return condition;
     }
 
-    let body = parseFunctionBlock(parser);
+    let body = parse_function_block(parser);
     if body && body.type == "ParseError" {
         return body;
     }
@@ -602,7 +602,7 @@ micro parseReturnStatement(parser: ValkyrieParser) -> Node {
     return node;
 }
 
-micro parseFunctionBlock(parser: ValkyrieParser) -> Node {
+micro parse_function_block(parser: ValkyrieParser) -> Node {
     let lbrace = parser.expect("LBRACE");
     if lbrace && lbrace.type == "ParseError" {
         return lbrace;
