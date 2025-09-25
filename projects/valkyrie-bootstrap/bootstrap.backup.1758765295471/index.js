@@ -354,9 +354,6 @@ return ((((("// Parse Error: " + ast.message) + " at line ") + ast.line) + ", co
 }
 return package_codegen_generateStatement(ast);
 }
-export function package_codegen_pathJoin(pathArray, separator) {
-return package_codegen_joinPath(pathArray, separator);
-}
 export function package_compiler_compile(compiler) {
 let lexer = new package_lexer_ValkyrieLexer(compiler.source);
 let tokens = package_lexer_tokenize(lexer);
@@ -2606,19 +2603,6 @@ return node;
 export function package_parser_parse(tokens) {
 let parser = new package_parser_ValkyrieParser(tokens);
 return package_parser_parseProgram(parser);
-}
-class package_codegen_CodeGenerator {
-  constructor() {
-  }
-
-  generateCodeExpression(node) {
-return generateExpression(node);
-}
-
-  generateCodeStatement(node) {
-return generateStatement(node);
-}
-
 }
 class package_lexer_ValkyrieLexer {
   constructor(source) {

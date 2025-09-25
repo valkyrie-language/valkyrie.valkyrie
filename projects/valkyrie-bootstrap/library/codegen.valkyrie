@@ -1,234 +1,225 @@
 namespace package::codegen;
 
-# Valkyrie 代码生成器 - 重构为类结构
+# Valkyrie 代码生成器 - 超简单版本
 
-class CodeGenerator {
-    constructor() {
-        # 代码生成器实例，可以在将来添加状态管理
+micro joinPath(pathArray, separator) {
+    let result = "";
+    let i = 0;
+    while i < pathArray.length {
+        if i > 0 {
+            result = result + separator;
+        }
+        result = result + pathArray[i];
+        i = i + 1;
     }
+    return result;
+}
 
-    # 静态工具方法：连接路径数组
-    static micro CodeGenerator::joinPath(pathArray, separator) {
-        let result = "";
-        let i = 0;
-        while i < pathArray.length {
-            if i > 0 {
-                result = result + separator;
-            }
-            result = result + pathArray[i];
+micro replaceAll(str, search, replace) {
+    let result = "";
+    let i = 0;
+    while i < str.length {
+        if str[i] == search {
+            result = result + replace;
+            i = i + search.length;
+        } else {
+            # 没有匹配，添加当前字符
+            result = result + str[i];
             i = i + 1;
         }
+    }
+    return result;
+}
+
+micro generateExpression(node) {
+    if node.type == "Number" {
+        return node.value;
+    }
+    
+    if node.type == "String" {
+        # 处理字符串转义，确保与bootstrap/codegen.js一致
+        let escaped = node.value;
+        # 替换反斜杠
+        escaped = replaceAll(escaped, "\\", "\\\\");
+        # 替换双引号
+        escaped = replaceAll(escaped, "\"", "\\\"");
+        # 替换换行符
+        escaped = replaceAll(escaped, "\n", "\\n");
+        # 替换回车符
+        escaped = replaceAll(escaped, "\r", "\\r");
+        # 替换制表符
+        escaped = replaceAll(escaped, "\t", "\\t");
+        return "\"" + escaped + "\"";
+    }
+    
+    if node.type == "Boolean" {
+        return node.value;
+    }
+    
+    if node.type == "Identifier" {
+        return node.name;
+    }
+    
+    if node.type == "BinaryOp" {
+        let left = generateExpression(node.left);
+        let right = generateExpression(node.right);
+        let result = "(";
+        result = result + left;
+        result = result + " ";
+        result = result + node.operator;
+        result = result + " ";
+        result = result + right;
+        result = result + ")";
         return result;
     }
-
-    # 静态工具方法：替换字符串中的所有匹配项
-    static micro replaceAll(str, search, replace) {
-        let result = "";
+    
+    if node.type == "Assignment" {
+        let left = generateExpression(node.left);
+        let right = generateExpression(node.right);
+        return left + " = " + right;
+    }
+    
+    if node.type == "MicroCall" {
+        let callee = generateExpression(node.callee);
+        let args = "";
+        
         let i = 0;
-        while i < str.length {
-            if str[i] == search {
-                result = result + replace;
-                i = i + search.length;
-            } else {
-                # 没有匹配，添加当前字符
-                result = result + str[i];
-                i = i + 1;
+        while i < node.arguments.length {
+            if i > 0 {
+                args = args + ", ";
             }
+            args = args + generateExpression(node.arguments[i]);
+            i = i + 1;
         }
+        
+        return callee + "(" + args + ")";
+    }
+    
+    if node.type == "NewExpression" {
+        let args = "";
+        
+        let i = 0;
+        while i < node.arguments.length {
+            if i > 0 {
+                args = args + ", ";
+            }
+            args = args + generateExpression(node.arguments[i]);
+            i = i + 1;
+        }
+        
+        return "new " + node.className + "(" + args + ")";
+    }
+    
+    if node.type == "AwaitExpression" {
+        let argument = generateExpression(node.argument);
+        return "await " + argument;
+    }
+    
+    if node.type == "PropertyAccess" {
+        if node.object.type {
+            let obj = generateExpression(node.object);
+            return obj + "." + node.property;
+        } else {
+            return node.object + "." + node.property;
+        }
+    }
+    
+    if node.type == "ArrayAccess" {
+        let obj = "";
+        if node.object.type {
+            obj = generateExpression(node.object);
+        } else {
+            obj = node.object;
+        }
+        let index = generateExpression(node.index);
+        return obj + "[" + index + "]";
+    }
+    
+    if node.type == "ObjectLiteral" {
+        if node.properties.length == 0 {
+            return "{}";
+        }
+        let result = "{";
+        let i = 0;
+        while i < node.properties.length {
+            let prop = node.properties[i];
+            if i > 0 {
+                result = result + ", ";
+            }
+            result = result + "\"" + prop.key + "\": " + generateExpression(prop.value);
+            i = i + 1;
+        }
+        result = result + "}";
         return result;
     }
-
-    # 实例方法：生成表达式代码
-    micro self.generateExpression(self, node) {
-        if node.type == "Number" {
-            return node.value;
-        }
-        
-        if node.type == "String" {
-            # 处理字符串转义，确保与bootstrap/codegen.js一致
-            let escaped = node.value;
-            # 替换反斜杠
-            escaped = CodeGenerator::replaceAll(escaped, "\\", "\\\\");
-            # 替换双引号
-            escaped = CodeGenerator::replaceAll(escaped, "\"", "\\\"");
-            # 替换换行符
-            escaped = CodeGenerator::replaceAll(escaped, "\n", "\\n");
-            # 替换回车符
-            escaped = CodeGenerator::replaceAll(escaped, "\r", "\\r");
-            # 替换制表符
-            escaped = CodeGenerator::replaceAll(escaped, "\t", "\\t");
-            return "\"" + escaped + "\"";
-        }
-        
-        if node.type == "Boolean" {
-            return node.value;
-        }
-        
-        if node.type == "Identifier" {
-            return node.name;
-        }
-        
-        if node.type == "BinaryOp" {
-            let left = self.generateExpression(node.left);
-            let right = self.generateExpression(node.right);
-            let result = "(";
-            result = result + left;
-            result = result + " ";
-            result = result + node.operator;
-            result = result + " ";
-            result = result + right;
-            result = result + ")";
-            return result;
+    
+    if node.type == "ArrayLiteral" {
+        return "[]";
     }
-        
-        if node.type == "Assignment" {
-            let left = self.generateExpression(node.left);
-            let right = self.generateExpression(node.right);
-            return left + " = " + right;
-        }
-        
-        if node.type == "MicroCall" {
-            let callee = self.generateExpression(node.callee);
-            let args = "";
-            
-            let i = 0;
-            while i < node.arguments.length {
-                if i > 0 {
-                    args = args + ", ";
-                }
-                args = args + self.generateExpression(node.arguments[i]);
-                i = i + 1;
-            }
-            
-            return callee + "(" + args + ")";
-        }
-        
-        if node.type == "NewExpression" {
-            let args = "";
-            
-            let i = 0;
-            while i < node.arguments.length {
-                if i > 0 {
-                    args = args + ", ";
-                }
-                args = args + self.generateExpression(node.arguments[i]);
-                i = i + 1;
-            }
-            
-            return "new " + node.className + "(" + args + ")";
-        }
-        
-        if node.type == "AwaitExpression" {
-            let argument = self.generateExpression(node.argument);
-            return "await " + argument;
-        }
-        
-        if node.type == "PropertyAccess" {
-            if node.object.type {
-                let obj = self.generateExpression(node.object);
-                return obj + "." + node.property;
-            } else {
-                return node.object + "." + node.property;
-            }
-        }
-        
-        if node.type == "ArrayAccess" {
-            let obj = "";
-            if node.object.type {
-                obj = self.generateExpression(node.object);
-            } else {
-                obj = node.object;
-            }
-            let index = self.generateExpression(node.index);
-            return obj + "[" + index + "]";
-        }
-        
-        if node.type == "ObjectLiteral" {
-            if node.properties.length == 0 {
-                return "{}";
-            }
-            let result = "{";
-            let i = 0;
-            while i < node.properties.length {
-                let prop = node.properties[i];
-                if i > 0 {
-                    result = result + ", ";
-                }
-                result = result + "\"" + prop.key + "\": " + self.generateExpression(prop.value);
-                i = i + 1;
-            }
-            result = result + "}";
-            return result;
-        }
-        
-        if node.type == "ArrayLiteral" {
-            return "[]";
-        }
-        
-        if node.type == "UnaryOp" {
-            let operand = self.generateExpression(node.operand);
-            return node.operator + operand;
-        }
-        
-        if node.type == "ThisExpression" {
-            return "this";
-        }
-        
-        if node.type == "DefaultValue" {
-            return "undefined";
-        }
-        
-        return "/* Unknown expression: " + node.type + " */";
+    
+    if node.type == "UnaryOp" {
+        let operand = generateExpression(node.operand);
+        return node.operator + operand;
+    }
+    
+    if node.type == "ThisExpression" {
+        return "this";
+    }
+    
+    if node.type == "DefaultValue" {
+        return "undefined";
+    }
+    
+    return "/* Unknown expression: " + node.type + " */";
+}
+
+micro generateStatement(node) {
+    if node.type == "LetStatement" {
+        let value = generateExpression(node.value);
+        return "let " + node.name + " = " + value + ";";
     }
 
-    # 实例方法：生成语句代码
-    micro self.generateStatement(self, node) {
-        if node.type == "LetStatement" {
-            let value = self.generateExpression(node.value);
-            return "let " + node.name + " = " + value + ";";
+    if node.type == "NamespaceStatement" {
+        # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
+        let namespacePath = joinPath(node.path, "::");
+        if node.isMainNamespace {
+            return "// namespace! " + namespacePath + ";";
+        } else {
+            return "// namespace " + namespacePath + ";";
         }
+    }
 
-        if node.type == "NamespaceStatement" {
-            # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
-            let namespacePath = CodeGenerator::joinPath(node.path, "::");
-            if node.isMainNamespace {
-                return "// namespace! " + namespacePath + ";";
-            } else {
-                return "// namespace " + namespacePath + ";";
+    if node.type == "UsingStatement" {
+        # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
+        return "// using " + joinPath(node.path, "::") + ";";
+    }
+
+    if node.type == "JSAttributeStatement" {
+        # 生成 JS 导入语句：import {importName as functionName} from "modulePath"
+        return "import { " + node.importName + " as " + node.functionName + " } from \"" + node.modulePath + "\";";
+    }
+
+    if node.type == "ImportJsStatement" {
+        # 生成 JS 导入语句：import {importName as localName} from "module"
+        return "import { " + node.importName + " as " + node.localName + " } from \"" + node.module + "\";";
+    }
+
+    if node.type == "MicroDeclaration" {
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
             }
+            params = params + node.parameters[i];
+            i = i + 1;
         }
-
-        if node.type == "UsingStatement" {
-            # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
-            return "// using " + CodeGenerator::joinPath(node.path, "::") + ";";
-        }
-
-        if node.type == "JSAttributeStatement" {
-            # 生成 JS 导入语句：import {importName as functionName} from "modulePath"
-            return "import { " + node.importName + " as " + node.functionName + " } from \"" + node.modulePath + "\";";
-        }
-
-        if node.type == "ImportJsStatement" {
-            # 生成 JS 导入语句：import {importName as localName} from "module"
-            return "import { " + node.importName + " as " + node.localName + " } from \"" + node.module + "\";";
-        }
-
-        if node.type == "MicroDeclaration" {
-            let params = "";
-            let i = 0;
-            while i < node.parameters.length {
-                if i > 0 {
-                    params = params + ", ";
-                }
-                params = params + node.parameters[i];
-                i = i + 1;
-            }
-            
-            let body = self.generateStatement(node.body);
-            # 直接使用 name 字段（已经是解析后的名称）
-            let functionName = node.name;
-            return "export function " + functionName + "(" + params + ") " + body;
-        }
+        
+        let body = generateStatement(node.body);
+        # 直接使用 name 字段（已经是解析后的名称）
+        let functionName = node.name;
+        return "export function " + functionName + "(" + params + ") " + body;
+    }
     
     if node.type == "MemberStatement" {
         let params = "";
@@ -241,17 +232,17 @@ class CodeGenerator {
             i = i + 1;
         }
         
-        let body = self.generateStatement(node.body);
+        let body = generateStatement(node.body);
         return "function " + node.name + "(" + params + ") " + body;
     }
     
     if node.type == "IfStatement" {
-        let condition = self.generateExpression(node.condition);
-        let thenBranch = self.generateStatement(node.thenBranch);
+        let condition = generateExpression(node.condition);
+        let thenBranch = generateStatement(node.thenBranch);
         let result = "if (" + condition + ") " + thenBranch;
         
         if node.elseBranch && node.elseBranch.type {
-            let elseBranch = self.generateStatement(node.elseBranch);
+            let elseBranch = generateStatement(node.elseBranch);
             result = result + " else " + elseBranch;
         }
         
@@ -259,14 +250,14 @@ class CodeGenerator {
     }
     
     if node.type == "WhileStatement" {
-        let condition = self.generateExpression(node.condition);
-        let body = self.generateStatement(node.body);
+        let condition = generateExpression(node.condition);
+        let body = generateStatement(node.body);
         return "while (" + condition + ") " + body;
     }
     
     if node.type == "ReturnStatement" {
         if node.value && node.value.type {
-            let value = self.generateExpression(node.value);
+            let value = generateExpression(node.value);
             return "return " + value + ";";
         } else {
             return "return;";
@@ -277,7 +268,7 @@ class CodeGenerator {
         let statements = "";
         let i = 0;
         while i < node.statements.length {
-            let stmt = self.generateStatement(node.statements[i]);
+            let stmt = generateStatement(node.statements[i]);
             if i > 0 {
                 statements = statements + "\n";
             }
@@ -288,17 +279,17 @@ class CodeGenerator {
     }
     
     if node.type == "ExpressionStatement" {
-        return self.generateExpression(node.expression) + ";";
+        return generateExpression(node.expression) + ";";
     }
     
     if node.type == "NamespaceStatement" {
         # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
-        return "// namespace " + CodeGenerator::joinPath(node.path, "::") + ";";
+        return "// namespace " + joinPath(node.path, "::") + ";";
     }
     
     if node.type == "UsingStatement" {
         # using 语句在单文件编译中被忽略，在多文件编译中用于符号导入
-        return "// using " + CodeGenerator::joinPath(node.path, "::") + ";";
+        return "// using " + joinPath(node.path, "::") + ";";
     }
     
     if node.type == "JSAttributeStatement" {
@@ -354,7 +345,7 @@ class CodeGenerator {
                 explicitConstructor = member;
             } else if member.type == "Property" {
                 if member.initializer && member.initializer.type {
-                    let initValue = self.generateExpression(member.initializer);
+                    let initValue = generateExpression(member.initializer);
                     fieldInits = fieldInits + "    self." + member.name + " = " + initValue + ";\n";
                 } else {
                     fieldInits = fieldInits + "    self." + member.name + " = undefined;\n";
@@ -380,7 +371,7 @@ class CodeGenerator {
                 result = result + "    super();\n";
             }
             result = result + fieldInits;
-            let ctorBody = self.generateStatement(explicitConstructor.body);
+            let ctorBody = generateStatement(explicitConstructor.body);
             # 移除外层的大括号，只保留内容
             if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
                 ctorBody = ctorBody.substring(2, ctorBody.length - 2);
@@ -417,7 +408,7 @@ class CodeGenerator {
                     }
                     j = j + 1;
                 }
-                let body = self.generateStatement(member.body);
+                let body = generateStatement(member.body);
                 result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
             }
             i = i + 1;
@@ -427,52 +418,51 @@ class CodeGenerator {
         return result;
     }
     
-        # 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
-        return "/* Unknown statement: " + node.type + " */";
-    }
-
-    # 实例方法：生成完整的代码
-    micro generate(self, ast) {
-        if ast.type == "Program" {
-            let result = "";
-            let i = 0;
-            while i < ast.statements.length {
-                let stmt = ast.statements[i];
-                result = result + self.generateStatement(stmt) + "\n";
-                i = i + 1;
-            }
-            
-            return result;
-        }
-        
-        if ast.type == "ParseError" {
-            return "// Parse Error: " + ast.message + " at line " + ast.line + ", column " + ast.column;
-        }
-        
-        return self.generateStatement(ast);
-    }
-}
-
-# 保持向后兼容性的全局函数 - 创建实例并调用方法
-micro joinPath(pathArray, separator) {
-    return CodeGenerator::joinPath(pathArray, separator);
-}
-
-micro replaceAll(str, search, replace) {
-    return CodeGenerator::replaceAll(str, search, replace);
-}
-
-micro generateExpression(node) {
-    let generator = new CodeGenerator();
-    return generator.generateExpression(node);
-}
-
-micro generateStatement(node) {
-    let generator = new CodeGenerator();
-    return generator.generateStatement(node);
+    # 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
+    return "/* Unknown statement: " + node.type + " */";
 }
 
 micro generate(ast) {
-    let generator = new CodeGenerator();
-    return generator.generate(ast);
+    if ast.type == "Program" {
+        let result = "";
+        let i = 0;
+        while i < ast.statements.length {
+            let stmt = ast.statements[i];
+            result = result + generateStatement(stmt) + "\n";
+            i = i + 1;
+        }
+        
+        return result;
+    }
+    
+    if ast.type == "ParseError" {
+        return "// Parse Error: " + ast.message + " at line " + ast.line + ", column " + ast.column;
+    }
+    
+    return generateStatement(ast);
+}
+
+# 新的类结构 - 演示正确的 Valkyrie 语法
+class CodeGenerator {
+    constructor() {
+        # 代码生成器实例
+    }
+
+    # 实例方法 - 使用 self 参数
+    micro generateCodeExpression(self, node) {
+        # 这是一个使用 self 的实例方法示例
+        return generateExpression(node);
+    }
+
+    # 实例方法 - 生成语句
+    micro generateCodeStatement(self, node) {
+        # 这是另一个使用 self 的实例方法示例
+        return generateStatement(node);
+    }
+}
+
+# 工具函数 - 静态方法（不在类中，不使用 self）
+micro pathJoin(pathArray, separator) {
+    # 这是一个静态工具函数示例
+    return joinPath(pathArray, separator);
 }
