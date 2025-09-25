@@ -260,6 +260,26 @@ micro parseMicroFunctionDeclaration(parser) {
         return rparen;
     }
 
+    # Parse optional return type: -> Type
+    let returnType = null;
+    if parser.current_token.type == "ARROW" {
+        parser.advance(); # skip '->'
+        returnType = parseTypeExpression(parser);
+        if returnType && returnType.type == "ParseError" {
+            return returnType;
+        }
+    }
+
+    # Parse optional effect type: / Type
+    let effectType = null;
+    if parser.current_token.type == "DIVIDE" {
+        parser.advance(); # skip '/'
+        effectType = parseTypeExpression(parser);
+        if effectType && effectType.type == "ParseError" {
+            return effectType;
+        }
+    }
+
     let body = parseFunctionBlock(parser);
     if body && body.type == "ParseError" {
         return body;
@@ -268,6 +288,8 @@ micro parseMicroFunctionDeclaration(parser) {
     let node = new Node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
+    node.returnType = returnType;
+    node.effectType = effectType;
     node.body = body;
     return node;
 }

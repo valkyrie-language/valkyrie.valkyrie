@@ -1423,22 +1423,6 @@ let rparen = parser.expect("RPAREN");
 if ((rparen && (rparen.type == "ParseError"))) {
 return rparen;
 }
-let returnType = null;
-if ((parser.current_token.type == "ARROW")) {
-parser.advance();
-returnType = package_parser_parseTypeExpression(parser);
-if ((returnType && (returnType.type == "ParseError"))) {
-return returnType;
-}
-}
-let effectType = null;
-if ((parser.current_token.type == "DIVIDE")) {
-parser.advance();
-effectType = package_parser_parseTypeExpression(parser);
-if ((effectType && (effectType.type == "ParseError"))) {
-return effectType;
-}
-}
 let body = package_parser_parseFunctionBlock(parser);
 if ((body && (body.type == "ParseError"))) {
 return body;
@@ -1446,8 +1430,6 @@ return body;
 let node = new package_parser_Node("MicroDeclaration");
 node.name = name.value;
 node.parameters = params;
-node.returnType = returnType;
-node.effectType = effectType;
 node.body = body;
 return node;
 }
@@ -2692,10 +2674,6 @@ if ((ch == "+")) {
 return new package_lexer_Token("PLUS", ch, line, column);
 }
 if ((ch == "-")) {
-if (((this.position < this.source.length) && (this.source.charAt(this.position) == ">"))) {
-this.advance();
-return new package_lexer_Token("ARROW", "->", line, column);
-}
 return new package_lexer_Token("MINUS", ch, line, column);
 }
 if ((ch == "*")) {

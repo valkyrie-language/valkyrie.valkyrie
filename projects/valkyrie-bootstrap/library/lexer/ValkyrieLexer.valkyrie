@@ -164,7 +164,14 @@ class ValkyrieLexer {
                 return new Token("ASSIGN", ch, line, column);
             }
             if ch == "+" { return new Token("PLUS", ch, line, column); }
-            if ch == "-" { return new Token("MINUS", ch, line, column); }
+            if ch == "-" { 
+                # 检查是否是 ->
+                if self.position < self.source.length && self.source.charAt(self.position) == ">" {
+                    self.advance(); # 跳过 >
+                    return new Token("ARROW", "->", line, column);
+                }
+                return new Token("MINUS", ch, line, column); 
+            }
             if ch == "*" { return new Token("MULTIPLY", ch, line, column); }
             if ch == "/" { return new Token("DIVIDE", ch, line, column); }
             if ch == "%" { return new Token("MODULO", ch, line, column); }
