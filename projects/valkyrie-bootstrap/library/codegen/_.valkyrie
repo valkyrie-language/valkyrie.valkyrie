@@ -1,11 +1,10 @@
 namespace package::codegen;
 
 using package::parser::Node;
-using package::codegen::JsCodeGeneration;
 using package::codegen::replace_all;
 using package::codegen::join_path;
 
-# Valkyrie 代码生成器 - 重构为模块化版本，使用写缓冲区产生更易读的JavaScript输出
+# Valkyrie 代码生成器 - 重构为模块化版本
 
 # Legacy compatibility functions for backward compatibility
 micro joinPath(pathArray, separator) {
@@ -16,7 +15,6 @@ micro replaceAll(str, search, replace) {
     return replace_all(str, search, replace);
 }
 
-# Enhanced expression generation using write buffer for better formatting
 micro generateExpression(node) {
     if node.type == "Number" {
         return node.value;
@@ -251,6 +249,9 @@ micro generateExpression(node) {
         return "undefined";
     }
     
+    return "/* Unknown expression: " + node.type + " */";
+}
+
 micro generateStatement(node) {
     if node.type == "LetStatement" {
         let value = generateExpression(node.value);
@@ -283,60 +284,49 @@ micro generateStatement(node) {
     }
 
     if node.type == "MicroDeclaration" {
-        # 使用写缓冲区生成更好格式的函数定义
-        let buffer = new JsCodeGeneration();
-        
-        buffer.write("export function " + node.name + "(");
-        
+        let params = "";
         let i = 0;
         while i < node.parameters.length {
             if i > 0 {
-                buffer.write(", ");
+                params = params + ", ";
             }
             # 处理新的 Parameter 节点结构
             let param = node.parameters[i];
             if param && param.name {
-                buffer.write(param.name);
+                params = params + param.name;
             } else {
                 # 兼容旧的字符串格式
-                buffer.write(param);
+                params = params + param;
             }
             i = i + 1;
         }
         
-        buffer.write(") ");
         let body = generateStatement(node.body);
-        buffer.write(body);
-        
-        return buffer.toString();
+        # 直接使用 name 字段（已经是解析后的名称）
+        let functionName = node.name;
+        return "export function " + functionName + "(" + params + ") " + body;
     }
     
     if node.type == "MemberStatement" {
-        let buffer = new JsCodeGeneration();
-        
-        buffer.write("function " + node.name + "(");
-        
+        let params = "";
         let i = 0;
         while i < node.parameters.length {
             if i > 0 {
-                buffer.write(", ");
+                params = params + ", ";
             }
             # 处理新的 Parameter 节点结构
             let param = node.parameters[i];
             if param && param.name {
-                buffer.write(param.name);
+                params = params + param.name;
             } else {
                 # 兼容旧的字符串格式
-                buffer.write(param);
+                params = params + param;
             }
             i = i + 1;
         }
         
-        buffer.write(") ");
         let body = generateStatement(node.body);
-        buffer.write(body);
-        
-        return buffer.toString();
+        return "function " + node.name + "(" + params + ") " + body;
     }
     
     if node.type == "IfStatement" {
@@ -374,81 +364,42 @@ micro generateStatement(node) {
     }
     
     if node.type == "Block" {
-        # 使用写缓冲区生成更好格式的代码块
-        let buffer = new JsCodeGeneration();
-        
-        buffer.write_line("{");
-        buffer.indent();
-        
+        let statements = "";
         let i = 0;
         while i < node.statements.length {
             let stmt = generateStatement(node.statements[i]);
-            buffer.write_line(stmt);
+            if i > 0 {
+                statements = statements + "\n";
+            }
+            statements = statements + stmt;
             i = i + 1;
         }
-        
-        buffer.dedent();
-        buffer.write("}");
-        
-        return buffer.toString();
+        return "{\n" + statements + "\n}";
     }
     
     if node.type == "ExpressionStatement" {
         return generateExpression(node.expression) + ";";
     }
     
-    if node.type == "JSAttributeStatement" {
-        # 生成 JS 导入语句和函数定义
-        let cleanImportName = replace_all(node.importName, "-", "_");
-        cleanImportName = replace_all(cleanImportName, ".", "_");
-        cleanImportName = replace_all(cleanImportName, "/", "_");
-        let uniqueName = node.functionName + "_" + cleanImportName;
-        let importStatement = "import { " + node.importName + " as " + uniqueName + " } from \"" + node.modulePath + "\";";
-        
-        # 生成函数包装
-        let params = "";
-        let i = 0;
-        while i < node.parameters.length {
-            if i > 0 {
-                params = params + ", ";
-            }
-            params = params + node.parameters[i];
-            i = i + 1;
-        }
-        
-        let buffer = new JsCodeGeneration();
-        buffer.write_line(importStatement);
-        buffer.write_line("export function " + node.functionName + "(" + params + ") {");
-        buffer.indent();
-        buffer.write_line("return " + uniqueName + "(" + params + ");");
-        buffer.dedent();
-        buffer.write("}");
-        
-        return buffer.toString();
-    }
-    
     if node.type == "ClassDeclaration" {
-        # 使用写缓冲区生成更好格式的类定义
-        let buffer = new JsCodeGeneration();
-        
+        # 直接使用 name 字段（已经是解析后的名称）
         let className = node.name;
         let superClass = node.superClass;
         let members = node.members;
         
-        buffer.write("class " + className);
+        let result = "class " + className;
         
         # 添加继承
         if superClass {
-            buffer.write(" extends " + superClass);
+            result = result + " extends " + superClass;
         }
         
-        buffer.write_line(" {");
-        buffer.indent();
+        result = result + " {\n";
         
         # 检查是否有显式构造函数
         let hasExplicitConstructor = false;
         let explicitConstructor = null;
-        let fieldInits = [];
+        let fieldInits = "";
         let i = 0;
         while i < members.length {
             let member = members[i];
@@ -456,66 +407,55 @@ micro generateStatement(node) {
                 hasExplicitConstructor = true;
                 explicitConstructor = member;
             } else if member.type == "Property" {
-                fieldInits.push(member);
+                if member.initializer && member.initializer.type {
+                    let initValue = generateExpression(member.initializer);
+                    fieldInits = fieldInits + "    this." + member.name + " = " + initValue + ";\n";
+                } else {
+                    fieldInits = fieldInits + "    this." + member.name + " = undefined;\n";
+                }
             }
             i = i + 1;
         }
         
         # 生成构造函数
-        if hasExplicitConstructor || fieldInits.length > 0 {
-            buffer.write("constructor(");
-            
-            if hasExplicitConstructor {
-                let j = 0;
-                while j < explicitConstructor.parameters.length {
-                    if j > 0 {
-                        buffer.write(", ");
-                    }
-                    # 处理新的 Parameter 节点结构
-                    let param = explicitConstructor.parameters[j];
-                    if param && param.name {
-                        buffer.write(param.name);
-                    } else {
-                        # 兼容旧的字符串格式
-                        buffer.write(param);
-                    }
-                    j = j + 1;
+        if hasExplicitConstructor {
+            # 使用显式构造函数
+            let params = "";
+            let j = 0;
+            while j < explicitConstructor.parameters.length {
+                if j > 0 {
+                    params = params + ", ";
                 }
-            }
-            
-            buffer.write_line(") {");
-            buffer.indent();
-            
-            if superClass {
-                buffer.write_line("super();");
-            }
-            
-            # 初始化字段
-            let k = 0;
-            while k < fieldInits.length {
-                let field = fieldInits[k];
-                if field.initializer && field.initializer.type {
-                    let initValue = generateExpression(field.initializer);
-                    buffer.write_line("this." + field.name + " = " + initValue + ";");
+                # 处理新的 Parameter 节点结构
+                let param = explicitConstructor.parameters[j];
+                if param && param.name {
+                    params = params + param.name;
                 } else {
-                    buffer.write_line("this." + field.name + " = undefined;");
+                    # 兼容旧的字符串格式
+                    params = params + param;
                 }
-                k = k + 1;
+                j = j + 1;
             }
-            
-            # 添加构造函数体
-            if hasExplicitConstructor && explicitConstructor.body {
-                let ctorBody = generateStatement(explicitConstructor.body);
-                # 移除外层的大括号，只保留内容
-                if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
-                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
-                }
-                buffer.write_line(ctorBody);
+            result = result + "  constructor(" + params + ") {\n";
+            if superClass {
+                result = result + "    super();\n";
             }
-            
-            buffer.dedent();
-            buffer.write_line("}");
-            buffer.write_line("");
+            result = result + fieldInits;
+            let ctorBody = generateStatement(explicitConstructor.body);
+            # 移除外层的大括号，只保留内容
+            if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
+                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+            }
+            result = result + ctorBody;
+            result = result + "  }\n\n";
+        } else if fieldInits != "" {
+            # 自动生成构造函数用于字段初始化
+            result = result + "  constructor() {\n";
+            if superClass {
+                result = result + "    super();\n";
+            }
+            result = result + fieldInits;
+            result = result + "  }\n\n";
         }
         
         # 生成类方法
@@ -524,18 +464,12 @@ micro generateStatement(node) {
             let member = members[i];
             if member.type == "MemberStatement" {
                 let methodName = member.name;
-                
-                if member.isStatic {
-                    buffer.write("static ");
-                }
-                
-                buffer.write(methodName + "(");
-                
-                let m = 0;
+                let params = "";
+                let j = 0;
                 let paramCount = 0;
-                while m < member.parameters.length {
+                while j < member.parameters.length {
                     # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
-                    let param = member.parameters[m];
+                    let param = member.parameters[j];
                     let paramName = "";
                     
                     # 处理新的 Parameter 节点结构
@@ -548,41 +482,43 @@ micro generateStatement(node) {
                     
                     if paramName != "self" {
                         if paramCount > 0 {
-                            buffer.write(", ");
+                            params = params + ", ";
                         }
-                        buffer.write(paramName);
+                        params = params + paramName;
                         paramCount = paramCount + 1;
                     }
-                    m = m + 1;
+                    j = j + 1;
                 }
-                buffer.write(") ");
                 let body = generateStatement(member.body);
-                buffer.write_line(body);
-                buffer.write_line("");
+                # 根据是否为静态方法生成不同的代码
+                if member.isStatic {
+                    result = result + "  static " + methodName + "(" + params + ") " + body + "\n\n";
+                } else {
+                    result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
+                }
             }
             i = i + 1;
         }
         
-        buffer.dedent();
-        buffer.write("}");
-        
-        return buffer.toString();
+        result = result + "}";
+        return result;
     }
     
+    # 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
+    return "/* Unknown statement: " + node.type + " */";
+}
+
 micro generate(ast) {
     if ast.type == "Program" {
-        # 使用写缓冲区生成更好格式的程序
-        let buffer = new JsCodeGeneration();
-        
+        let result = "";
         let i = 0;
         while i < ast.statements.length {
             let stmt = ast.statements[i];
-            let stmtCode = generateStatement(stmt);
-            buffer.write_line(stmtCode);
+            result = result + generateStatement(stmt) + "\n";
             i = i + 1;
         }
         
-        return buffer.toString();
+        return result;
     }
     
     if ast.type == "ParseError" {
