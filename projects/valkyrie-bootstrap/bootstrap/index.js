@@ -1,22 +1,25 @@
 export function package_codegen_joinPath(pathArray, separator) {
     let result = "";
-    for (let i = 0; i < pathArray.length; i++) {
+    let i = 0;
+    while (i < pathArray.length) {
         if (i > 0) {
-            result += separator;
+            result = result + separator;
         }
-        result += pathArray[i];
+        result = result + pathArray[i];
+        i = i + 1;
     }
     return result;
 }
 export function package_codegen_replaceAll(str, search, replace) {
     let result = "";
-    for (let i = 0; i < str.length; ) {
+    let i = 0;
+    while (i < str.length) {
         if (str[i] == search) {
-            result += replace;
-            i += search.length;
+            result = result + replace;
+            i = i + search.length;
         } else {
-            result += str[i];
-            i++;
+            result = result + str[i];
+            i = i + 1;
         }
     }
     return result;
@@ -44,12 +47,12 @@ export function package_codegen_generateExpression(node) {
         let left = package_codegen_generateExpression(node.left);
         let right = package_codegen_generateExpression(node.right);
         let result = "(";
-        result += left;
-        result += " ";
-        result += node.operator;
-        result += " ";
-        result += right;
-        result += ")";
+        result = result + left;
+        result = result + " ";
+        result = result + node.operator;
+        result = result + " ";
+        result = result + right;
+        result = result + ")";
         return result;
     }
     if (node.type == "Assignment") {
@@ -60,34 +63,38 @@ export function package_codegen_generateExpression(node) {
     if (node.type == "MicroCall") {
         let callee = package_codegen_generateExpression(node.callee);
         let args = "";
-        for (let i = 0; i < node.arguments.length; i++) {
+        let i = 0;
+        while (i < node.arguments.length) {
             if (i > 0) {
-                args += ", ";
+                args = args + ", ";
             }
-            args += package_codegen_generateExpression(node.arguments[i]);
+            args = args + package_codegen_generateExpression(node.arguments[i]);
+            i = i + 1;
         }
         return callee + "(" + args + ")";
     }
     if (node.type == "NewExpression") {
         let args = "";
-        for (let i = 0; i < node.arguments.length; i++) {
+        let i = 0;
+        while (i < node.arguments.length) {
             if (i > 0) {
-                args += ", ";
+                args = args + ", ";
             }
-            args += package_codegen_generateExpression(node.arguments[i]);
+            args = args + package_codegen_generateExpression(node.arguments[i]);
+            i = i + 1;
         }
-        return `new ${node.className}(${args})`;
+        return "new " + node.className + "(" + args + ")";
     }
     if (node.type == "AwaitExpression") {
         let argument = package_codegen_generateExpression(node.argument);
-        return `await ${argument}`;
+        return "await " + argument;
     }
     if (node.type == "PropertyAccess") {
         if (node.object.type) {
             let obj = package_codegen_generateExpression(node.object);
-            return `${obj}.${node.property}`;
+            return obj + "." + node.property;
         } else {
-            return `${node.object}.${node.property}`;
+            return node.object + "." + node.property;
         }
     }
     if (node.type == "ArrayAccess") {
@@ -105,14 +112,21 @@ export function package_codegen_generateExpression(node) {
             return "{}";
         }
         let result = "{";
-        for (let i = 0; i < node.properties.length; i++) {
+        let i = 0;
+        while (i < node.properties.length) {
             let prop = node.properties[i];
             if (i > 0) {
-                result += ", ";
+                result = result + ", ";
             }
-            result += `"${prop.key}": ${package_codegen_generateExpression(prop.value)}`;
+            result =
+                result +
+                '"' +
+                prop.key +
+                '": ' +
+                package_codegen_generateExpression(prop.value);
+            i = i + 1;
         }
-        result += "}";
+        result = result + "}";
         return result;
     }
     if (node.type == "ArrayLiteral") {
@@ -170,26 +184,30 @@ export function package_codegen_generateStatement(node) {
     }
     if (node.type == "MicroDeclaration") {
         let params = "";
-        for (let i = 0; i < node.parameters.length; i++) {
+        let i = 0;
+        while (i < node.parameters.length) {
             if (i > 0) {
-                params += ", ";
+                params = params + ", ";
             }
-            params += node.parameters[i];
+            params = params + node.parameters[i];
+            i = i + 1;
         }
         let body = package_codegen_generateStatement(node.body);
         let functionName = node.name;
-        return `export function ${functionName}(${params}) ${body}`;
+        return "export function " + functionName + "(" + params + ") " + body;
     }
     if (node.type == "MemberStatement") {
         let params = "";
-        for (let i = 0; i < node.parameters.length; i++) {
+        let i = 0;
+        while (i < node.parameters.length) {
             if (i > 0) {
-                params += ", ";
+                params = params + ", ";
             }
-            params += node.parameters[i];
+            params = params + node.parameters[i];
+            i = i + 1;
         }
         let body = package_codegen_generateStatement(node.body);
-        return `function ${node.name}(${params}) ${body}`;
+        return "function " + node.name + "(" + params + ") " + body;
     }
     if (node.type == "IfStatement") {
         let condition = package_codegen_generateExpression(node.condition);
@@ -197,7 +215,7 @@ export function package_codegen_generateStatement(node) {
         let result = "if (" + condition + ") " + thenBranch;
         if (node.elseBranch && node.elseBranch.type) {
             let elseBranch = package_codegen_generateStatement(node.elseBranch);
-            result += " else " + elseBranch;
+            result = result + " else " + elseBranch;
         }
         return result;
     }
@@ -220,10 +238,10 @@ export function package_codegen_generateStatement(node) {
         while (i < node.statements.length) {
             let stmt = package_codegen_generateStatement(node.statements[i]);
             if (i > 0) {
-                statements += "\n";
+                statements = statements + "\n";
             }
-            statements += stmt;
-            i++;
+            statements = statements + stmt;
+            i = i + 1;
         }
         return "{\n" + statements + "\n}";
     }
@@ -259,10 +277,10 @@ export function package_codegen_generateStatement(node) {
         let i = 0;
         while (i < node.parameters.length) {
             if (i > 0) {
-                params += ", ";
+                params = params + ", ";
             }
-            params += node.parameters[i];
-            i++;
+            params = params + node.parameters[i];
+            i = i + 1;
         }
         let functionDef =
             "export function " + node.functionName + "(" + params + ") {\n";
@@ -277,9 +295,9 @@ export function package_codegen_generateStatement(node) {
         let members = node.members;
         let result = "class " + className;
         if (superClass) {
-            result += " extends " + superClass;
+            result = result + " extends " + superClass;
         }
-        result += " {\n";
+        result = result + " {\n";
         let hasExplicitConstructor = false;
         let explicitConstructor = null;
         let fieldInits = "";
@@ -309,38 +327,38 @@ export function package_codegen_generateStatement(node) {
                         " = undefined;\n";
                 }
             }
-            i++;
+            i = i + 1;
         }
         if (hasExplicitConstructor) {
             let params = "";
             let j = 0;
             while (j < explicitConstructor.parameters.length) {
                 if (j > 0) {
-                    params += ", ";
+                    params = params + ", ";
                 }
-                params += explicitConstructor.parameters[j];
+                params = params + explicitConstructor.parameters[j];
                 j = j + 1;
             }
-            result += "  constructor(" + params + ") {\n";
+            result = result + "  constructor(" + params + ") {\n";
             if (superClass) {
-                result += "    super();\n";
+                result = result + "    super();\n";
             }
-            result += fieldInits;
+            result = result + fieldInits;
             let ctorBody = package_codegen_generateStatement(
                 explicitConstructor.body
             );
             if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
                 ctorBody = ctorBody.substring(2, ctorBody.length - 2);
             }
-            result += ctorBody;
-            result += "  }\n\n";
+            result = result + ctorBody;
+            result = result + "  }\n\n";
         } else if (fieldInits != "") {
-            result += "  constructor() {\n";
+            result = result + "  constructor() {\n";
             if (superClass) {
-                result += "    super();\n";
+                result = result + "    super();\n";
             }
-            result += fieldInits;
-            result += "  }\n\n";
+            result = result + fieldInits;
+            result = result + "  }\n\n";
         }
         i = 0;
         while (i < members.length) {
@@ -353,9 +371,9 @@ export function package_codegen_generateStatement(node) {
                 while (j < member.parameters.length) {
                     if (member.parameters[j] != "self") {
                         if (paramCount > 0) {
-                            params += ", ";
+                            params = params + ", ";
                         }
-                        params += member.parameters[j];
+                        params = params + member.parameters[j];
                         paramCount = paramCount + 1;
                     }
                     j = j + 1;
@@ -371,9 +389,9 @@ export function package_codegen_generateStatement(node) {
                     body +
                     "\n\n";
             }
-            i++;
+            i = i + 1;
         }
-        result += "}";
+        result = result + "}";
         return result;
     }
     return "/* Unknown statement: " + node.type + " */";
@@ -384,8 +402,8 @@ export function package_codegen_generate(ast) {
         let i = 0;
         while (i < ast.statements.length) {
             let stmt = ast.statements[i];
-            result += package_codegen_generateStatement(stmt) + "\n";
-            i++;
+            result = result + package_codegen_generateStatement(stmt) + "\n";
+            i = i + 1;
         }
         return result;
     }
@@ -477,7 +495,7 @@ export function package_compiler_countASTNodes(node) {
         let i = 0;
         while (i < node.statements.length) {
             count = count + package_compiler_countASTNodes(node.statements[i]);
-            i++;
+            i = i + 1;
         }
     }
     if (node.body != null) {
@@ -548,8 +566,8 @@ export function package_compiler_joinPath(pathArray, separator) {
     let result = pathArray[0];
     let i = 1;
     while (i < pathArray.length) {
-        result += separator + pathArray[i];
-        i++;
+        result = result + separator + pathArray[i];
+        i = i + 1;
     }
     return result;
 }
@@ -601,7 +619,7 @@ export function package_compiler_addSymbolToNamespace(
             fileExists = true;
             break;
         }
-        i++;
+        i = i + 1;
     }
     if (!fileExists) {
         namespaceData.files.push(filePath);
@@ -647,7 +665,7 @@ export function package_compiler_resolveSymbol(
                     };
                 }
             }
-            i++;
+            i = i + 1;
         }
     }
     let globalNamespaceData = manager.namespaces[""];
@@ -675,7 +693,7 @@ export function package_compiler_findSymbolNamespace(
                 return namespaceName;
             }
         }
-        i++;
+        i = i + 1;
     }
     return "";
 }
@@ -748,7 +766,7 @@ export function package_compiler_resolveMultipleNamespaces(ast) {
                 manager.currentFile
             );
         }
-        i++;
+        i = i + 1;
     }
     let j = 0;
     while (j < ast.statements.length) {
@@ -791,7 +809,7 @@ export function package_compiler_validateNamespaceRules(ast, mode) {
                 hasMainNamespace = true;
             }
         }
-        i++;
+        i = i + 1;
     }
     if (mode == "standard" && !hasNamespace) {
         return "Error: Standard mode requires at least one namespace declaration";
@@ -818,7 +836,7 @@ export function package_compiler_compileFolderWithMode(fileContents, mode) {
         let lexerInstance = new package_lexer_ValkyrieLexer(content);
         let tokens = package_lexer_tokenize(lexerInstance);
         if (tokens.length == 0) {
-            i++;
+            i = i + 1;
             continue;
         }
         let ast = package_parser_parse(tokens);
@@ -917,7 +935,7 @@ export function package_compiler_compileFolderWithMode(fileContents, mode) {
             }
             j = j + 1;
         }
-        i++;
+        i = i + 1;
     }
     if (mode == "standard") {
         let mainNamespaces = [];
@@ -1065,7 +1083,7 @@ export function package_compiler_resolveMultipleNamespacesAndGenerate(ast) {
         } else {
             executionStatements.push(stmt);
         }
-        i++;
+        i = i + 1;
     }
     let j = 0;
     while (j < functionStatements.length) {
@@ -1194,7 +1212,7 @@ export function package_compiler_compileSingleFileComplete(sourceText) {
         } else {
             executionStatements.push(stmt);
         }
-        i++;
+        i = i + 1;
     }
     let uniqueNames = {};
     let j = 0;
@@ -1300,7 +1318,7 @@ export function package_compiler_generateSingleJSFromAnalysis(
                 }
             }
         }
-        i++;
+        i = i + 1;
     }
     let sortResult = package_compiler_topologicalSort(analyzer, fileContents);
     if (sortResult.error != null) {
@@ -1595,7 +1613,7 @@ export function package_compiler_findNamespaceProvider(
                 }
             }
         }
-        i++;
+        i = i + 1;
     }
     return null;
 }
@@ -1606,7 +1624,7 @@ export function package_compiler_topologicalSort(analyzer, fileContents) {
     let i = 0;
     while (i < fileNames.length) {
         visited[fileNames[i]] = false;
-        i++;
+        i = i + 1;
     }
     let j = 0;
     while (j < fileNames.length) {
@@ -1642,7 +1660,7 @@ export function package_compiler_resolveIdentifiersInExpression(
                 resolvedExpr.name = funcStmt.uniqueName;
                 return resolvedExpr;
             }
-            i++;
+            i = i + 1;
         }
         let j = 0;
         while (j < variableStatements.length) {
@@ -1672,7 +1690,7 @@ export function package_compiler_resolveIdentifiersInExpression(
                     resolvedExpr.callee = resolvedCallee;
                     break;
                 }
-                i++;
+                i = i + 1;
             }
             if (i == functionStatements.length) {
                 resolvedExpr.callee =
@@ -1903,7 +1921,7 @@ export function package_compiler_resolveIdentifiersInStatement(
                     classStatements
                 )
             );
-            i++;
+            i = i + 1;
         }
         resolvedStmt.statements = resolvedStatements;
         return resolvedStmt;
@@ -1926,7 +1944,7 @@ export function package_compiler_simpleDfsVisit(
         while (i < dependencies.length) {
             let depFile = dependencies[i];
             package_compiler_simpleDfsVisit(depFile, analyzer, visited, sorted);
-            i++;
+            i = i + 1;
         }
     }
     sorted.push(filePath);
@@ -1957,7 +1975,7 @@ export function package_lexer_readIdentifier(lexer) {
         lexer.current_char != "" &&
         package_lexer_isAlphaNumeric(lexer.current_char)
     ) {
-        result += lexer.current_char;
+        result = result + lexer.current_char;
         lexer.advance();
     }
     return result;
@@ -1968,7 +1986,7 @@ export function package_lexer_readNumber(lexer) {
         lexer.current_char != "" &&
         package_lexer_isDigit(lexer.current_char)
     ) {
-        result += lexer.current_char;
+        result = result + lexer.current_char;
         lexer.advance();
     }
     return result;
@@ -1980,28 +1998,28 @@ export function package_lexer_readString(lexer) {
         if (lexer.current_char == "\\") {
             lexer.advance();
             if (lexer.current_char == "n") {
-                result += "\n";
+                result = result + "\n";
             } else {
                 if (lexer.current_char == "t") {
-                    result += "\t";
+                    result = result + "\t";
                 } else {
                     if (lexer.current_char == "r") {
-                        result += "\r";
+                        result = result + "\r";
                     } else {
                         if (lexer.current_char == '"') {
-                            result += '"';
+                            result = result + '"';
                         } else {
                             if (lexer.current_char == "\\") {
-                                result += "\\";
+                                result = result + "\\";
                             } else {
-                                result += "\\" + lexer.current_char;
+                                result = result + "\\" + lexer.current_char;
                             }
                         }
                     }
                 }
             }
         } else {
-            result += lexer.current_char;
+            result = result + lexer.current_char;
         }
         lexer.advance();
     }
@@ -3000,7 +3018,7 @@ export function package_parser_parseClassMember(parser) {
                 isInstanceMethod = true;
                 break;
             }
-            i++;
+            i = i + 1;
         }
         let methodNode = new package_parser_Node("MemberStatement");
         methodNode.name = name.value;
