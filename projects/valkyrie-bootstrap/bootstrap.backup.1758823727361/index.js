@@ -1,28 +1,8 @@
 export function package_codegen_joinPath(pathArray, separator) {
-let result = "";
-let i = 0;
-while ((i < pathArray.length)) {
-if ((i > 0)) {
-result = (result + separator);
-}
-result = (result + pathArray[i]);
-i = (i + 1);
-}
-return result;
+return package_codegen_join_path(pathArray, separator);
 }
 export function package_codegen_replaceAll(str, search, replace) {
-let result = "";
-let i = 0;
-while ((i < str.length)) {
-if ((str[i] == search)) {
-result = (result + replace);
-i = (i + search.length);
-} else {
-result = (result + str[i]);
-i = (i + 1);
-}
-}
-return result;
+return package_codegen_replace_all(str, search, replace);
 }
 export function package_codegen_generateExpression(node) {
 if ((node.type == "Number")) {
@@ -30,11 +10,11 @@ return node.value;
 }
 if ((node.type == "String")) {
 let escaped = node.value;
-escaped = package_codegen_replaceAll(escaped, "\\", "\\\\");
-escaped = package_codegen_replaceAll(escaped, "\"", "\\\"");
-escaped = package_codegen_replaceAll(escaped, "\n", "\\n");
-escaped = package_codegen_replaceAll(escaped, "\r", "\\r");
-escaped = package_codegen_replaceAll(escaped, "\t", "\\t");
+escaped = package_codegen_replace_all(escaped, "\\", "\\\\");
+escaped = package_codegen_replace_all(escaped, "\"", "\\\"");
+escaped = package_codegen_replace_all(escaped, "\n", "\\n");
+escaped = package_codegen_replace_all(escaped, "\r", "\\r");
+escaped = package_codegen_replace_all(escaped, "\t", "\\t");
 return (("\"" + escaped) + "\"");
 }
 if ((node.type == "Boolean")) {
@@ -71,7 +51,39 @@ args = (args + ", ");
 args = (args + package_codegen_generateExpression(node.arguments[i]));
 i = (i + 1);
 }
+if (node.closure) {
+let closureParams = "";
+let closureBody = "";
+if (node.closure) {
+closureBody = package_codegen_generateStatement(node.closure);
+}
+if ((args.length > 0)) {
+args = (args + ", ");
+}
+args = ((((args + "function(") + closureParams) + ") ") + closureBody);
+}
 return (((callee + "(") + args) + ")");
+}
+if ((node.type == "AnonymousFunction")) {
+let params = "";
+let i = 0;
+while ((i < node.parameters.length)) {
+if ((i > 0)) {
+params = (params + ", ");
+}
+let param = node.parameters[i];
+if ((param && param.name)) {
+params = (params + param.name);
+} else {
+params = (params + param);
+}
+i = (i + 1);
+}
+let body = "";
+if (node.body) {
+body = package_codegen_generateStatement(node.body);
+}
+return ((("function(" + params) + ") ") + body);
 }
 if ((node.type == "NewExpression")) {
 let args = "";
@@ -188,7 +200,7 @@ let value = package_codegen_generateExpression(node.value);
 return (((("let " + node.name) + " = ") + value) + ";");
 }
 if ((node.type == "NamespaceStatement")) {
-let namespacePath = package_codegen_joinPath(node.path, "::");
+let namespacePath = package_codegen_join_path(node.path, "::");
 if (node.isMainNamespace) {
 return (("// namespace! " + namespacePath) + ";");
 } else {
@@ -196,7 +208,7 @@ return (("// namespace " + namespacePath) + ";");
 }
 }
 if ((node.type == "UsingStatement")) {
-return (("// using " + package_codegen_joinPath(node.path, "::")) + ";");
+return (("// using " + package_codegen_join_path(node.path, "::")) + ";");
 }
 if ((node.type == "JSAttributeStatement")) {
 return (((((("import { " + node.importName) + " as ") + node.functionName) + " } from \"") + node.modulePath) + "\";");
@@ -285,32 +297,6 @@ return (("{\n" + statements) + "\n}");
 if ((node.type == "ExpressionStatement")) {
 return (package_codegen_generateExpression(node.expression) + ";");
 }
-if ((node.type == "NamespaceStatement")) {
-return (("// namespace " + package_codegen_joinPath(node.path, "::")) + ";");
-}
-if ((node.type == "UsingStatement")) {
-return (("// using " + package_codegen_joinPath(node.path, "::")) + ";");
-}
-if ((node.type == "JSAttributeStatement")) {
-let cleanImportName = package_codegen_replaceAll(node.importName, "-", "_");
-cleanImportName = package_codegen_replaceAll(cleanImportName, ".", "_");
-cleanImportName = package_codegen_replaceAll(cleanImportName, "/", "_");
-let uniqueName = ((node.functionName + "_") + cleanImportName);
-let importStatement = (((((("import { " + node.importName) + " as ") + uniqueName) + " } from \"") + node.modulePath) + "\";");
-let params = "";
-let i = 0;
-while ((i < node.parameters.length)) {
-if ((i > 0)) {
-params = (params + ", ");
-}
-params = (params + node.parameters[i]);
-i = (i + 1);
-}
-let functionDef = (((("export function " + node.functionName) + "(") + params) + ") {\n");
-functionDef = (((((functionDef + "  return ") + uniqueName) + "(") + params) + ");\n");
-functionDef = (functionDef + "}");
-return ((importStatement + "\n") + functionDef);
-}
 if ((node.type == "ClassDeclaration")) {
 let className = node.name;
 let superClass = node.superClass;
@@ -332,9 +318,9 @@ explicitConstructor = member;
 } else if ((member.type == "Property")) {
 if ((member.initializer && member.initializer.type)) {
 let initValue = package_codegen_generateExpression(member.initializer);
-fieldInits = (((((fieldInits + "    self.") + member.name) + " = ") + initValue) + ";\n");
+fieldInits = (((((fieldInits + "    this.") + member.name) + " = ") + initValue) + ";\n");
 } else {
-fieldInits = (((fieldInits + "    self.") + member.name) + " = undefined;\n");
+fieldInits = (((fieldInits + "    this.") + member.name) + " = undefined;\n");
 }
 }
 i = (i + 1);
@@ -414,20 +400,45 @@ return (("/* Unknown statement: " + node.type) + " */");
 }
 export function package_codegen_generate(ast) {
 if ((ast.type == "Program")) {
-let buffer = new package_codegen_JsCodeGeneration("    ");
+let result = "";
 let i = 0;
 while ((i < ast.statements.length)) {
 let stmt = ast.statements[i];
-let stmt_code = package_codegen_generateStatement(stmt);
-buffer.writeLine(stmt_code);
+result = ((result + package_codegen_generateStatement(stmt)) + "\n");
 i = (i + 1);
 }
-return buffer.toString();
+return result;
 }
 if ((ast.type == "ParseError")) {
 return ((((("// Parse Error: " + ast.message) + " at line ") + ast.line) + ", column ") + ast.column);
 }
 return package_codegen_generateStatement(ast);
+}
+export function package_codegen_replace_all(str, search, replace) {
+let result = "";
+let i = 0;
+while ((i < str.length)) {
+if ((str[i] == search)) {
+result = (result + replace);
+i = (i + search.length);
+} else {
+result = (result + str[i]);
+i = (i + 1);
+}
+}
+return result;
+}
+export function package_codegen_join_path(pathArray, separator) {
+let result = "";
+let i = 0;
+while ((i < pathArray.length)) {
+if ((i > 0)) {
+result = (result + separator);
+}
+result = (result + pathArray[i]);
+i = (i + 1);
+}
+return result;
 }
 export function package_compiler_resolve_symbol(manager, symbol_name, current_namespace, current_file) {
 let current_namespace_data = manager.namespaces[current_namespace];
@@ -808,7 +819,7 @@ let j = 0;
 while ((j < ast.statements.length)) {
 let stmt = ast.statements[j];
 if ((stmt.type == "UsingStatement")) {
-let using_path = package_compiler_join_path(stmt.path, "::");
+let using_path = package_codegen_join_path(stmt.path, "::");
 let provider_file = package_compiler_find_namespace_provider(using_path, file_contents);
 if (((provider_file != null) && (provider_file != file_name))) {
 analyzer.dependencies[file_name].push(provider_file);
@@ -854,7 +865,7 @@ let l = 0;
 while ((l < ast.statements.length)) {
 let stmt = ast.statements[l];
 if ((stmt.type == "NamespaceStatement")) {
-current_namespace = package_compiler_join_path(stmt.path, "::");
+current_namespace = package_codegen_join_path(stmt.path, "::");
 if (stmt.isMainNamespace) {
 current_namespace = (current_namespace + "!");
 if ((mode == "standard")) {
@@ -871,7 +882,7 @@ console.log(("✅ 主命名空间检查通过: " + current_namespace));
 }
 manager.currentNamespace = current_namespace;
 } else if ((stmt.type == "UsingStatement")) {
-let using_path = package_compiler_join_path(stmt.path, "::");
+let using_path = package_codegen_join_path(stmt.path, "::");
 let is_global = package_compiler_is_main_namespace(using_path);
 package_compiler_add_using_import(manager, using_path, is_global);
 } else if ((stmt.type == "JSImportStatement")) {
@@ -1011,13 +1022,13 @@ let i = 0;
 while ((i < ast.statements.length)) {
 let stmt = ast.statements[i];
 if ((stmt.type == "NamespaceStatement")) {
-let namespace_path = package_compiler_join_path(stmt.path, "::");
+let namespace_path = package_codegen_join_path(stmt.path, "::");
 if (stmt.isMainNamespace) {
 namespace_path = (namespace_path + "!");
 }
 manager.currentNamespace = namespace_path;
 } else if ((stmt.type == "UsingStatement")) {
-let using_path = package_compiler_join_path(stmt.path, "::");
+let using_path = package_codegen_join_path(stmt.path, "::");
 let is_global = package_compiler_is_main_namespace(using_path);
 package_compiler_add_using_import(manager, using_path, is_global);
 } else if ((stmt.type == "MicroDeclaration")) {
@@ -2595,12 +2606,15 @@ this.indent_level = (this.indent_level - 1);
 this.buffer.push(text);
 }
 
-  writeLine(text) {
+  write_line(text) {
 let current_indent = "";
 let i = 0;
 while ((i < this.indent_level)) {
 current_indent = (current_indent + this.indent_text);
 i = (i + 1);
+}
+if ((text == null)) {
+text = "";
 }
 this.buffer.push(((current_indent + text) + "\n"));
 }

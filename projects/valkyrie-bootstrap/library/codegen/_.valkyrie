@@ -1,38 +1,58 @@
 namespace package::codegen;
 
 using package::parser::Node;
-using package::codegen::replace_all;
-using package::codegen::join_path;
+using package::codegen::JsCodeGeneration;
 
-# Valkyrie 代码生成器 - 重构为模块化版本
+# Valkyrie 代码生成器 - 重构为模块化版本，使用写缓冲区产生更易读的JavaScript输出
 
-# Legacy compatibility functions for backward compatibility
-micro joinPath(pathArray, separator) {
-    return join_path(pathArray, separator);
+# Legacy compatibility functions - keep original implementation for backward compatibility
+micro joinPath(pathArray: Array<String>, separator: String) -> String {
+    let result = "";
+    let i = 0;
+    while i < pathArray.length {
+        if i > 0 {
+            result = result + separator;
+        }
+        result = result + pathArray[i];
+        i = i + 1;
+    }
+    return result;
 }
 
-micro replaceAll(str, search, replace) {
-    return replace_all(str, search, replace);
+micro replaceAll(str: String, search: String, replace: String) -> String {
+    let result = "";
+    let i = 0;
+    while i < str.length {
+        if str[i] == search {
+            result = result + replace;
+            i = i + search.length;
+        } else {
+            # 没有匹配，添加当前字符
+            result = result + str[i];
+            i = i + 1;
+        }
+    }
+    return result;
 }
 
-micro generateExpression(node) {
+micro generateExpression(node: Node) -> String {
     if node.type == "Number" {
         return node.value;
     }
     
     if node.type == "String" {
-        # 处理字符串转义，确保与bootstrap/codegen.js一致
+        # 处理字符串转义，确保与bootstrap/codegen.js一致，使用模块化函数
         let escaped = node.value;
         # 替换反斜杠
-        escaped = replace_all(escaped, "\\", "\\\\");
+        escaped = replaceAll(escaped, "\\", "\\\\");
         # 替换双引号
-        escaped = replace_all(escaped, "\"", "\\\"");
+        escaped = replaceAll(escaped, "\"", "\\\"");
         # 替换换行符
-        escaped = replace_all(escaped, "\n", "\\n");
+        escaped = replaceAll(escaped, "\n", "\\n");
         # 替换回车符
-        escaped = replace_all(escaped, "\r", "\\r");
+        escaped = replaceAll(escaped, "\r", "\\r");
         # 替换制表符
-        escaped = replace_all(escaped, "\t", "\\t");
+        escaped = replaceAll(escaped, "\t", "\\t");
         return "\"" + escaped + "\"";
     }
     
@@ -76,50 +96,7 @@ micro generateExpression(node) {
             i = i + 1;
         }
         
-        # 检查是否有尾随闭包
-        if node.closure {
-            # 生成尾随闭包的 JavaScript 代码
-            let closureParams = "";
-            # 尾随闭包通常没有参数，或者参数在调用时推断
-            
-            let closureBody = "";
-            if node.closure {
-                # closure 是一个 Block 节点
-                closureBody = generateStatement(node.closure);
-            }
-            
-            # 如果有普通参数，添加逗号分隔
-            if args.length > 0 {
-                args = args + ", ";
-            }
-            args = args + "function(" + closureParams + ") " + closureBody;
-        }
-        
         return callee + "(" + args + ")";
-    }
-    
-    if node.type == "AnonymousFunction" {
-        let params = "";
-        let i = 0;
-        while i < node.parameters.length {
-            if i > 0 {
-                params = params + ", ";
-            }
-            let param = node.parameters[i];
-            if param && param.name {
-                params = params + param.name;
-            } else {
-                params = params + param;
-            }
-            i = i + 1;
-        }
-        
-        let body = "";
-        if node.body {
-            body = generateStatement(node.body);
-        }
-        
-        return "function(" + params + ") " + body;
     }
     
     if node.type == "NewExpression" {
@@ -252,7 +229,7 @@ micro generateExpression(node) {
     return "/* Unknown expression: " + node.type + " */";
 }
 
-micro generateStatement(node) {
+micro generateStatement(node: Node) -> String {
     if node.type == "LetStatement" {
         let value = generateExpression(node.value);
         return "let " + node.name + " = " + value + ";";
@@ -260,7 +237,7 @@ micro generateStatement(node) {
 
     if node.type == "NamespaceStatement" {
         # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
-        let namespacePath = join_path(node.path, "::");
+        let namespacePath = joinPath(node.path, "::");
         if node.isMainNamespace {
             return "// namespace! " + namespacePath + ";";
         } else {
@@ -270,7 +247,7 @@ micro generateStatement(node) {
 
     if node.type == "UsingStatement" {
         # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
-        return "// using " + join_path(node.path, "::") + ";";
+        return "// using " + joinPath(node.path, "::") + ";";
     }
 
     if node.type == "JSAttributeStatement" {
@@ -381,6 +358,42 @@ micro generateStatement(node) {
         return generateExpression(node.expression) + ";";
     }
     
+    if node.type == "NamespaceStatement" {
+        # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
+        return "// namespace " + joinPath(node.path, "::") + ";";
+    }
+    
+    if node.type == "UsingStatement" {
+        # using 语句在单文件编译中被忽略，在多文件编译中用于符号导入
+        return "// using " + joinPath(node.path, "::") + ";";
+    }
+    
+    if node.type == "JSAttributeStatement" {
+        # 生成 JS 导入语句和函数定义
+        let cleanImportName = replaceAll(node.importName, "-", "_");
+        cleanImportName = replaceAll(cleanImportName, ".", "_");
+        cleanImportName = replaceAll(cleanImportName, "/", "_");
+        let uniqueName = node.functionName + "_" + cleanImportName;
+        let importStatement = "import { " + node.importName + " as " + uniqueName + " } from \"" + node.modulePath + "\";";
+        
+        # 生成函数包装
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            params = params + node.parameters[i];
+            i = i + 1;
+        }
+        
+        let functionDef = "export function " + node.functionName + "(" + params + ") {\n";
+        functionDef = functionDef + "  return " + uniqueName + "(" + params + ");\n";
+        functionDef = functionDef + "}";
+        
+        return importStatement + "\n" + functionDef;
+    }
+    
     if node.type == "ClassDeclaration" {
         # 直接使用 name 字段（已经是解析后的名称）
         let className = node.name;
@@ -409,9 +422,9 @@ micro generateStatement(node) {
             } else if member.type == "Property" {
                 if member.initializer && member.initializer.type {
                     let initValue = generateExpression(member.initializer);
-                    fieldInits = fieldInits + "    this." + member.name + " = " + initValue + ";\n";
+                    fieldInits = fieldInits + "    self." + member.name + " = " + initValue + ";\n";
                 } else {
-                    fieldInits = fieldInits + "    this." + member.name + " = undefined;\n";
+                    fieldInits = fieldInits + "    self." + member.name + " = undefined;\n";
                 }
             }
             i = i + 1;
@@ -442,7 +455,7 @@ micro generateStatement(node) {
             }
             result = result + fieldInits;
             let ctorBody = generateStatement(explicitConstructor.body);
-            # 移除外层的大括号，只保留内容
+            # 移格外层的大括号，只保留内容
             if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
                 ctorBody = ctorBody.substring(2, ctorBody.length - 2);
             }
@@ -508,17 +521,20 @@ micro generateStatement(node) {
     return "/* Unknown statement: " + node.type + " */";
 }
 
-micro generate(ast) {
+micro generate(ast: Node) -> String {
     if ast.type == "Program" {
-        let result = "";
+        # 使用写缓冲区生成更好格式的程序输出
+        let buffer = new JsCodeGeneration("    ");
+        
         let i = 0;
         while i < ast.statements.length {
             let stmt = ast.statements[i];
-            result = result + generateStatement(stmt) + "\n";
+            let stmt_code = generateStatement(stmt);
+            buffer.writeLine(stmt_code);
             i = i + 1;
         }
         
-        return result;
+        return buffer.toString();
     }
     
     if ast.type == "ParseError" {

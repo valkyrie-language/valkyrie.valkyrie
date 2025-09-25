@@ -6,7 +6,7 @@ using package::codegen::generate;
 using package::parser::Node;
 using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
-using package::codegen::join_path;
+using package::codegen::joinPath;
 
 # 拓扑排序 (简化版，不检测循环依赖)
 micro topological_sort(analyzer: DependencyAnalyzer, file_contents: Map<String, String>) -> Array<String> {
