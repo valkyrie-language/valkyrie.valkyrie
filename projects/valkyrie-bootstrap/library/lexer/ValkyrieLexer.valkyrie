@@ -30,32 +30,16 @@ class ValkyrieLexer {
         }
     }
 
-    micro skip_whitespace() {
-        while self.current_char != "" && self.is_whitespace(self.current_char) {
+    micro skip_whitespace(self) {
+        while self.current_char != "" && is_whitespace(self.current_char) {
             self.advance();
         }
     }
 
-    micro is_whitespace(ch) {
-        return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
-    }
-
-    micro is_alpha_numeric(ch) {
-        return self.is_alpha(ch) || self.is_digit(ch);
-    }
-
-    micro is_alpha(ch) {
-        return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
-    }
-
-    micro is_digit(ch) {
-        return ch >= "0" && ch <= "9";
-    }
-
-    micro read_number() {
+    micro read_number(self) {
         let result = "";
 
-        while self.current_char != "" && self.is_digit(self.current_char) {
+        while self.current_char != "" && is_digit(self.current_char) {
             result = result + self.current_char;
             self.advance();
         }
@@ -63,10 +47,10 @@ class ValkyrieLexer {
         return result;
     }
 
-    micro read_identifier() {
+    micro read_identifier(self) {
         let result = "";
 
-        while self.current_char != "" && self.is_alpha_numeric(self.current_char) {
+        while self.current_char != "" && is_alpha_numeric(self.current_char) {
             result = result + self.current_char;
             self.advance();
         }
@@ -74,7 +58,7 @@ class ValkyrieLexer {
         return result;
     }
 
-    micro read_string() {
+    micro read_string(self) {
         let result = "";
         self.advance(); # skip opening quote
 
@@ -115,37 +99,15 @@ class ValkyrieLexer {
         return result;
     }
 
-    micro skip_comment() {
+    micro skip_comment(self) {
         while self.current_char != "" && self.current_char != "\n" {
             self.advance();
         }
     }
 
-    micro get_keyword_type(value) {
-        if value == "micro" { return "MICRO"; }
-        if value == "let" { return "LET"; }
-        if value == "if" { return "IF"; }
-        if value == "else" { return "ELSE"; }
-        if value == "while" { return "WHILE"; }
-        if value == "return" { return "RETURN"; }
-        if value == "true" { return "BOOLEAN"; }
-        if value == "false" { return "BOOLEAN"; }
-        if value == "namespace" { return "NAMESPACE"; }
-        if value == "using" { return "USING"; }
-        if value == "class" { return "CLASS"; }
-        if value == "constructor" { return "CONSTRUCTOR"; }
-        if value == "self" { return "SELF"; }
-        if value == "extends" { return "EXTENDS"; }
-        if value == "implements" { return "IMPLEMENTS"; }
-        if value == "new" { return "NEW"; }
-        if value == "default" { return "DEFAULT"; }
-        if value == "await" { return "AWAIT"; }
-        return "IDENTIFIER";
-    }
-
-    micro next_token() {
+    micro next_token(self) {
         while self.current_char != "" {
-            if self.is_whitespace(self.current_char) {
+            if is_whitespace(self.current_char) {
                 self.skip_whitespace();
                 continue;
             }
@@ -158,13 +120,13 @@ class ValkyrieLexer {
             let line = self.line;
             let column = self.column;
 
-            if self.is_alpha(self.current_char) {
+            if is_alpha(self.current_char) {
                 let value = self.read_identifier();
-                let tokenType = self.get_keyword_type(value);
+                let tokenType = get_keyword_type(value);
                 return new Token(tokenType, value, line, column);
             }
 
-            if self.is_digit(self.current_char) {
+            if is_digit(self.current_char) {
                 let value = self.read_number();
                 return new Token("NUMBER", value, line, column);
             }
@@ -256,7 +218,7 @@ class ValkyrieLexer {
         return new Token("EOF", "", self.line, self.column);
     }
 
-    micro tokenize() {
+    micro tokenize(self) {
         let tokens = [];
 
         while true {
@@ -270,4 +232,43 @@ class ValkyrieLexer {
 
         return tokens;
     }
+}
+
+micro is_whitespace(ch) {
+    return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
+}
+
+micro is_alpha_numeric(ch) {
+    return is_alpha(ch) || is_digit(ch);
+}
+
+micro is_alpha(ch) {
+    return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
+}
+
+micro is_digit(ch) {
+    return ch >= "0" && ch <= "9";
+}
+
+micro get_keyword_type(value) {
+    if value == "micro" { return "MICRO"; }
+    if value == "let" { return "LET"; }
+    if value == "if" { return "IF"; }
+    if value == "else" { return "ELSE"; }
+    if value == "while" { return "WHILE"; }
+    if value == "return" { return "RETURN"; }
+    if value == "true" { return "BOOLEAN"; }
+    if value == "false" { return "BOOLEAN"; }
+    if value == "namespace" { return "NAMESPACE"; }
+    if value == "using" { return "USING"; }
+    if value == "class" { return "CLASS"; }
+    if value == "constructor" { return "CONSTRUCTOR"; }
+    if value == "self" { return "SELF"; }
+    if value == "Self" { return "SELF"; }
+    if value == "extends" { return "EXTENDS"; }
+    if value == "implements" { return "IMPLEMENTS"; }
+    if value == "new" { return "NEW"; }
+    if value == "default" { return "DEFAULT"; }
+    if value == "await" { return "AWAIT"; }
+    return "IDENTIFIER";
 }

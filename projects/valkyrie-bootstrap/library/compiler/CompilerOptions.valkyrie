@@ -2,9 +2,10 @@ namespace package::compiler;
 
 
 class CompilerOptions {
-    constructor(outputFormat, optimize, debug) {
-        self.outputFormat = outputFormat || "js";
+    constructor(output_format, optimize, debug, implicit_member_call) {
+        self.output_format = output_format || "js";
         self.optimize = optimize || false;
         self.debug = debug || false;
+        self.implicit_member_call = implicit_member_call || "warning";
     }
 }

@@ -219,6 +219,67 @@ micro parsePostfixExpression(parser) {
                 accessNode.property = property.value;
                 expr = accessNode;
             }
+        } else if parser.current_token.type == "DOUBLE_COLON" {
+            parser.advance();
+            let methodName = parser.expect("IDENTIFIER");
+            if methodName && methodName.type == "ParseError" {
+                return methodName;
+            }
+            
+            # 检查是否还有更多的双冒号（支持a::b::c语法）
+            let namespacePath = [expr];
+            namespacePath.push(methodName.value);
+            
+            while parser.current_token.type == "DOUBLE_COLON" {
+                parser.advance();
+                let nextName = parser.expect("IDENTIFIER");
+                if nextName && nextName.type == "ParseError" {
+                    return nextName;
+                }
+                namespacePath.push(nextName.value);
+            }
+            
+            # 检查是否是方法调用（有括号）
+            if parser.current_token.type == "LPAREN" {
+                parser.advance();
+                let args = [];
+                
+                if parser.current_token.type != "RPAREN" {
+                    let arg = parseExpression(parser);
+                    if arg && arg.type == "ParseError" {
+                        return arg;
+                    }
+                    args.push(arg);
+                    
+                    while parser.current_token.type == "COMMA" {
+                        parser.advance();
+                        arg = parseExpression(parser);
+                        if arg && arg.type == "ParseError" {
+                            return arg;
+                        }
+                        args.push(arg);
+                    }
+                }
+                
+                let rparen = parser.expect("RPAREN");
+                if rparen && rparen.type == "ParseError" {
+                    return rparen;
+                }
+                
+                let staticCallNode = new Node("StaticMethodCall");
+                staticCallNode.namespacePath = namespacePath;
+                staticCallNode.methodName = namespacePath[namespacePath.length - 1];
+                staticCallNode.className = namespacePath[namespacePath.length - 2];
+                staticCallNode.arguments = args;
+                expr = staticCallNode;
+            } else {
+                # 静态属性访问
+                let staticAccessNode = new Node("StaticPropertyAccess");
+                staticAccessNode.namespacePath = namespacePath;
+                staticAccessNode.property = namespacePath[namespacePath.length - 1];
+                staticAccessNode.className = namespacePath[namespacePath.length - 2];
+                expr = staticAccessNode;
+            }
         } else if parser.current_token.type == "LBRACKET" {
             parser.advance();
             let index = parseExpression(parser);
@@ -275,9 +336,20 @@ micro parseAtomicExpression(parser) {
     }
 
     if parser.current_token.type == "SELF" {
-        parser.advance();
-        let node = new Node("ThisExpression");
-        return node;
+        # 检查下一个token是否是双冒号，如果是则作为类名处理
+        let nextIndex = parser.position + 1;
+        if nextIndex < parser.tokens.length && parser.tokens[nextIndex].type == "DOUBLE_COLON" {
+            let name = "Self";  # 使用标准化的Self名称
+            parser.advance();
+            let node = new Node("Identifier");
+            node.name = name;
+            return node;
+        } else {
+            # 否则作为this表达式处理
+            parser.advance();
+            let node = new Node("ThisExpression");
+            return node;
+        }
     }
 
     if parser.current_token.type == "NEW" {

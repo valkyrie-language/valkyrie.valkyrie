@@ -1039,7 +1039,7 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
             if (
                 !found_function &&
                 options != null &&
-                options.implicit_member_call == "warning"
+                options.implicitMemberCall == "warning"
             ) {
                 let k = 0;
                 while (k < class_statements.length) {
@@ -2722,11 +2722,11 @@ export function package_parser_parse(tokens) {
     return package_parser_parseProgram(parser);
 }
 class package_compiler_CompilerOptions {
-    constructor(output_format, optimize, debug, implicit_member_call) {
-        this.output_format = output_format || "js";
+    constructor(outputFormat, optimize, debug, implicitMemberCall) {
+        this.outputFormat = outputFormat || "js";
         this.optimize = optimize || false;
         this.debug = debug || false;
-        this.implicit_member_call = implicit_member_call || "warning";
+        this.implicitMemberCall = implicitMemberCall || "warning";
     }
 }
 class package_compiler_CompilerStatistics {

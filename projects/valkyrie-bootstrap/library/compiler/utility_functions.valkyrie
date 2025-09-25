@@ -13,9 +13,24 @@ micro create_error(message, line, column) {
     };
 }
 
+# 创建编译器警告对象
+micro create_warning(message, line, column) {
+    return {
+        "type": "CompilerWarning",
+        "message": message,
+        "line": line,
+        "column": column
+    };
+}
+
 # 报告编译器错误
 micro report_error(error) {
     console.log("Compiler Error: " + error.message + " at line " + error.line + ", column " + error.column);
+}
+
+# 报告编译器警告
+micro report_warning(warning) {
+    console.log("Compiler Warning: " + warning.message + " at line " + warning.line + ", column " + warning.column);
 }
 
 # 计算AST节点数量
