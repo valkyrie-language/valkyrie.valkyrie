@@ -59,7 +59,7 @@ export function copyDir(src, dest) {
     }
 }
 
-// --- New Compiler Logic using compiler.valkyrie functions ---
+// --- New Compiler Logic using _.valkyrie functions ---
 
 export async function compileSourceWithCompiler(source, compilerParts) {
     const { compiler } = compilerParts;
@@ -116,19 +116,38 @@ export async function compileFileWithCompiler(
 
 // --- Single File Compilation Functions ---
 
-export function readLibraryFiles(libraryDir) {
-    const files = fs
-        .readdirSync(libraryDir)
-        .filter((f) => f.endsWith(".valkyrie"));
-    const fileContents = {};
-
-    for (const file of files) {
-        const filePath = path.join(libraryDir, file);
-        const content = fs.readFileSync(filePath, "utf8");
-        fileContents[file] = content;
+// 递归扫描目录中的所有.valkyrie文件
+export function scanValkyrieFilesRecursively(dir, baseDir = null) {
+    if (baseDir === null) {
+        baseDir = dir;
     }
 
-    return fileContents;
+    const files = {};
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+            // 递归扫描子目录
+            const subFiles = scanValkyrieFilesRecursively(fullPath, baseDir);
+            Object.assign(files, subFiles);
+        } else if (entry.name.endsWith(".valkyrie")) {
+            // 计算相对路径作为文件键，统一使用正斜杠
+            const relativePath = path
+                .relative(baseDir, fullPath)
+                .replace(/\\/g, "/");
+            const content = fs.readFileSync(fullPath, "utf8");
+            files[relativePath] = content;
+        }
+    }
+
+    return files;
+}
+
+export function readLibraryFiles(libraryDir) {
+    // 使用新的递归扫描函数
+    return scanValkyrieFilesRecursively(libraryDir);
 }
 
 export async function generateSingleFileWithCompiler(
@@ -145,9 +164,11 @@ export async function generateSingleFileWithCompiler(
         const { compiler } = compilerParts;
 
         // Use generateSingleJS function from the compiler
-        if (typeof compiler.package_compiler_generateSingleJS === "function") {
+        if (
+            typeof compiler.package_compiler_generate_single_js === "function"
+        ) {
             const result =
-                compiler.package_compiler_generateSingleJS(fileContents);
+                compiler.package_compiler_generate_single_js(fileContents);
 
             ensureDir(path.dirname(outputPath));
             fs.writeFileSync(outputPath, result, "utf8");
@@ -157,7 +178,7 @@ export async function generateSingleFileWithCompiler(
             return true;
         } else {
             throw new Error(
-                "package_compiler_generateSingleJS function not found in compiler module"
+                "package_compiler_generate_single_js function not found in compiler module"
             );
         }
     } catch (err) {

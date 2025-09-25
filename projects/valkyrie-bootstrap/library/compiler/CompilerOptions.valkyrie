@@ -1,0 +1,10 @@
+namespace package::compiler;
+
+
+class CompilerOptions {
+    constructor(outputFormat, optimize, debug) {
+        self.outputFormat = outputFormat || "js";
+        self.optimize = optimize || false;
+        self.debug = debug || false;
+    }
+}

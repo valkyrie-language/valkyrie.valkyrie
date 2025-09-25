@@ -1,0 +1,258 @@
+namespace package::compiler;
+
+class DependencyAnalyzer {
+    constructor() {
+        self.dependencies = {};
+        self.reverseDependencies = {};
+    }
+}
+
+
+# 解析符号
+micro resolve_symbol(manager, symbol_name, current_namespace, current_file) {
+    # 首先在当前命名空间中查找
+    let current_namespace_data = manager.namespaces[current_namespace];
+    if current_namespace_data != null && current_namespace_data.symbols != null {
+        let symbol = current_namespace_data.symbols[symbol_name];
+        if symbol != null {
+            return {
+                "found": true,
+                "symbol": symbol,
+                "namespace": current_namespace
+            };
+        }
+    }
+    
+    # 然后在using导入中查找
+    let file_usings = manager.usings[current_file];
+    if file_usings != null {
+        let i = 0;
+        while i < file_usings.length {
+            let using_info = file_usings[i];
+            let using_namespace = using_info["namespace"];
+            
+            let using_namespace_data = manager.namespaces[using_namespace];
+            if using_namespace_data != null && using_namespace_data.symbols != null {
+                let symbol = using_namespace_data.symbols[symbol_name];
+                if symbol != null {
+                    return {
+                        "found": true,
+                        "symbol": symbol,
+                        "namespace": using_namespace
+                    };
+                }
+            }
+            
+            i = i + 1;
+        }
+    }
+    
+    # 最后在全局命名空间中查找
+    let global_namespace_data = manager.namespaces[""];
+    if global_namespace_data != null && global_namespace_data.symbols != null {
+        let symbol = global_namespace_data.symbols[symbol_name];
+        if symbol != null {
+            return {
+                "found": true,
+                "symbol": symbol,
+                "namespace": ""
+            };
+        }
+    }
+    
+    return {
+        "found": false,
+        "symbol": null,
+        "namespace": null
+    };
+}
+
+# 递归解析表达式中的标识符
+micro resolve_identifiers_in_expression(expr, manager, function_statements, variable_statements, class_statements) {
+    if expr == null {
+        return expr;
+    }
+    
+    if expr.type == "Identifier" {
+        # 查找是否是函数调用
+        let i = 0;
+        while i < function_statements.length {
+            let func_stmt = function_statements[i];
+            if func_stmt.name == expr.name && func_stmt.uniqueName != null {
+                let resolved_expr = Object.assign({}, expr);
+                resolved_expr.name = func_stmt.uniqueName;
+                return resolved_expr;
+            }
+            i = i + 1;
+        }
+        
+        # 查找是否是变量
+        let j = 0;
+        while j < variable_statements.length {
+            let var_stmt = variable_statements[j];
+            if var_stmt.name == expr.name && var_stmt.uniqueName != null {
+                let resolved_expr = Object.assign({}, expr);
+                resolved_expr.name = var_stmt.uniqueName;
+                return resolved_expr;
+            }
+            j = j + 1;
+        }
+        
+        return expr;
+    }
+    
+    if expr.type == "MicroCall" {
+        let resolved_expr = Object.assign({}, expr);
+        
+        # 特殊处理函数名的 namespace 解析
+        if expr.callee.type == "Identifier" {
+            let function_name = expr.callee.name;
+            let i = 0;
+            while i < function_statements.length {
+                let func_stmt = function_statements[i];
+                if func_stmt.name == function_name && func_stmt.uniqueName != null {
+                    let resolved_callee = Object.assign({}, expr.callee);
+                    resolved_callee.name = func_stmt.uniqueName;
+                    resolved_expr.callee = resolved_callee;
+                    break;
+                }
+                i = i + 1;
+            }
+            if i == function_statements.length {
+                resolved_expr.callee = resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements);
+            }
+        } else {
+            resolved_expr.callee = resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements);
+        }
+        
+        let resolved_args = [];
+        let k = 0;
+        while k < expr.arguments.length {
+            resolved_args.push(resolve_identifiers_in_expression(expr.arguments[k], manager, function_statements, variable_statements, class_statements));
+            k = k + 1;
+        }
+        resolved_expr.arguments = resolved_args;
+        return resolved_expr;
+    }
+    
+    if expr.type == "BinaryOp" {
+        let resolved_expr = Object.assign({}, expr);
+        resolved_expr.left = resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements);
+        resolved_expr.right = resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements);
+        return resolved_expr;
+    }
+    
+    if expr.type == "Assignment" {
+        let resolved_expr = Object.assign({}, expr);
+        resolved_expr.left = resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements);
+        resolved_expr.right = resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements);
+        return resolved_expr;
+    }
+    
+    if expr.type == "PropertyAccess" {
+        let resolved_expr = Object.assign({}, expr);
+        resolved_expr.object = resolve_identifiers_in_expression(expr.object, manager, function_statements, variable_statements, class_statements);
+        return resolved_expr;
+    }
+    
+    if expr.type == "NewExpression" {
+        let resolved_expr = Object.assign({}, expr);
+        
+        # 调试信息：输出正在处理的类名
+        if expr.className == "Token" {
+            console.log("DEBUG: Processing NewExpression for Token class");
+            console.log("DEBUG: Available classes:");
+            let debug_m = 0;
+            while debug_m < class_statements.length {
+                console.log("  - " + class_statements[debug_m].name + " -> " + class_statements[debug_m].uniqueName);
+                debug_m = debug_m + 1;
+            }
+        }
+        
+        # 解析 className，查找是否需要添加 namespace 前缀
+        let m = 0;
+        while m < class_statements.length {
+            let class_stmt = class_statements[m];
+            if class_stmt.name == expr.className && class_stmt.uniqueName != null {
+                resolved_expr.className = class_stmt.uniqueName;
+                if expr.className == "Token" {
+                    console.log("DEBUG: Token class resolved to: " + class_stmt.uniqueName);
+                }
+                break;
+            }
+            m = m + 1;
+        }
+        
+        # 解析参数
+        let resolved_args = [];
+        if expr.arguments != null {
+            let n = 0;
+            while n < expr.arguments.length {
+                resolved_args.push(resolve_identifiers_in_expression(expr.arguments[n], manager, function_statements, variable_statements, class_statements));
+                n = n + 1;
+            }
+        }
+        resolved_expr.arguments = resolved_args;
+        return resolved_expr;
+    }
+    
+    return expr;
+}
+
+# 递归解析语句中的标识符
+micro resolve_identifiers_in_statement(stmt, manager, function_statements, variable_statements, class_statements) {
+    if stmt == null {
+        return stmt;
+    }
+    
+    if stmt.type == "LetStatement" {
+        let resolved_stmt = Object.assign({}, stmt);
+        resolved_stmt.value = resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements);
+        return resolved_stmt;
+    }
+    
+    if stmt.type == "ExpressionStatement" {
+        let resolved_stmt = Object.assign({}, stmt);
+        resolved_stmt.expression = resolve_identifiers_in_expression(stmt.expression, manager, function_statements, variable_statements, class_statements);
+        return resolved_stmt;
+    }
+    
+    if stmt.type == "ReturnStatement" {
+        let resolved_stmt = Object.assign({}, stmt);
+        if stmt.value != null {
+            resolved_stmt.value = resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements);
+        }
+        return resolved_stmt;
+    }
+    
+    if stmt.type == "IfStatement" {
+        let resolved_stmt = Object.assign({}, stmt);
+        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements);
+        resolved_stmt.thenBranch = resolve_identifiers_in_statement(stmt.thenBranch, manager, function_statements, variable_statements, class_statements);
+        if stmt.elseBranch != null {
+            resolved_stmt.elseBranch = resolve_identifiers_in_statement(stmt.elseBranch, manager, function_statements, variable_statements, class_statements);
+        }
+        return resolved_stmt;
+    }
+    
+    if stmt.type == "WhileStatement" {
+        let resolved_stmt = Object.assign({}, stmt);
+        resolved_stmt.condition = resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements);
+        resolved_stmt.body = resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements);
+        return resolved_stmt;
+    }
+    
+    if stmt.type == "Block" {
+        let resolved_stmt = Object.assign({}, stmt);
+        let resolved_statements = [];
+        let i = 0;
+        while i < stmt.statements.length {
+            resolved_statements.push(resolve_identifiers_in_statement(stmt.statements[i], manager, function_statements, variable_statements, class_statements));
+            i = i + 1;
+        }
+        resolved_stmt.statements = resolved_statements;
+        return resolved_stmt;
+    }
+    
+    return stmt;
+}

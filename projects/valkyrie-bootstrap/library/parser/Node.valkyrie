@@ -1,0 +1,7 @@
+namespace package::parser;
+
+class Node {
+    constructor(type) {
+        self.type = type;
+    }
+}

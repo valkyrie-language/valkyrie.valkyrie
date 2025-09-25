@@ -1,0 +1,132 @@
+namespace package::compiler;
+
+using package::lexer::ValkyrieLexer;
+using package::parser::parse;
+
+# 创建编译器错误对象
+micro create_error(message, line, column) {
+    return {
+        "type": "CompilerError",
+        "message": message,
+        "line": line,
+        "column": column
+    };
+}
+
+# 报告编译器错误
+micro report_error(error) {
+    console.log("Compiler Error: " + error.message + " at line " + error.line + ", column " + error.column);
+}
+
+# 计算AST节点数量
+micro count_ast_nodes(node) {
+    if node == null {
+        return 0;
+    }
+    
+    let count = 1;
+    
+    if node.statements != null {
+        let i = 0;
+        while i < node.statements.length {
+            count = count + count_ast_nodes(node.statements[i]);
+            i = i + 1;
+        }
+    }
+    
+    if node.body != null {
+        count = count + count_ast_nodes(node.body);
+    }
+    
+    if node.left != null {
+        count = count + count_ast_nodes(node.left);
+    }
+    
+    if node.right != null {
+        count = count + count_ast_nodes(node.right);
+    }
+    
+    if node.expression != null {
+        count = count + count_ast_nodes(node.expression);
+    }
+    
+    if node.condition != null {
+        count = count + count_ast_nodes(node.condition);
+    }
+    
+    if node.thenBranch != null {
+        count = count + count_ast_nodes(node.thenBranch);
+    }
+    
+    if node.elseBranch != null {
+        count = count + count_ast_nodes(node.elseBranch);
+    }
+    
+    return count;
+}
+
+# 语法验证
+micro validate_syntax(source) {
+    let lexer = new ValkyrieLexer(source);
+    let tokens = lexer.tokenize();
+    
+    if tokens.length == 0 {
+        return {
+            "valid": false,
+            "error": "Lexical analysis failed"
+        };
+    }
+    
+    let ast = parse(tokens);
+    if ast.type == "" || ast.type == "ParseError" {
+        return {
+            "valid": false,
+            "error": "Syntax analysis failed"
+        };
+    }
+    
+    return {
+        "valid": true,
+        "error": null
+    };
+}
+
+# 路径连接工具函数
+micro join_path(path_array, separator) {
+    if path_array == null || path_array.length == 0 {
+        return "";
+    }
+    
+    let result = path_array[0];
+    let i = 1;
+    while i < path_array.length {
+        result = result + separator + path_array[i];
+        i = i + 1;
+    }
+    return result;
+}
+
+# 设置编译模式
+micro set_compile_mode(manager, mode) {
+    manager.mode = mode;
+}
+
+# 简单深度优先搜索访问
+micro simple_dfs_visit(file_path, analyzer, visited, sorted) {
+    if visited[file_path] {
+        return;
+    }
+    
+    visited[file_path] = true;
+    
+    let dependencies = analyzer.dependencies[file_path];
+    if dependencies != null {
+        let i = 0;
+        while i < dependencies.length {
+            simple_dfs_visit(dependencies[i], analyzer, visited, sorted);
+            i = i + 1;
+        }
+    }
+    
+    sorted.push(file_path);
+}

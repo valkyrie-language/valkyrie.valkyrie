@@ -107,7 +107,13 @@ micro generateExpression(node) {
             i = i + 1;
         }
         
-        return "new " + node.className + "(" + args + ")";
+        # 检查是否有解析后的类名
+        let className = node.className;
+        if node.resolvedClassName {
+            className = node.resolvedClassName;
+        }
+        
+        return "new " + className + "(" + args + ")";
     }
     
     if node.type == "AwaitExpression" {

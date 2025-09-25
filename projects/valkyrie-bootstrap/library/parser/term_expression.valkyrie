@@ -1,0 +1,455 @@
+namespace package::parser;
+
+# Pratt 解析器优先级表
+micro getOperatorPrecedence(tokenType) {
+    if tokenType == "ASSIGN" {
+        return 1;
+    }
+    if tokenType == "OR" {
+        return 2;
+    }
+    if tokenType == "AND" {
+        return 3;
+    }
+    if tokenType == "EQ" {
+        return 4;
+    }
+    if tokenType == "NE" {
+        return 4;
+    }
+    if tokenType == "GT" {
+        return 5;
+    }
+    if tokenType == "LT" {
+        return 5;
+    }
+    if tokenType == "GTE" {
+        return 5;
+    }
+    if tokenType == "LTE" {
+        return 5;
+    }
+    if tokenType == "PIPE" {
+        return 6;
+    }
+    if tokenType == "AMPERSAND" {
+        return 6;
+    }
+    if tokenType == "PLUS" {
+        return 7;
+    }
+    if tokenType == "MINUS" {
+        return 7;
+    }
+    if tokenType == "MULTIPLY" {
+        return 8;
+    }
+    if tokenType == "DIVIDE" {
+        return 8;
+    }
+    if tokenType == "MODULO" {
+        return 8;
+    }
+    return -1;
+}
+
+micro isRightAssociative(tokenType) {
+    return tokenType == "ASSIGN";
+}
+
+# Pratt 解析器主函数
+micro parseExpressionWithPrecedence(parser, minPrecedence) {
+    let left = parseUnaryExpression(parser);
+
+    if left && left.type == "ParseError" {
+        return left;
+    }
+
+    while true {
+        let precedence = getOperatorPrecedence(parser.current_token.type);
+        if precedence < minPrecedence {
+            break;
+        }
+
+        let op = parser.current_token.value;
+        let tokenType = parser.current_token.type;
+        parser.advance();
+
+        let nextMinPrecedence = precedence;
+        if isRightAssociative(tokenType) {
+
+        }
+        else {
+            nextMinPrecedence = precedence + 1;
+        }
+
+        let right = parseExpressionWithPrecedence(parser, nextMinPrecedence);
+        if right && right.type == "ParseError" {
+            return right;
+        }
+
+        if tokenType == "ASSIGN" {
+            let node = new Node("Assignment");
+            node.left = left;
+            node.right = right;
+            left = node;
+        } else {
+            let node = new Node("BinaryOp");
+            node.left = left;
+            node.operator = op;
+            node.right = right;
+            left = node;
+        }
+    }
+
+    return left;
+}
+
+micro parseExpression(parser) {
+    return parseExpressionWithPrecedence(parser, 0);
+}
+
+micro parseUnaryExpression(parser) {
+    if parser.current_token.type == "BANG" || parser.current_token.type == "MINUS" {
+        let op = parser.current_token.value;
+        parser.advance();
+        let operand = parseUnaryExpression(parser);
+        if operand && operand.type == "ParseError" {
+            return operand;
+        }
+        let node = new Node("UnaryOp");
+        node.operator = op;
+        node.operand = operand;
+        return node;
+    }
+
+    if parser.current_token.type == "NEW" {
+        return parseNewExpression(parser);
+    }
+
+    return parsePostfixExpression(parser);
+}
+
+micro parseNewExpression(parser) {
+    parser.advance(); # skip 'new'
+
+    # 解析类名
+    let className = parser.expect("IDENTIFIER");
+    if className.type == "ParseError" { return className; }
+
+    # 解析构造函数参数
+    let lparen = parser.expect("LPAREN");
+    if lparen.type == "ParseError" { return lparen; }
+
+    let args = [];
+    if parser.current_token.type != "RPAREN" {
+        let arg = parseExpression(parser);
+        if arg.type == "ParseError" { return arg; }
+        args.push(arg);
+
+        while parser.current_token.type == "COMMA" {
+            parser.advance(); # skip comma
+            arg = parseExpression(parser);
+            if arg.type == "ParseError" { return arg; }
+            args.push(arg);
+        }
+    }
+
+    let rparen = parser.expect("RPAREN");
+    if rparen.type == "ParseError" { return rparen; }
+
+    let node = new Node("NewExpression");
+    node.className = className.value;
+    node.arguments = args;
+    return node;
+}
+
+micro parsePostfixExpression(parser) {
+    let expr = parseAtomicExpression(parser);
+
+    if expr && expr.type == "ParseError" {
+        return expr;
+    }
+
+    while true {
+        if parser.current_token.type == "LPAREN" {
+            parser.advance();
+            let args = [];
+
+            if parser.current_token.type != "RPAREN" {
+                let arg = parseExpression(parser);
+                if arg && arg.type == "ParseError" {
+                    return arg;
+                }
+                args.push(arg);
+
+                while parser.current_token.type == "COMMA" {
+                    parser.advance();
+                    arg = parseExpression(parser);
+                    if arg && arg.type == "ParseError" {
+                        return arg;
+                    }
+                    args.push(arg);
+                }
+            }
+
+            let rparen = parser.expect("RPAREN");
+            if rparen && rparen.type == "ParseError" {
+                return rparen;
+            }
+
+            let callNode = new Node("MicroCall");
+            callNode.callee = expr;
+            callNode.arguments = args;
+            expr = callNode;
+        } else if parser.current_token.type == "DOT" {
+            parser.advance();
+            if parser.current_token.type == "AWAIT" {
+                parser.advance();
+                let awaitNode = new Node("AwaitExpression");
+                awaitNode.argument = expr;
+                expr = awaitNode;
+            } else {
+                let property = parser.expect("IDENTIFIER");
+                if property && property.type == "ParseError" {
+                    return property;
+                }
+                let accessNode = new Node("PropertyAccess");
+                accessNode.object = expr;
+                accessNode.property = property.value;
+                expr = accessNode;
+            }
+        } else if parser.current_token.type == "LBRACKET" {
+            parser.advance();
+            let index = parseExpression(parser);
+            if index && index.type == "ParseError" {
+                return index;
+            }
+            let rbracket = parser.expect("RBRACKET");
+            if rbracket && rbracket.type == "ParseError" {
+                return rbracket;
+            }
+            let accessNode = new Node("ArrayAccess");
+            accessNode.object = expr;
+            accessNode.index = index;
+            expr = accessNode;
+        } else {
+            break;
+        }
+    }
+
+    return expr;
+}
+
+micro parseAtomicExpression(parser) {
+    if parser.current_token.type == "NUMBER" {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = new Node("Number");
+        node.value = value;
+        return node;
+    }
+
+    if parser.current_token.type == "STRING" {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = new Node("String");
+        node.value = value;
+        return node;
+    }
+
+    if parser.current_token.type == "BOOLEAN" {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = new Node("Boolean");
+        node.value = value;
+        return node;
+    }
+
+    if parser.current_token.type == "IDENTIFIER" {
+        let name = parser.current_token.value;
+        parser.advance();
+        let node = new Node("Identifier");
+        node.name = name;
+        return node;
+    }
+
+    if parser.current_token.type == "SELF" {
+        parser.advance();
+        let node = new Node("ThisExpression");
+        return node;
+    }
+
+    if parser.current_token.type == "NEW" {
+        parser.advance();
+        let className = parser.expect("IDENTIFIER");
+        if className && className.type == "ParseError" {
+            return className;
+        }
+
+        let lparen = parser.expect("LPAREN");
+        if lparen && lparen.type == "ParseError" {
+            return lparen;
+        }
+
+        let args = [];
+        if parser.current_token.type != "RPAREN" {
+            let arg = parseExpression(parser);
+            if arg && arg.type == "ParseError" {
+                return arg;
+            }
+            args.push(arg);
+
+            while parser.current_token.type == "COMMA" {
+                parser.advance();
+                arg = parseExpression(parser);
+                if arg && arg.type == "ParseError" {
+                    return arg;
+                }
+                args.push(arg);
+            }
+        }
+
+        let rparen = parser.expect("RPAREN");
+        if rparen && rparen.type == "ParseError" {
+            return rparen;
+        }
+
+        let node = new Node("NewExpression");
+        node.className = className.value;
+        node.arguments = args;
+        return node;
+    }
+
+    if parser.current_token.type == "LPAREN" {
+        parser.advance();
+        let expr = parseExpression(parser);
+        if expr && expr.type == "ParseError" {
+            return expr;
+        }
+        let rparen = parser.expect("RPAREN");
+        if rparen && rparen.type == "ParseError" {
+            return rparen;
+        }
+        return expr;
+    }
+
+    # 支持数组字面量 []
+    if parser.current_token.type == "LBRACKET" {
+        parser.advance();
+        let node = new Node("ArrayLiteral");
+        node.elements = [];
+
+        if parser.current_token.type != "RBRACKET" {
+            let element = parseExpression(parser);
+            if element && element.type == "ParseError" {
+                return element;
+            }
+            node.elements.push(element);
+
+            while parser.current_token.type == "COMMA" {
+                parser.advance();
+                element = parseExpression(parser);
+                if element && element.type == "ParseError" {
+                    return element;
+                }
+                node.elements.push(element);
+            }
+        }
+
+        let rbracket = parser.expect("RBRACKET");
+        if rbracket && rbracket.type == "ParseError" {
+            return rbracket;
+        }
+
+        return node;
+    }
+
+    # 支持对象字面量 {}
+    if parser.current_token.type == "LBRACE" {
+        parser.advance();
+        let node = new Node("ObjectLiteral");
+        node.properties = [];
+
+        if parser.current_token.type != "RBRACE" {
+            while parser.current_token.type == "IDENTIFIER" || parser.current_token.type == "STRING" {
+                let key = parser.current_token.value;
+                parser.advance();
+                let colon = parser.expect("COLON");
+                if colon && colon.type == "ParseError" {
+                    return colon;
+                }
+                let value = parseExpression(parser);
+                if value && value.type == "ParseError" {
+                    return value;
+                }
+
+                let propertyNode = new Node("Property");
+                propertyNode.key = key;
+                propertyNode.value = value;
+                node.properties.push(propertyNode);
+
+                if parser.current_token.type == "COMMA" {
+                    parser.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let rbrace = parser.expect("RBRACE");
+        if rbrace && rbrace.type == "ParseError" {
+            return rbrace;
+        }
+
+        return node;
+    }
+
+    # 如果没有匹配的主表达式，返回错误
+    let error = {};
+    error.type = "ParseError";
+    error.message = "Expected expression but got " + parser.current_token.type;
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
+}
+
+# 封装参数解析函数，供 micro function 和 method function 共享
+micro parseTermParameters(parser) {
+    let params = [];
+
+    if parser.current_token.type != "RPAREN" {
+        let param = null;
+        if parser.current_token.type == "IDENTIFIER" {
+            param = parser.expect("IDENTIFIER");
+        } else if parser.current_token.type == "SELF" {
+            param = parser.expect("SELF");
+        } else {
+            param = parser.expect("IDENTIFIER");
+        }
+        if param && param.type == "ParseError" {
+            return param;
+        }
+        params.push(param.value);
+
+        while parser.current_token.type == "COMMA" {
+            parser.advance();
+            if parser.current_token.type == "IDENTIFIER" {
+                param = parser.expect("IDENTIFIER");
+            } else if parser.current_token.type == "SELF" {
+                param = parser.expect("SELF");
+            } else {
+                param = parser.expect("IDENTIFIER");
+            }
+            if param && param.type == "ParseError" {
+                return param;
+            }
+            params.push(param.value);
+        }
+    }
+
+    return params;
+}
+
+
+
