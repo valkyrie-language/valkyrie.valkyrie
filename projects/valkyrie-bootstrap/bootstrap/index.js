@@ -76,11 +76,11 @@ export function package_codegen_generateExpression(node) {
             }
             args += package_codegen_generateExpression(node.arguments[i]);
         }
-        return "new " + node.className + "(" + args + ")";
+        return `new ${node.className}(${args})`;
     }
     if (node.type == "AwaitExpression") {
         let argument = package_codegen_generateExpression(node.argument);
-        return "await " + argument;
+        return `await ${argument}`;
     }
     if (node.type == "PropertyAccess") {
         if (node.object.type) {
@@ -105,19 +105,12 @@ export function package_codegen_generateExpression(node) {
             return "{}";
         }
         let result = "{";
-        let i = 0;
-        while (i < node.properties.length) {
+        for (let i = 0; i < node.properties.length; i++) {
             let prop = node.properties[i];
             if (i > 0) {
                 result += ", ";
             }
-            result =
-                result +
-                '"' +
-                prop.key +
-                '": ' +
-                package_codegen_generateExpression(prop.value);
-            i++;
+            result += `"${prop.key}": ${package_codegen_generateExpression(prop.value)}`;
         }
         result += "}";
         return result;
@@ -177,30 +170,26 @@ export function package_codegen_generateStatement(node) {
     }
     if (node.type == "MicroDeclaration") {
         let params = "";
-        let i = 0;
-        while (i < node.parameters.length) {
+        for (let i = 0; i < node.parameters.length; i++) {
             if (i > 0) {
-                params = params + ", ";
+                params += ", ";
             }
-            params = params + node.parameters[i];
-            i++;
+            params += node.parameters[i];
         }
         let body = package_codegen_generateStatement(node.body);
         let functionName = node.name;
-        return "export function " + functionName + "(" + params + ") " + body;
+        return `export function ${functionName}(${params}) ${body}`;
     }
     if (node.type == "MemberStatement") {
         let params = "";
-        let i = 0;
-        while (i < node.parameters.length) {
+        for (let i = 0; i < node.parameters.length; i++) {
             if (i > 0) {
-                params = params + ", ";
+                params += ", ";
             }
-            params = params + node.parameters[i];
-            i++;
+            params += node.parameters[i];
         }
         let body = package_codegen_generateStatement(node.body);
-        return "function " + node.name + "(" + params + ") " + body;
+        return `function ${node.name}(${params}) ${body}`;
     }
     if (node.type == "IfStatement") {
         let condition = package_codegen_generateExpression(node.condition);
@@ -231,9 +220,9 @@ export function package_codegen_generateStatement(node) {
         while (i < node.statements.length) {
             let stmt = package_codegen_generateStatement(node.statements[i]);
             if (i > 0) {
-                statements = statements + "\n";
+                statements += "\n";
             }
-            statements = statements + stmt;
+            statements += stmt;
             i++;
         }
         return "{\n" + statements + "\n}";
@@ -270,9 +259,9 @@ export function package_codegen_generateStatement(node) {
         let i = 0;
         while (i < node.parameters.length) {
             if (i > 0) {
-                params = params + ", ";
+                params += ", ";
             }
-            params = params + node.parameters[i];
+            params += node.parameters[i];
             i++;
         }
         let functionDef =
@@ -327,9 +316,9 @@ export function package_codegen_generateStatement(node) {
             let j = 0;
             while (j < explicitConstructor.parameters.length) {
                 if (j > 0) {
-                    params = params + ", ";
+                    params += ", ";
                 }
-                params = params + explicitConstructor.parameters[j];
+                params += explicitConstructor.parameters[j];
                 j = j + 1;
             }
             result += "  constructor(" + params + ") {\n";
@@ -364,9 +353,9 @@ export function package_codegen_generateStatement(node) {
                 while (j < member.parameters.length) {
                     if (member.parameters[j] != "self") {
                         if (paramCount > 0) {
-                            params = params + ", ";
+                            params += ", ";
                         }
-                        params = params + member.parameters[j];
+                        params += member.parameters[j];
                         paramCount = paramCount + 1;
                     }
                     j = j + 1;
