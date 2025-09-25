@@ -2,9 +2,12 @@ namespace package::compiler;
 
 using package::lexer::ValkyrieLexer;
 using package::parser::parse;
+using package::parser::Node;
+using package::compiler::NamespaceManager;
+using package::compiler::DependencyAnalyzer;
 
 # 创建编译器错误对象
-micro create_error(message: String, line: i32, column: i32) -> Object {
+micro create_error(message: String, line: i32, column: i32) -> Map<String, String> {
     return {
         "type": "CompilerError",
         "message": message,
@@ -14,7 +17,7 @@ micro create_error(message: String, line: i32, column: i32) -> Object {
 }
 
 # 创建编译器警告对象
-micro create_warning(message: String, line: i32, column: i32) -> Object {
+micro create_warning(message: String, line: i32, column: i32) -> Map<String, String> {
     return {
         "type": "CompilerWarning",
         "message": message,
@@ -24,17 +27,17 @@ micro create_warning(message: String, line: i32, column: i32) -> Object {
 }
 
 # 报告编译器错误
-micro report_error(error: Object) {
+micro report_error(error: Map<String, String>) {
     console.log("Compiler Error: " + error.message + " at line " + error.line + ", column " + error.column);
 }
 
 # 报告编译器警告
-micro report_warning(warning: Object) {
+micro report_warning(warning: Map<String, String>) {
     console.log("Compiler Warning: " + warning.message + " at line " + warning.line + ", column " + warning.column);
 }
 
 # 计算AST节点数量
-micro count_ast_nodes(node: Object) -> i32 {
+micro count_ast_nodes(node: Node) -> i32 {
     if node == null {
         return 0;
     }
@@ -81,7 +84,7 @@ micro count_ast_nodes(node: Object) -> i32 {
 }
 
 # 语法验证
-micro validate_syntax(source: String) -> Object {
+micro validate_syntax(source: String) -> Map<String, String> {
     let lexer = new ValkyrieLexer(source);
     let tokens = lexer.tokenize();
     
@@ -107,7 +110,7 @@ micro validate_syntax(source: String) -> Object {
 }
 
 # 路径连接工具函数
-micro join_path(path_array: Array, separator: String) -> String {
+micro join_path(path_array: Array<String>, separator: String) -> String {
     if path_array == null || path_array.length == 0 {
         return "";
     }
@@ -122,12 +125,12 @@ micro join_path(path_array: Array, separator: String) -> String {
 }
 
 # 设置编译模式
-micro set_compile_mode(manager: Object, mode: String) {
+micro set_compile_mode(manager: NamespaceManager, mode: String) {
     manager.mode = mode;
 }
 
 # 简单深度优先搜索访问
-micro simple_dfs_visit(file_path: String, analyzer: Object, visited: Object, sorted: Array) {
+micro simple_dfs_visit(file_path: String, analyzer: DependencyAnalyzer, visited: Map<String, Bool>, sorted: Array<String>) {
     if visited[file_path] {
         return;
     }

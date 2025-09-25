@@ -6,24 +6,25 @@ using package::lexer::tokenize;
 using package::parser::parse;
 using package::codegen::generate;
 using package::lexer::Token;
+using package::compiler::CompilerOptions;
 
 # REPL模式的单一JS文件生成
-micro generate_single_js(file_contents: Object) -> String {
+micro generate_single_js(file_contents: Map<String, String>) -> String {
     return compile_asts(file_contents, "repl");
 }
 
 # 标准模式的单一JS文件生成
-micro generate_single_js_standard(file_contents: Object) -> String {
+micro generate_single_js_standard(file_contents: Map<String, String>) -> String {
     return compile_asts(file_contents, "standard");
 }
 
 # 带选项的REPL模式的单一JS文件生成
-micro generate_single_js_with_options(file_contents: Object, options: Object) -> String {
+micro generate_single_js_with_options(file_contents: Map<String, String>, options: CompilerOptions) -> String {
     return compile_asts_with_options(file_contents, "repl", options);
 }
 
 # 带选项的标准模式的单一JS文件生成
-micro generate_single_js_standard_with_options(file_contents: Object, options: Object) -> String {
+micro generate_single_js_standard_with_options(file_contents: Map<String, String>, options: CompilerOptions) -> String {
     return compile_asts_with_options(file_contents, "standard", options);
 }
 
@@ -36,7 +37,7 @@ micro package_compiler_compile_text(source_text: String) -> String {
 }
 
 # 带选项的编译单个源代码文本文件
-micro package_compiler_compile_text_with_options(source_text: String, options: Object) -> String {
+micro package_compiler_compile_text_with_options(source_text: String, options: CompilerOptions) -> String {
     let file_contents = {
         "main.valkyrie": source_text
     };

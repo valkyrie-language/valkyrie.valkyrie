@@ -1,6 +1,10 @@
 namespace package::parser;
 
-micro parseStatement(parser: Object) -> Object {
+using package::parser::Node;
+using package::parser::ValkyrieParser;
+using package::lexer::Token;
+
+micro parseStatement(parser: ValkyrieParser) -> Node {
     # 检查 EOF
     if parser.current_token.type == "EOF" {
         let error = {};
@@ -78,7 +82,7 @@ micro parseStatement(parser: Object) -> Object {
     return stmt;
 }
 
-micro parseLetStatement(parser: Object) -> Object {
+micro parseLetStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'let'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -106,7 +110,7 @@ micro parseLetStatement(parser: Object) -> Object {
     return node;
 }
 
-micro parseNamespaceStatement(parser: Object) -> Object {
+micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'namespace'
     let path = [];
     let isMainNamespace = false;
@@ -137,7 +141,7 @@ micro parseNamespaceStatement(parser: Object) -> Object {
     return node;
 }
 
-micro parseUsingStatement(parser: Object) -> Object {
+micro parseUsingStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'using'
     let path = [];
 
@@ -160,7 +164,7 @@ micro parseUsingStatement(parser: Object) -> Object {
     return node;
 }
 
-micro parseAttributeStatement(parser: Object) -> Object {
+micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip '↯'
 
     # 期望 js 标识符
@@ -238,7 +242,7 @@ micro parseAttributeStatement(parser: Object) -> Object {
 }
 
 # 解析顶级 micro function 语法: micro name(params) { ... }
-micro parseMicroFunctionDeclaration(parser: Object) -> Object {
+micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -294,7 +298,7 @@ micro parseMicroFunctionDeclaration(parser: Object) -> Object {
     return node;
 }
 
-micro parseClassDeclaration(parser: Object) -> Object {
+micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'class'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -339,7 +343,7 @@ micro parseClassDeclaration(parser: Object) -> Object {
     return node;
 }
 
-micro parseClassMember(parser: Object) -> Object {
+micro parseClassMember(parser: ValkyrieParser) -> Node {
     # 检查是否是构造函数
     if parser.current_token.type == "CONSTRUCTOR" {
         parser.advance(); # skip 'constructor'
@@ -472,7 +476,7 @@ micro parseClassMember(parser: Object) -> Object {
     return error;
 }
 
-micro parseFunctionDeclaration(parser: Object) -> Object {
+micro parseFunctionDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
@@ -506,7 +510,7 @@ micro parseFunctionDeclaration(parser: Object) -> Object {
     return node;
 }
 
-micro parseIfStatement(parser: Object) -> Object {
+micro parseIfStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'if'
     let condition = parseExpression(parser);
     if condition && condition.type == "ParseError" {
@@ -535,7 +539,7 @@ micro parseIfStatement(parser: Object) -> Object {
     return node;
 }
 
-micro parseWhileStatement(parser: Object) -> Object {
+micro parseWhileStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'while'
     let condition = parseExpression(parser);
     if condition && condition.type == "ParseError" {
@@ -553,7 +557,7 @@ micro parseWhileStatement(parser: Object) -> Object {
     return node;
 }
 
-micro parseReturnStatement(parser: Object) -> Object {
+micro parseReturnStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'return'
 
     let node = new Node("ReturnStatement");
@@ -576,7 +580,7 @@ micro parseReturnStatement(parser: Object) -> Object {
     return node;
 }
 
-micro parseFunctionBlock(parser: Object) -> Object {
+micro parseFunctionBlock(parser: ValkyrieParser) -> Node {
     let lbrace = parser.expect("LBRACE");
     if lbrace && lbrace.type == "ParseError" {
         return lbrace;
@@ -602,7 +606,7 @@ micro parseFunctionBlock(parser: Object) -> Object {
     return node;
 }
 
-micro parseProgram(parser: Object) -> Object {
+micro parseProgram(parser: ValkyrieParser) -> Node {
     let statements = [];
 
     while parser.current_token.type != "EOF" {
@@ -618,7 +622,7 @@ micro parseProgram(parser: Object) -> Object {
     return node;
 }
 
-micro parse(tokens: Array) -> Object {
+micro parse(tokens: Array<Token>) -> Node {
     let parser = new ValkyrieParser(tokens);
     return parseProgram(parser);
 }

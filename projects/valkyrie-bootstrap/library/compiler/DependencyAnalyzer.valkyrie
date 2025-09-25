@@ -1,5 +1,9 @@
 namespace package::compiler;
 
+using package::parser::Node;
+using package::compiler::NamespaceManager;
+using package::compiler::CompilerOptions;
+
 class DependencyAnalyzer {
     constructor() {
         self.dependencies = {};
@@ -9,7 +13,7 @@ class DependencyAnalyzer {
 
 
 # 解析符号
-micro resolve_symbol(manager: Object, symbol_name: String, current_namespace: Array, current_file: String) -> Object {
+micro resolve_symbol(manager: NamespaceManager, symbol_name: String, current_namespace: Array<String>, current_file: String) -> Map<String, String> {
     # 首先在当前命名空间中查找
     let current_namespace_data = manager.namespaces[current_namespace];
     if current_namespace_data != null && current_namespace_data.symbols != null {
@@ -68,12 +72,12 @@ micro resolve_symbol(manager: Object, symbol_name: String, current_namespace: Ar
 }
 
 # 递归解析表达式中的标识符
-micro resolve_identifiers_in_expression(expr: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array) -> Object {
+micro resolve_identifiers_in_expression(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>) -> Node {
     return resolve_identifiers_in_expression_with_options(expr, manager, function_statements, variable_statements, class_statements, null);
 }
 
 # 带选项的递归解析表达式中的标识符
-micro resolve_identifiers_in_expression_with_options(expr: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array, options: Object) -> Object {
+micro resolve_identifiers_in_expression_with_options(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
     if expr == null {
         return expr;
     }
@@ -235,12 +239,12 @@ micro resolve_identifiers_in_expression_with_options(expr: Object, manager: Obje
 }
 
 # 递归解析语句中的标识符
-micro resolve_identifiers_in_statement(stmt: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array) -> Object {
+micro resolve_identifiers_in_statement(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>) -> Node {
     return resolve_identifiers_in_statement_with_options(stmt, manager, function_statements, variable_statements, class_statements, null);
 }
 
 # 带选项的递归解析语句中的标识符
-micro resolve_identifiers_in_statement_with_options(stmt: Object, manager: Object, function_statements: Array, variable_statements: Array, class_statements: Array, options: Object) -> Object {
+micro resolve_identifiers_in_statement_with_options(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions) -> Node {
     if stmt == null {
         return stmt;
     }
