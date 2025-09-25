@@ -1838,9 +1838,10 @@ export function package_parser_isRightAssociative(tokenType) {
 }
 export function package_parser_parseExpressionWithPrecedence(
     parser,
-    minPrecedence
+    minPrecedence,
+    inline
 ) {
-    let left = package_parser_parseUnaryExpression(parser);
+    let left = package_parser_parseUnaryExpression(parser, inline);
     if (left && left.type == "ParseError") {
         return left;
     }
@@ -1861,7 +1862,8 @@ export function package_parser_parseExpressionWithPrecedence(
         }
         let right = package_parser_parseExpressionWithPrecedence(
             parser,
-            nextMinPrecedence
+            nextMinPrecedence,
+            inline
         );
         if (right && right.type == "ParseError") {
             return right;
@@ -1882,16 +1884,19 @@ export function package_parser_parseExpressionWithPrecedence(
     return left;
 }
 export function package_parser_parseExpression(parser) {
-    return package_parser_parseExpressionWithPrecedence(parser, 0);
+    return package_parser_parseExpressionWithPrecedence(parser, 0, false);
 }
-export function package_parser_parseUnaryExpression(parser) {
+export function package_parser_parseInlineExpression(parser) {
+    return package_parser_parseExpressionWithPrecedence(parser, 0, true);
+}
+export function package_parser_parseUnaryExpression(parser, inline) {
     if (
         parser.current_token.type == "BANG" ||
         parser.current_token.type == "MINUS"
     ) {
         let op = parser.current_token.value;
         parser.advance();
-        let operand = package_parser_parseUnaryExpression(parser);
+        let operand = package_parser_parseUnaryExpression(parser, inline);
         if (operand && operand.type == "ParseError") {
             return operand;
         }
@@ -1901,11 +1906,11 @@ export function package_parser_parseUnaryExpression(parser) {
         return node;
     }
     if (parser.current_token.type == "NEW") {
-        return package_parser_parseNewExpression(parser);
+        return package_parser_parseNewExpression(parser, inline);
     }
-    return package_parser_parsePostfixExpression(parser);
+    return package_parser_parsePostfixExpression(parser, inline);
 }
-export function package_parser_parseNewExpression(parser) {
+export function package_parser_parseNewExpression(parser, inline) {
     parser.advance();
     let className = parser.expect("IDENTIFIER");
     if (className.type == "ParseError") {
@@ -1917,14 +1922,22 @@ export function package_parser_parseNewExpression(parser) {
     }
     let args = [];
     if (parser.current_token.type != "RPAREN") {
-        let arg = package_parser_parseExpression(parser);
+        let arg = package_parser_parseExpressionWithPrecedence(
+            parser,
+            0,
+            inline
+        );
         if (arg.type == "ParseError") {
             return arg;
         }
         args.push(arg);
         while (parser.current_token.type == "COMMA") {
             parser.advance();
-            arg = package_parser_parseExpression(parser);
+            arg = package_parser_parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
             if (arg.type == "ParseError") {
                 return arg;
             }
@@ -1940,24 +1953,34 @@ export function package_parser_parseNewExpression(parser) {
     node.arguments = args;
     return node;
 }
-export function package_parser_parsePostfixExpression(parser) {
-    let expr = package_parser_parseAtomicExpression(parser);
+export function package_parser_parsePostfixExpression(parser, inline) {
+    let expr = package_parser_parseAtomicExpression(parser, inline);
     if (expr && expr.type == "ParseError") {
         return expr;
     }
     while (true) {
         if (parser.current_token.type == "LPAREN") {
+            let nextIndex = parser.position + 1;
+            let hasTrailingClosure = false;
             parser.advance();
             let args = [];
             if (parser.current_token.type != "RPAREN") {
-                let arg = package_parser_parseExpression(parser);
+                let arg = package_parser_parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
                 if (arg && arg.type == "ParseError") {
                     return arg;
                 }
                 args.push(arg);
                 while (parser.current_token.type == "COMMA") {
                     parser.advance();
-                    arg = package_parser_parseExpression(parser);
+                    arg = package_parser_parseExpressionWithPrecedence(
+                        parser,
+                        0,
+                        inline
+                    );
                     if (arg && arg.type == "ParseError") {
                         return arg;
                     }
@@ -1968,9 +1991,20 @@ export function package_parser_parsePostfixExpression(parser) {
             if (rparen && rparen.type == "ParseError") {
                 return rparen;
             }
+            let closure = null;
+            if (parser.current_token.type == "LBRACE" && !inline) {
+                closure = package_parser_parse_function_block(parser);
+                if (closure && closure.type == "ParseError") {
+                    return closure;
+                }
+                hasTrailingClosure = true;
+            }
             let callNode = new package_parser_Node("MicroCall");
             callNode.callee = expr;
             callNode.arguments = args;
+            if (hasTrailingClosure) {
+                callNode.closure = closure;
+            }
             expr = callNode;
         } else if (parser.current_token.type == "DOT") {
             parser.advance();
@@ -2009,14 +2043,22 @@ export function package_parser_parsePostfixExpression(parser) {
                 parser.advance();
                 let args = [];
                 if (parser.current_token.type != "RPAREN") {
-                    let arg = package_parser_parseExpression(parser);
+                    let arg = package_parser_parseExpressionWithPrecedence(
+                        parser,
+                        0,
+                        inline
+                    );
                     if (arg && arg.type == "ParseError") {
                         return arg;
                     }
                     args.push(arg);
                     while (parser.current_token.type == "COMMA") {
                         parser.advance();
-                        arg = package_parser_parseExpression(parser);
+                        arg = package_parser_parseExpressionWithPrecedence(
+                            parser,
+                            0,
+                            inline
+                        );
                         if (arg && arg.type == "ParseError") {
                             return arg;
                         }
@@ -2050,7 +2092,11 @@ export function package_parser_parsePostfixExpression(parser) {
             }
         } else if (parser.current_token.type == "LBRACKET") {
             parser.advance();
-            let index = package_parser_parseExpression(parser);
+            let index = package_parser_parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
             if (index && index.type == "ParseError") {
                 return index;
             }
@@ -2068,7 +2114,7 @@ export function package_parser_parsePostfixExpression(parser) {
     }
     return expr;
 }
-export function package_parser_parseAtomicExpression(parser) {
+export function package_parser_parseAtomicExpression(parser, inline) {
     if (parser.current_token.type == "NUMBER") {
         let value = parser.current_token.value;
         parser.advance();
@@ -2093,8 +2139,44 @@ export function package_parser_parseAtomicExpression(parser) {
     if (parser.current_token.type == "IDENTIFIER") {
         let name = parser.current_token.value;
         parser.advance();
+        if (parser.current_token.type == "LBRACE" && !inline) {
+            let closure = package_parser_parse_function_block(parser);
+            if (closure && closure.type == "ParseError") {
+                return closure;
+            }
+            let callNode = new package_parser_Node("MicroCall");
+            let identifierNode = new package_parser_Node("Identifier");
+            identifierNode.name = name;
+            callNode.callee = identifierNode;
+            callNode.arguments = [];
+            callNode.closure = closure;
+            return callNode;
+        }
         let node = new package_parser_Node("Identifier");
         node.name = name;
+        return node;
+    }
+    if (parser.current_token.type == "MICRO") {
+        parser.advance();
+        let lparen = parser.expect("LPAREN");
+        if (lparen.type == "ParseError") {
+            return lparen;
+        }
+        let params = package_parser_parseTermParameters(parser);
+        if (params && params.type == "ParseError") {
+            return params;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen.type == "ParseError") {
+            return rparen;
+        }
+        let body = package_parser_parse_function_block(parser);
+        if (body && body.type == "ParseError") {
+            return body;
+        }
+        let node = new package_parser_Node("AnonymousFunction");
+        node.parameters = params;
+        node.body = body;
         return node;
     }
     if (parser.current_token.type == "SELF") {
@@ -2126,14 +2208,22 @@ export function package_parser_parseAtomicExpression(parser) {
         }
         let args = [];
         if (parser.current_token.type != "RPAREN") {
-            let arg = package_parser_parseExpression(parser);
+            let arg = package_parser_parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
             if (arg && arg.type == "ParseError") {
                 return arg;
             }
             args.push(arg);
             while (parser.current_token.type == "COMMA") {
                 parser.advance();
-                arg = package_parser_parseExpression(parser);
+                arg = package_parser_parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
                 if (arg && arg.type == "ParseError") {
                     return arg;
                 }
@@ -2151,7 +2241,11 @@ export function package_parser_parseAtomicExpression(parser) {
     }
     if (parser.current_token.type == "LPAREN") {
         parser.advance();
-        let expr = package_parser_parseExpression(parser);
+        let expr = package_parser_parseExpressionWithPrecedence(
+            parser,
+            0,
+            inline
+        );
         if (expr && expr.type == "ParseError") {
             return expr;
         }
@@ -2166,14 +2260,22 @@ export function package_parser_parseAtomicExpression(parser) {
         let node = new package_parser_Node("ArrayLiteral");
         node.elements = [];
         if (parser.current_token.type != "RBRACKET") {
-            let element = package_parser_parseExpression(parser);
+            let element = package_parser_parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
             if (element && element.type == "ParseError") {
                 return element;
             }
             node.elements.push(element);
             while (parser.current_token.type == "COMMA") {
                 parser.advance();
-                element = package_parser_parseExpression(parser);
+                element = package_parser_parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
                 if (element && element.type == "ParseError") {
                     return element;
                 }
@@ -2186,7 +2288,7 @@ export function package_parser_parseAtomicExpression(parser) {
         }
         return node;
     }
-    if (parser.current_token.type == "LBRACE") {
+    if (parser.current_token.type == "LBRACE" && !inline) {
         parser.advance();
         let node = new package_parser_Node("ObjectLiteral");
         node.properties = [];
@@ -2201,7 +2303,11 @@ export function package_parser_parseAtomicExpression(parser) {
                 if (colon && colon.type == "ParseError") {
                     return colon;
                 }
-                let value = package_parser_parseExpression(parser);
+                let value = package_parser_parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
                 if (value && value.type == "ParseError") {
                     return value;
                 }
@@ -2633,7 +2739,7 @@ export function package_parser_parseStatement(parser) {
                 return package_parser_parseMicroFunctionDeclaration(parser);
             }
         }
-        return package_parser_parseFunctionDeclaration(parser);
+        return package_parser_parse_function_declaration(parser);
     }
     if (parser.current_token.type == "IF") {
         return package_parser_parseIfStatement(parser);
@@ -2648,7 +2754,7 @@ export function package_parser_parseStatement(parser) {
         return package_parser_parseReturnStatement(parser);
     }
     if (parser.current_token.type == "LBRACE") {
-        return package_parser_parseFunctionBlock(parser);
+        return package_parser_parse_function_block(parser);
     }
     let expr = package_parser_parseExpression(parser);
     if (expr && expr.type == "ParseError") {
@@ -2851,7 +2957,7 @@ export function package_parser_parseMicroFunctionDeclaration(parser) {
             return effectType;
         }
     }
-    let body = package_parser_parseFunctionBlock(parser);
+    let body = package_parser_parse_function_block(parser);
     if (body && body.type == "ParseError") {
         return body;
     }
@@ -2917,7 +3023,7 @@ export function package_parser_parseClassMember(parser) {
         if (rparen && rparen.type == "ParseError") {
             return rparen;
         }
-        let body = package_parser_parseFunctionBlock(parser);
+        let body = package_parser_parse_function_block(parser);
         if (body && body.type == "ParseError") {
             return body;
         }
@@ -2944,7 +3050,7 @@ export function package_parser_parseClassMember(parser) {
         if (rparen && rparen.type == "ParseError") {
             return rparen;
         }
-        let body = package_parser_parseFunctionBlock(parser);
+        let body = package_parser_parse_function_block(parser);
         if (body && body.type == "ParseError") {
             return body;
         }
@@ -3009,7 +3115,7 @@ export function package_parser_parseClassMember(parser) {
     error.column = parser.current_token.column;
     return error;
 }
-export function package_parser_parseFunctionDeclaration(parser) {
+export function package_parser_parse_function_declaration(parser) {
     parser.advance();
     let name = parser.expect("IDENTIFIER");
     if (name && name.type == "ParseError") {
@@ -3027,7 +3133,7 @@ export function package_parser_parseFunctionDeclaration(parser) {
     if (rparen && rparen.type == "ParseError") {
         return rparen;
     }
-    let body = package_parser_parseFunctionBlock(parser);
+    let body = package_parser_parse_function_block(parser);
     if (body && body.type == "ParseError") {
         return body;
     }
@@ -3039,7 +3145,7 @@ export function package_parser_parseFunctionDeclaration(parser) {
 }
 export function package_parser_parseIfStatement(parser) {
     parser.advance();
-    let condition = package_parser_parseExpression(parser);
+    let condition = package_parser_parseInlineExpression(parser);
     if (condition && condition.type == "ParseError") {
         return condition;
     }
@@ -3063,11 +3169,11 @@ export function package_parser_parseIfStatement(parser) {
 }
 export function package_parser_parseWhileStatement(parser) {
     parser.advance();
-    let condition = package_parser_parseExpression(parser);
+    let condition = package_parser_parseInlineExpression(parser);
     if (condition && condition.type == "ParseError") {
         return condition;
     }
-    let body = package_parser_parseFunctionBlock(parser);
+    let body = package_parser_parse_function_block(parser);
     if (body && body.type == "ParseError") {
         return body;
     }
@@ -3078,11 +3184,11 @@ export function package_parser_parseWhileStatement(parser) {
 }
 export function package_parser_parseUntilStatement(parser) {
     parser.advance();
-    let condition = package_parser_parseExpression(parser);
+    let condition = package_parser_parseInlineExpression(parser);
     if (condition && condition.type == "ParseError") {
         return condition;
     }
-    let body = package_parser_parseFunctionBlock(parser);
+    let body = package_parser_parse_function_block(parser);
     if (body && body.type == "ParseError") {
         return body;
     }
@@ -3109,7 +3215,7 @@ export function package_parser_parseReturnStatement(parser) {
     }
     return node;
 }
-export function package_parser_parseFunctionBlock(parser) {
+export function package_parser_parse_function_block(parser) {
     let lbrace = parser.expect("LBRACE");
     if (lbrace && lbrace.type == "ParseError") {
         return lbrace;
