@@ -1,538 +1,3 @@
-export function package_codegen_joinPath(pathArray, separator) {
-    let result = "";
-    let i = 0;
-    while (i < pathArray.length) {
-        if (i > 0) {
-            result = result + separator;
-        }
-        result = result + pathArray[i];
-        i = i + 1;
-    }
-    return result;
-}
-export function package_codegen_replaceAll(str, search, replace) {
-    let result = "";
-    let i = 0;
-    while (i < str.length) {
-        if (str[i] == search) {
-            result = result + replace;
-            i = i + search.length;
-        } else {
-            result = result + str[i];
-            i = i + 1;
-        }
-    }
-    return result;
-}
-export function package_codegen_generateExpression(node) {
-    if (node.type == "Number") {
-        return node.value;
-    }
-    if (node.type == "String") {
-        let escaped = node.value;
-        escaped = package_codegen_replaceAll(escaped, "\\", "\\\\");
-        escaped = package_codegen_replaceAll(escaped, '"', '\\"');
-        escaped = package_codegen_replaceAll(escaped, "\n", "\\n");
-        escaped = package_codegen_replaceAll(escaped, "\r", "\\r");
-        escaped = package_codegen_replaceAll(escaped, "\t", "\\t");
-        return '"' + escaped + '"';
-    }
-    if (node.type == "Boolean") {
-        return node.value;
-    }
-    if (node.type == "Identifier") {
-        return node.name;
-    }
-    if (node.type == "BinaryOp") {
-        let left = package_codegen_generateExpression(node.left);
-        let right = package_codegen_generateExpression(node.right);
-        let result = "(";
-        result = result + left;
-        result = result + " ";
-        result = result + node.operator;
-        result = result + " ";
-        result = result + right;
-        result = result + ")";
-        return result;
-    }
-    if (node.type == "Assignment") {
-        let left = package_codegen_generateExpression(node.left);
-        let right = package_codegen_generateExpression(node.right);
-        return left + " = " + right;
-    }
-    if (node.type == "MicroCall") {
-        let callee = package_codegen_generateExpression(node.callee);
-        let args = "";
-        let i = 0;
-        while (i < node.arguments.length) {
-            if (i > 0) {
-                args = args + ", ";
-            }
-            args = args + package_codegen_generateExpression(node.arguments[i]);
-            i = i + 1;
-        }
-        if (node.closure) {
-            let closureParams = "";
-            let closureBody = "";
-            if (node.closure) {
-                closureBody = package_codegen_generateStatement(node.closure);
-            }
-            if (args.length > 0) {
-                args = args + ", ";
-            }
-            args = args + "function(" + closureParams + ") " + closureBody;
-        }
-        return callee + "(" + args + ")";
-    }
-    if (node.type == "AnonymousFunction") {
-        let params = "";
-        let i = 0;
-        while (i < node.parameters.length) {
-            if (i > 0) {
-                params = params + ", ";
-            }
-            let param = node.parameters[i];
-            if (param && param.name) {
-                params = params + param.name;
-            } else {
-                params = params + param;
-            }
-            i = i + 1;
-        }
-        let body = "";
-        if (node.body) {
-            body = package_codegen_generateStatement(node.body);
-        }
-        return "function(" + params + ") " + body;
-    }
-    if (node.type == "NewExpression") {
-        let args = "";
-        let i = 0;
-        while (i < node.arguments.length) {
-            if (i > 0) {
-                args = args + ", ";
-            }
-            args = args + package_codegen_generateExpression(node.arguments[i]);
-            i = i + 1;
-        }
-        let className = node.className;
-        if (node.resolvedClassName) {
-            className = node.resolvedClassName;
-        }
-        return "new " + className + "(" + args + ")";
-    }
-    if (node.type == "AwaitExpression") {
-        let argument = package_codegen_generateExpression(node.argument);
-        return "await " + argument;
-    }
-    if (node.type == "PropertyAccess") {
-        if (node.object.type) {
-            let obj = package_codegen_generateExpression(node.object);
-            return obj + "." + node.property;
-        } else {
-            return node.object + "." + node.property;
-        }
-    }
-    if (node.type == "StaticMethodCall") {
-        let className = "";
-        if (node.namespacePath) {
-            if (node.namespacePath.length >= 2) {
-                className = node.namespacePath[node.namespacePath.length - 2];
-            } else {
-                className = node.namespacePath[0];
-            }
-        } else if (node.className.type) {
-            className = package_codegen_generateExpression(node.className);
-        } else {
-            className = node.className;
-        }
-        let args = "";
-        let i = 0;
-        while (i < node.arguments.length) {
-            if (i > 0) {
-                args = args + ", ";
-            }
-            args = args + package_codegen_generateExpression(node.arguments[i]);
-            i = i + 1;
-        }
-        return className + "." + node.methodName + "(" + args + ")";
-    }
-    if (node.type == "StaticPropertyAccess") {
-        let className = "";
-        if (node.namespacePath) {
-            if (node.namespacePath.length >= 2) {
-                className = node.namespacePath[node.namespacePath.length - 2];
-            } else {
-                className = node.namespacePath[0];
-            }
-        } else if (node.className.type) {
-            className = package_codegen_generateExpression(node.className);
-        } else {
-            className = node.className;
-        }
-        return className + "." + node.property;
-    }
-    if (node.type == "ArrayAccess") {
-        let obj = "";
-        if (node.object.type) {
-            obj = package_codegen_generateExpression(node.object);
-        } else {
-            obj = node.object;
-        }
-        let index = package_codegen_generateExpression(node.index);
-        return obj + "[" + index + "]";
-    }
-    if (node.type == "ObjectLiteral") {
-        if (node.properties.length == 0) {
-            return "{}";
-        }
-        let result = "{";
-        let i = 0;
-        while (i < node.properties.length) {
-            let prop = node.properties[i];
-            if (i > 0) {
-                result = result + ", ";
-            }
-            result =
-                result +
-                '"' +
-                prop.key +
-                '": ' +
-                package_codegen_generateExpression(prop.value);
-            i = i + 1;
-        }
-        result = result + "}";
-        return result;
-    }
-    if (node.type == "ArrayLiteral") {
-        return "[]";
-    }
-    if (node.type == "UnaryOp") {
-        let operand = package_codegen_generateExpression(node.operand);
-        return node.operator + operand;
-    }
-    if (node.type == "ThisExpression") {
-        return "this";
-    }
-    if (node.type == "DefaultValue") {
-        return "undefined";
-    }
-    return "/* Unknown expression: " + node.type + " */";
-}
-export function package_codegen_generateStatement(node) {
-    if (node.type == "LetStatement") {
-        let value = package_codegen_generateExpression(node.value);
-        return "let " + node.name + " = " + value + ";";
-    }
-    if (node.type == "NamespaceStatement") {
-        let namespacePath = package_codegen_joinPath(node.path, "::");
-        if (node.isMainNamespace) {
-            return "// namespace! " + namespacePath + ";";
-        } else {
-            return "// namespace " + namespacePath + ";";
-        }
-    }
-    if (node.type == "UsingStatement") {
-        return "// using " + package_codegen_joinPath(node.path, "::") + ";";
-    }
-    if (node.type == "JSAttributeStatement") {
-        return (
-            "import { " +
-            node.importName +
-            " as " +
-            node.functionName +
-            ' } from "' +
-            node.modulePath +
-            '";'
-        );
-    }
-    if (node.type == "ImportJsStatement") {
-        return (
-            "import { " +
-            node.importName +
-            " as " +
-            node.localName +
-            ' } from "' +
-            node.module +
-            '";'
-        );
-    }
-    if (node.type == "MicroDeclaration") {
-        let params = "";
-        let i = 0;
-        while (i < node.parameters.length) {
-            if (i > 0) {
-                params = params + ", ";
-            }
-            let param = node.parameters[i];
-            if (param && param.name) {
-                params = params + param.name;
-            } else {
-                params = params + param;
-            }
-            i = i + 1;
-        }
-        let body = package_codegen_generateStatement(node.body);
-        let functionName = node.name;
-        return "export function " + functionName + "(" + params + ") " + body;
-    }
-    if (node.type == "MemberStatement") {
-        let params = "";
-        let i = 0;
-        while (i < node.parameters.length) {
-            if (i > 0) {
-                params = params + ", ";
-            }
-            let param = node.parameters[i];
-            if (param && param.name) {
-                params = params + param.name;
-            } else {
-                params = params + param;
-            }
-            i = i + 1;
-        }
-        let body = package_codegen_generateStatement(node.body);
-        return "function " + node.name + "(" + params + ") " + body;
-    }
-    if (node.type == "IfStatement") {
-        let condition = package_codegen_generateExpression(node.condition);
-        let thenBranch = package_codegen_generateStatement(node.thenBranch);
-        let result = "if (" + condition + ") " + thenBranch;
-        if (node.elseBranch && node.elseBranch.type) {
-            let elseBranch = package_codegen_generateStatement(node.elseBranch);
-            result = result + " else " + elseBranch;
-        }
-        return result;
-    }
-    if (node.type == "WhileStatement") {
-        let condition = package_codegen_generateExpression(node.condition);
-        let body = package_codegen_generateStatement(node.body);
-        return "while (" + condition + ") " + body;
-    }
-    if (node.type == "UntilStatement") {
-        let condition = package_codegen_generateExpression(node.condition);
-        let body = package_codegen_generateStatement(node.body);
-        return "while (!(" + condition + ")) " + body;
-    }
-    if (node.type == "ReturnStatement") {
-        if (node.value && node.value.type) {
-            let value = package_codegen_generateExpression(node.value);
-            return "return " + value + ";";
-        } else {
-            return "return;";
-        }
-    }
-    if (node.type == "Block") {
-        let statements = "";
-        let i = 0;
-        while (i < node.statements.length) {
-            let stmt = package_codegen_generateStatement(node.statements[i]);
-            if (i > 0) {
-                statements = statements + "\n";
-            }
-            statements = statements + stmt;
-            i = i + 1;
-        }
-        return "{\n" + statements + "\n}";
-    }
-    if (node.type == "ExpressionStatement") {
-        return package_codegen_generateExpression(node.expression) + ";";
-    }
-    if (node.type == "NamespaceStatement") {
-        return (
-            "// namespace " + package_codegen_joinPath(node.path, "::") + ";"
-        );
-    }
-    if (node.type == "UsingStatement") {
-        return "// using " + package_codegen_joinPath(node.path, "::") + ";";
-    }
-    if (node.type == "JSAttributeStatement") {
-        let cleanImportName = package_codegen_replaceAll(
-            node.importName,
-            "-",
-            "_"
-        );
-        cleanImportName = package_codegen_replaceAll(cleanImportName, ".", "_");
-        cleanImportName = package_codegen_replaceAll(cleanImportName, "/", "_");
-        let uniqueName = node.functionName + "_" + cleanImportName;
-        let importStatement =
-            "import { " +
-            node.importName +
-            " as " +
-            uniqueName +
-            ' } from "' +
-            node.modulePath +
-            '";';
-        let params = "";
-        let i = 0;
-        while (i < node.parameters.length) {
-            if (i > 0) {
-                params = params + ", ";
-            }
-            params = params + node.parameters[i];
-            i = i + 1;
-        }
-        let functionDef =
-            "export function " + node.functionName + "(" + params + ") {\n";
-        functionDef =
-            functionDef + "  return " + uniqueName + "(" + params + ");\n";
-        functionDef = functionDef + "}";
-        return importStatement + "\n" + functionDef;
-    }
-    if (node.type == "ClassDeclaration") {
-        let className = node.name;
-        let superClass = node.superClass;
-        let members = node.members;
-        let result = "class " + className;
-        if (superClass) {
-            result = result + " extends " + superClass;
-        }
-        result = result + " {\n";
-        let hasExplicitConstructor = false;
-        let explicitConstructor = null;
-        let fieldInits = "";
-        let i = 0;
-        while (i < members.length) {
-            let member = members[i];
-            if (member.type == "ConstructorStatement") {
-                hasExplicitConstructor = true;
-                explicitConstructor = member;
-            } else if (member.type == "Property") {
-                if (member.initializer && member.initializer.type) {
-                    let initValue = package_codegen_generateExpression(
-                        member.initializer
-                    );
-                    fieldInits =
-                        fieldInits +
-                        "    self." +
-                        member.name +
-                        " = " +
-                        initValue +
-                        ";\n";
-                } else {
-                    fieldInits =
-                        fieldInits +
-                        "    self." +
-                        member.name +
-                        " = undefined;\n";
-                }
-            }
-            i = i + 1;
-        }
-        if (hasExplicitConstructor) {
-            let params = "";
-            let j = 0;
-            while (j < explicitConstructor.parameters.length) {
-                if (j > 0) {
-                    params = params + ", ";
-                }
-                let param = explicitConstructor.parameters[j];
-                if (param && param.name) {
-                    params = params + param.name;
-                } else {
-                    params = params + param;
-                }
-                j = j + 1;
-            }
-            result = result + "  constructor(" + params + ") {\n";
-            if (superClass) {
-                result = result + "    super();\n";
-            }
-            result = result + fieldInits;
-            let ctorBody = package_codegen_generateStatement(
-                explicitConstructor.body
-            );
-            if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
-                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
-            }
-            result = result + ctorBody;
-            result = result + "  }\n\n";
-        } else if (fieldInits != "") {
-            result = result + "  constructor() {\n";
-            if (superClass) {
-                result = result + "    super();\n";
-            }
-            result = result + fieldInits;
-            result = result + "  }\n\n";
-        }
-        i = 0;
-        while (i < members.length) {
-            let member = members[i];
-            if (member.type == "MemberStatement") {
-                let methodName = member.name;
-                let params = "";
-                let j = 0;
-                let paramCount = 0;
-                while (j < member.parameters.length) {
-                    let param = member.parameters[j];
-                    let paramName = "";
-                    if (param && param.name) {
-                        paramName = param.name;
-                    } else {
-                        paramName = param;
-                    }
-                    if (paramName != "self") {
-                        if (paramCount > 0) {
-                            params = params + ", ";
-                        }
-                        params = params + paramName;
-                        paramCount = paramCount + 1;
-                    }
-                    j = j + 1;
-                }
-                let body = package_codegen_generateStatement(member.body);
-                if (member.isStatic) {
-                    result =
-                        result +
-                        "  static " +
-                        methodName +
-                        "(" +
-                        params +
-                        ") " +
-                        body +
-                        "\n\n";
-                } else {
-                    result =
-                        result +
-                        "  " +
-                        methodName +
-                        "(" +
-                        params +
-                        ") " +
-                        body +
-                        "\n\n";
-                }
-            }
-            i = i + 1;
-        }
-        result = result + "}";
-        return result;
-    }
-    return "/* Unknown statement: " + node.type + " */";
-}
-export function package_codegen_generate(ast) {
-    if (ast.type == "Program") {
-        let result = "";
-        let i = 0;
-        while (i < ast.statements.length) {
-            let stmt = ast.statements[i];
-            result = result + package_codegen_generateStatement(stmt) + "\n";
-            i = i + 1;
-        }
-        return result;
-    }
-    if (ast.type == "ParseError") {
-        return (
-            "// Parse Error: " +
-            ast.message +
-            " at line " +
-            ast.line +
-            ", column " +
-            ast.column
-        );
-    }
-    return package_codegen_generateStatement(ast);
-}
 export function package_compiler_topological_sort(analyzer, file_contents) {
     let file_names = Object.keys(file_contents);
     let visited = {};
@@ -831,7 +296,7 @@ export function package_compiler_compile_asts_with_options(
             let modified_stmt = Object.assign({}, func_stmt);
             modified_stmt.name = func_stmt.uniqueName;
             modified_stmt.body =
-                package_compiler_resolve_identifiers_in_statement_with_options(
+                package_compiler_resolve_identifiers_in_statement(
                     func_stmt.body,
                     manager,
                     function_statements,
@@ -843,7 +308,7 @@ export function package_compiler_compile_asts_with_options(
         } else {
             let modified_stmt = Object.assign({}, func_stmt);
             modified_stmt.body =
-                package_compiler_resolve_identifiers_in_statement_with_options(
+                package_compiler_resolve_identifiers_in_statement(
                     func_stmt.body,
                     manager,
                     function_statements,
@@ -877,7 +342,7 @@ export function package_compiler_compile_asts_with_options(
                     member.body != null
                 ) {
                     resolved_member.body =
-                        package_compiler_resolve_identifiers_in_statement_with_options(
+                        package_compiler_resolve_identifiers_in_statement(
                             member.body,
                             manager,
                             function_statements,
@@ -896,19 +361,19 @@ export function package_compiler_compile_asts_with_options(
     }
     let t = 0;
     while (t < execution_statements.length) {
-        let resolved_stmt =
-            package_compiler_resolve_identifiers_in_statement_with_options(
-                execution_statements[t],
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
+        let resolved_stmt = package_compiler_resolve_identifiers_in_statement(
+            execution_statements[t],
+            manager,
+            function_statements,
+            variable_statements,
+            class_statements,
+            options
+        );
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
-    let generated = package_codegen_generate(integrated_ast);
+    let generator = new package_codegen_JsCodeGeneration("    ");
+    let generated = generator.generate(integrated_ast);
     return { success: true, code: generated, error: null };
 }
 export function package_compiler_resolve_multiple_namespaces(ast) {
@@ -1042,22 +507,6 @@ export function package_compiler_resolve_identifiers_in_expression(
     manager,
     function_statements,
     variable_statements,
-    class_statements
-) {
-    return package_compiler_resolve_identifiers_in_expression_with_options(
-        expr,
-        manager,
-        function_statements,
-        variable_statements,
-        class_statements,
-        null
-    );
-}
-export function package_compiler_resolve_identifiers_in_expression_with_options(
-    expr,
-    manager,
-    function_statements,
-    variable_statements,
     class_statements,
     options
 ) {
@@ -1145,7 +594,7 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
             }
             if (!found_function) {
                 resolved_expr.callee =
-                    package_compiler_resolve_identifiers_in_expression_with_options(
+                    package_compiler_resolve_identifiers_in_expression(
                         expr.callee,
                         manager,
                         function_statements,
@@ -1156,7 +605,7 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
             }
         } else {
             resolved_expr.callee =
-                package_compiler_resolve_identifiers_in_expression_with_options(
+                package_compiler_resolve_identifiers_in_expression(
                     expr.callee,
                     manager,
                     function_statements,
@@ -1169,7 +618,7 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
         let k = 0;
         while (k < expr.arguments.length) {
             resolved_args.push(
-                package_compiler_resolve_identifiers_in_expression_with_options(
+                package_compiler_resolve_identifiers_in_expression(
                     expr.arguments[k],
                     manager,
                     function_statements,
@@ -1185,17 +634,16 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
     }
     if (expr.type == "BinaryOp") {
         let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left =
-            package_compiler_resolve_identifiers_in_expression_with_options(
-                expr.left,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
+        resolved_expr.left = package_compiler_resolve_identifiers_in_expression(
+            expr.left,
+            manager,
+            function_statements,
+            variable_statements,
+            class_statements,
+            options
+        );
         resolved_expr.right =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 expr.right,
                 manager,
                 function_statements,
@@ -1207,17 +655,16 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
     }
     if (expr.type == "Assignment") {
         let resolved_expr = Object.assign({}, expr);
-        resolved_expr.left =
-            package_compiler_resolve_identifiers_in_expression_with_options(
-                expr.left,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
+        resolved_expr.left = package_compiler_resolve_identifiers_in_expression(
+            expr.left,
+            manager,
+            function_statements,
+            variable_statements,
+            class_statements,
+            options
+        );
         resolved_expr.right =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 expr.right,
                 manager,
                 function_statements,
@@ -1230,7 +677,7 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
     if (expr.type == "PropertyAccess") {
         let resolved_expr = Object.assign({}, expr);
         resolved_expr.object =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 expr.object,
                 manager,
                 function_statements,
@@ -1259,7 +706,7 @@ export function package_compiler_resolve_identifiers_in_expression_with_options(
             let n = 0;
             while (n < expr.arguments.length) {
                 resolved_args.push(
-                    package_compiler_resolve_identifiers_in_expression_with_options(
+                    package_compiler_resolve_identifiers_in_expression(
                         expr.arguments[n],
                         manager,
                         function_statements,
@@ -1281,22 +728,6 @@ export function package_compiler_resolve_identifiers_in_statement(
     manager,
     function_statements,
     variable_statements,
-    class_statements
-) {
-    return package_compiler_resolve_identifiers_in_statement_with_options(
-        stmt,
-        manager,
-        function_statements,
-        variable_statements,
-        class_statements,
-        null
-    );
-}
-export function package_compiler_resolve_identifiers_in_statement_with_options(
-    stmt,
-    manager,
-    function_statements,
-    variable_statements,
     class_statements,
     options
 ) {
@@ -1306,7 +737,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
     if (stmt.type == "LetStatement") {
         let resolved_stmt = Object.assign({}, stmt);
         resolved_stmt.value =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 stmt.value,
                 manager,
                 function_statements,
@@ -1319,7 +750,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
     if (stmt.type == "ExpressionStatement") {
         let resolved_stmt = Object.assign({}, stmt);
         resolved_stmt.expression =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 stmt.expression,
                 manager,
                 function_statements,
@@ -1333,7 +764,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
         let resolved_stmt = Object.assign({}, stmt);
         if (stmt.value != null) {
             resolved_stmt.value =
-                package_compiler_resolve_identifiers_in_expression_with_options(
+                package_compiler_resolve_identifiers_in_expression(
                     stmt.value,
                     manager,
                     function_statements,
@@ -1347,7 +778,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
     if (stmt.type == "IfStatement") {
         let resolved_stmt = Object.assign({}, stmt);
         resolved_stmt.condition =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 stmt.condition,
                 manager,
                 function_statements,
@@ -1356,7 +787,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
                 options
             );
         resolved_stmt.thenBranch =
-            package_compiler_resolve_identifiers_in_statement_with_options(
+            package_compiler_resolve_identifiers_in_statement(
                 stmt.thenBranch,
                 manager,
                 function_statements,
@@ -1366,7 +797,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
             );
         if (stmt.elseBranch != null) {
             resolved_stmt.elseBranch =
-                package_compiler_resolve_identifiers_in_statement_with_options(
+                package_compiler_resolve_identifiers_in_statement(
                     stmt.elseBranch,
                     manager,
                     function_statements,
@@ -1380,7 +811,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
     if (stmt.type == "WhileStatement") {
         let resolved_stmt = Object.assign({}, stmt);
         resolved_stmt.condition =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 stmt.condition,
                 manager,
                 function_statements,
@@ -1388,21 +819,20 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
                 class_statements,
                 options
             );
-        resolved_stmt.body =
-            package_compiler_resolve_identifiers_in_statement_with_options(
-                stmt.body,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
+        resolved_stmt.body = package_compiler_resolve_identifiers_in_statement(
+            stmt.body,
+            manager,
+            function_statements,
+            variable_statements,
+            class_statements,
+            options
+        );
         return resolved_stmt;
     }
     if (stmt.type == "UntilStatement") {
         let resolved_stmt = Object.assign({}, stmt);
         resolved_stmt.condition =
-            package_compiler_resolve_identifiers_in_expression_with_options(
+            package_compiler_resolve_identifiers_in_expression(
                 stmt.condition,
                 manager,
                 function_statements,
@@ -1410,15 +840,14 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
                 class_statements,
                 options
             );
-        resolved_stmt.body =
-            package_compiler_resolve_identifiers_in_statement_with_options(
-                stmt.body,
-                manager,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options
-            );
+        resolved_stmt.body = package_compiler_resolve_identifiers_in_statement(
+            stmt.body,
+            manager,
+            function_statements,
+            variable_statements,
+            class_statements,
+            options
+        );
         return resolved_stmt;
     }
     if (stmt.type == "Block") {
@@ -1427,7 +856,7 @@ export function package_compiler_resolve_identifiers_in_statement_with_options(
         let i = 0;
         while (i < stmt.statements.length) {
             resolved_statements.push(
-                package_compiler_resolve_identifiers_in_statement_with_options(
+                package_compiler_resolve_identifiers_in_statement(
                     stmt.statements[i],
                     manager,
                     function_statements,
@@ -3332,9 +2761,9 @@ class package_compiler_CompilerOptions {
 class package_compiler_CompilerStatistics {
     constructor() {
         self.output_size = undefined;
-        this.tokensCount = 0;
-        this.astNodesCount = 0;
-        this.compilationTime = 0;
+        this.tokens_count = 0;
+        this.ast_nodes_count = 0;
+        this.compilation_time = 0;
         this.output_size = 0;
     }
 }
@@ -3351,6 +2780,579 @@ class package_compiler_NamespaceManager {
         this.current_namespace = "";
         this.current_file = "";
         this.mode = "repl";
+    }
+}
+class package_codegen_JsCodeGeneration {
+    constructor(indent_text) {
+        this.buffer = "";
+        this.indent_level = 0;
+        this.indent_text = indent_text || "    ";
+    }
+
+    indent() {
+        this.indent_level = this.indent_level + 1;
+    }
+
+    dedent() {
+        if (this.indent_level > 0) {
+            this.indent_level = this.indent_level - 1;
+        }
+    }
+
+    write(text) {
+        this.buffer = this.buffer + text;
+    }
+
+    write_line(text) {
+        let current_indent = "";
+        let i = 0;
+        while (i < this.indent_level) {
+            current_indent = current_indent + this.indent_text;
+            i = i + 1;
+        }
+        this.buffer = this.buffer + current_indent + text + "\n";
+    }
+
+    to_string() {
+        return this.buffer;
+    }
+
+    replace_all(str, search, replace) {
+        let result = "";
+        let i = 0;
+        while (i < str.length) {
+            if (str[i] == search) {
+                result = result + replace;
+                i = i + search.length;
+            } else {
+                result = result + str[i];
+                i = i + 1;
+            }
+        }
+        return result;
+    }
+
+    join_name_path(names, separator) {
+        let result = "";
+        let i = 0;
+        while (i < names.length) {
+            if (i > 0) {
+                result = result + separator;
+            }
+            result = result + names[i];
+            i = i + 1;
+        }
+        return result;
+    }
+
+    generate_expression(node) {
+        if (node.type == "Number") {
+            return node.value;
+        }
+        if (node.type == "String") {
+            let escaped = node.value;
+            escaped = this.replace_all(escaped, "\\", "\\\\");
+            escaped = this.replace_all(escaped, '"', '\\"');
+            escaped = this.replace_all(escaped, "\n", "\\n");
+            escaped = this.replace_all(escaped, "\r", "\\r");
+            escaped = this.replace_all(escaped, "\t", "\\t");
+            return '"' + escaped + '"';
+        }
+        if (node.type == "Boolean") {
+            return node.value;
+        }
+        if (node.type == "Identifier") {
+            return node.name;
+        }
+        if (node.type == "BinaryOp") {
+            let left = this.generate_expression(node.left);
+            let right = this.generate_expression(node.right);
+            let result = "(";
+            result = result + left;
+            result = result + " ";
+            result = result + node.operator;
+            result = result + " ";
+            result = result + right;
+            result = result + ")";
+            return result;
+        }
+        if (node.type == "Assignment") {
+            let left = this.generate_expression(node.left);
+            let right = this.generate_expression(node.right);
+            return left + " = " + right;
+        }
+        if (node.type == "MicroCall") {
+            let callee = this.generate_expression(node.callee);
+            let args = "";
+            let i = 0;
+            while (i < node.arguments.length) {
+                if (i > 0) {
+                    args = args + ", ";
+                }
+                args = args + this.generate_expression(node.arguments[i]);
+                i = i + 1;
+            }
+            if (node.closure) {
+                let closureParams = "";
+                let closureBody = "";
+                if (node.closure) {
+                    closureBody = this.generate_statement(node.closure);
+                }
+                if (args.length > 0) {
+                    args = args + ", ";
+                }
+                args = args + "function(" + closureParams + ") " + closureBody;
+            }
+            return callee + "(" + args + ")";
+        }
+        if (node.type == "AnonymousFunction") {
+            let params = "";
+            let i = 0;
+            while (i < node.parameters.length) {
+                if (i > 0) {
+                    params = params + ", ";
+                }
+                let param = node.parameters[i];
+                if (param && param.name) {
+                    params = params + param.name;
+                } else {
+                    params = params + param;
+                }
+                i = i + 1;
+            }
+            let body = "";
+            if (node.body) {
+                body = this.generate_statement(node.body);
+            }
+            return "function(" + params + ") " + body;
+        }
+        if (node.type == "NewExpression") {
+            let args = "";
+            let i = 0;
+            while (i < node.arguments.length) {
+                if (i > 0) {
+                    args = args + ", ";
+                }
+                args = args + this.generate_expression(node.arguments[i]);
+                i = i + 1;
+            }
+            let className = node.className;
+            if (node.resolvedClassName) {
+                className = node.resolvedClassName;
+            }
+            return "new " + className + "(" + args + ")";
+        }
+        if (node.type == "AwaitExpression") {
+            let argument = this.generate_expression(node.argument);
+            return "await " + argument;
+        }
+        if (node.type == "PropertyAccess") {
+            if (node.object.type) {
+                let obj = this.generate_expression(node.object);
+                return obj + "." + node.property;
+            } else {
+                return node.object + "." + node.property;
+            }
+        }
+        if (node.type == "StaticMethodCall") {
+            let className = "";
+            if (node.namespacePath) {
+                if (node.namespacePath.length >= 2) {
+                    className =
+                        node.namespacePath[node.namespacePath.length - 2];
+                } else {
+                    className = node.namespacePath[0];
+                }
+            } else if (node.className.type) {
+                className = this.generate_expression(node.className);
+            } else {
+                className = node.className;
+            }
+            let args = "";
+            let i = 0;
+            while (i < node.arguments.length) {
+                if (i > 0) {
+                    args = args + ", ";
+                }
+                args = args + this.generate_expression(node.arguments[i]);
+                i = i + 1;
+            }
+            return className + "." + node.methodName + "(" + args + ")";
+        }
+        if (node.type == "StaticPropertyAccess") {
+            let className = "";
+            if (node.namespacePath) {
+                if (node.namespacePath.length >= 2) {
+                    className =
+                        node.namespacePath[node.namespacePath.length - 2];
+                } else {
+                    className = node.namespacePath[0];
+                }
+            } else if (node.className.type) {
+                className = this.generate_expression(node.className);
+            } else {
+                className = node.className;
+            }
+            return className + "." + node.property;
+        }
+        if (node.type == "ArrayAccess") {
+            let obj = "";
+            if (node.object.type) {
+                obj = this.generate_expression(node.object);
+            } else {
+                obj = node.object;
+            }
+            let index = this.generate_expression(node.index);
+            return obj + "[" + index + "]";
+        }
+        if (node.type == "ObjectLiteral") {
+            if (node.properties.length == 0) {
+                return "{}";
+            }
+            let result = "{";
+            let i = 0;
+            while (i < node.properties.length) {
+                let prop = node.properties[i];
+                if (i > 0) {
+                    result = result + ", ";
+                }
+                result =
+                    result +
+                    '"' +
+                    prop.key +
+                    '": ' +
+                    this.generate_expression(prop.value);
+                i = i + 1;
+            }
+            result = result + "}";
+            return result;
+        }
+        if (node.type == "ArrayLiteral") {
+            return "[]";
+        }
+        if (node.type == "UnaryOp") {
+            let operand = this.generate_expression(node.operand);
+            return node.operator + operand;
+        }
+        if (node.type == "ThisExpression") {
+            return "this";
+        }
+        if (node.type == "DefaultValue") {
+            return "undefined";
+        }
+        return "/* Unknown expression: " + node.type + " */";
+    }
+
+    generate_statement(node) {
+        if (node.type == "LetStatement") {
+            let value = this.generate_expression(node.value);
+            return "let " + node.name + " = " + value + ";";
+        }
+        if (node.type == "NamespaceStatement") {
+            let namespacePath = this.join_name_path(node.path, "::");
+            if (node.isMainNamespace) {
+                return "// namespace! " + namespacePath + ";";
+            } else {
+                return "// namespace " + namespacePath + ";";
+            }
+        }
+        if (node.type == "UsingStatement") {
+            return "// using " + this.join_name_path(node.path, "::") + ";";
+        }
+        if (node.type == "JSAttributeStatement") {
+            return (
+                "import { " +
+                node.importName +
+                " as " +
+                node.functionName +
+                ' } from "' +
+                node.modulePath +
+                '";'
+            );
+        }
+        if (node.type == "ImportJsStatement") {
+            return (
+                "import { " +
+                node.importName +
+                " as " +
+                node.localName +
+                ' } from "' +
+                node.module +
+                '";'
+            );
+        }
+        if (node.type == "MicroDeclaration") {
+            let params = "";
+            let i = 0;
+            while (i < node.parameters.length) {
+                if (i > 0) {
+                    params = params + ", ";
+                }
+                let param = node.parameters[i];
+                if (param && param.name) {
+                    params = params + param.name;
+                } else {
+                    params = params + param;
+                }
+                i = i + 1;
+            }
+            let body = this.generate_statement(node.body);
+            let functionName = node.name;
+            return (
+                "export function " + functionName + "(" + params + ") " + body
+            );
+        }
+        if (node.type == "MemberStatement") {
+            let params = "";
+            let i = 0;
+            while (i < node.parameters.length) {
+                if (i > 0) {
+                    params = params + ", ";
+                }
+                let param = node.parameters[i];
+                if (param && param.name) {
+                    params = params + param.name;
+                } else {
+                    params = params + param;
+                }
+                i = i + 1;
+            }
+            let body = this.generate_statement(node.body);
+            return "function " + node.name + "(" + params + ") " + body;
+        }
+        if (node.type == "IfStatement") {
+            let condition = this.generate_expression(node.condition);
+            let thenBranch = this.generate_statement(node.thenBranch);
+            let result = "if (" + condition + ") " + thenBranch;
+            if (node.elseBranch && node.elseBranch.type) {
+                let elseBranch = this.generate_statement(node.elseBranch);
+                result = result + " else " + elseBranch;
+            }
+            return result;
+        }
+        if (node.type == "WhileStatement") {
+            let condition = this.generate_expression(node.condition);
+            let body = this.generate_statement(node.body);
+            return "while (" + condition + ") " + body;
+        }
+        if (node.type == "UntilStatement") {
+            let condition = this.generate_expression(node.condition);
+            let body = this.generate_statement(node.body);
+            return "while (!(" + condition + ")) " + body;
+        }
+        if (node.type == "ReturnStatement") {
+            if (node.value && node.value.type) {
+                let value = this.generate_expression(node.value);
+                return "return " + value + ";";
+            } else {
+                return "return;";
+            }
+        }
+        if (node.type == "Block") {
+            let statements = "";
+            let i = 0;
+            while (i < node.statements.length) {
+                let stmt = this.generate_statement(node.statements[i]);
+                if (i > 0) {
+                    statements = statements + "\n";
+                }
+                statements = statements + stmt;
+                i = i + 1;
+            }
+            return "{\n" + statements + "\n}";
+        }
+        if (node.type == "ExpressionStatement") {
+            return this.generate_expression(node.expression) + ";";
+        }
+        if (node.type == "NamespaceStatement") {
+            return "// namespace " + this.join_name_path(node.path, "::") + ";";
+        }
+        if (node.type == "UsingStatement") {
+            return "// using " + this.join_name_path(node.path, "::") + ";";
+        }
+        if (node.type == "JSAttributeStatement") {
+            let cleanImportName = this.replace_all(node.importName, "-", "_");
+            cleanImportName = this.replace_all(cleanImportName, ".", "_");
+            cleanImportName = this.replace_all(cleanImportName, "/", "_");
+            let uniqueName = node.functionName + "_" + cleanImportName;
+            let importStatement =
+                "import { " +
+                node.importName +
+                " as " +
+                uniqueName +
+                ' } from "' +
+                node.modulePath +
+                '";';
+            let params = "";
+            let i = 0;
+            while (i < node.parameters.length) {
+                if (i > 0) {
+                    params = params + ", ";
+                }
+                params = params + node.parameters[i];
+                i = i + 1;
+            }
+            let functionDef =
+                "export function " + node.functionName + "(" + params + ") {\n";
+            functionDef =
+                functionDef + "  return " + uniqueName + "(" + params + ");\n";
+            functionDef = functionDef + "}";
+            return importStatement + "\n" + functionDef;
+        }
+        if (node.type == "ClassDeclaration") {
+            let className = node.name;
+            let superClass = node.superClass;
+            let members = node.members;
+            let result = "class " + className;
+            if (superClass) {
+                result = result + " extends " + superClass;
+            }
+            result = result + " {\n";
+            let hasExplicitConstructor = false;
+            let explicitConstructor = null;
+            let fieldInits = "";
+            let i = 0;
+            while (i < members.length) {
+                let member = members[i];
+                if (member.type == "ConstructorStatement") {
+                    hasExplicitConstructor = true;
+                    explicitConstructor = member;
+                } else if (member.type == "Property") {
+                    if (member.initializer && member.initializer.type) {
+                        let initValue = this.generate_expression(
+                            member.initializer
+                        );
+                        fieldInits =
+                            fieldInits +
+                            "    self." +
+                            member.name +
+                            " = " +
+                            initValue +
+                            ";\n";
+                    } else {
+                        fieldInits =
+                            fieldInits +
+                            "    self." +
+                            member.name +
+                            " = undefined;\n";
+                    }
+                }
+                i = i + 1;
+            }
+            if (hasExplicitConstructor) {
+                let params = "";
+                let j = 0;
+                while (j < explicitConstructor.parameters.length) {
+                    if (j > 0) {
+                        params = params + ", ";
+                    }
+                    let param = explicitConstructor.parameters[j];
+                    if (param && param.name) {
+                        params = params + param.name;
+                    } else {
+                        params = params + param;
+                    }
+                    j = j + 1;
+                }
+                result = result + "  constructor(" + params + ") {\n";
+                if (superClass) {
+                    result = result + "    super();\n";
+                }
+                result = result + fieldInits;
+                let ctorBody = this.generate_statement(
+                    explicitConstructor.body
+                );
+                if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
+                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+                }
+                result = result + ctorBody;
+                result = result + "  }\n\n";
+            } else if (fieldInits != "") {
+                result = result + "  constructor() {\n";
+                if (superClass) {
+                    result = result + "    super();\n";
+                }
+                result = result + fieldInits;
+                result = result + "  }\n\n";
+            }
+            i = 0;
+            while (i < members.length) {
+                let member = members[i];
+                if (member.type == "MemberStatement") {
+                    let methodName = member.name;
+                    let params = "";
+                    let j = 0;
+                    let paramCount = 0;
+                    while (j < member.parameters.length) {
+                        let param = member.parameters[j];
+                        let paramName = "";
+                        if (param && param.name) {
+                            paramName = param.name;
+                        } else {
+                            paramName = param;
+                        }
+                        if (paramName != "self") {
+                            if (paramCount > 0) {
+                                params = params + ", ";
+                            }
+                            params = params + paramName;
+                            paramCount = paramCount + 1;
+                        }
+                        j = j + 1;
+                    }
+                    let body = this.generate_statement(member.body);
+                    if (member.isStatic) {
+                        result =
+                            result +
+                            "  static " +
+                            methodName +
+                            "(" +
+                            params +
+                            ") " +
+                            body +
+                            "\n\n";
+                    } else {
+                        result =
+                            result +
+                            "  " +
+                            methodName +
+                            "(" +
+                            params +
+                            ") " +
+                            body +
+                            "\n\n";
+                    }
+                }
+                i = i + 1;
+            }
+            result = result + "}";
+            return result;
+        }
+        return "/* Unknown statement: " + node.type + " */";
+    }
+
+    generate(ast) {
+        if (ast.type == "Program") {
+            let i = 0;
+            while (i < ast.statements.length) {
+                let stmt = ast.statements[i];
+                let stmt_code = this.generate_statement(stmt);
+                this.write_line(stmt_code);
+                i = i + 1;
+            }
+            return this.to_string();
+        }
+        if (ast.type == "ParseError") {
+            return (
+                "// Parse Error: " +
+                ast.message +
+                " at line " +
+                ast.line +
+                ", column " +
+                ast.column
+            );
+        }
+        return this.generate_statement(ast);
     }
 }
 class package_lexer_Token {
