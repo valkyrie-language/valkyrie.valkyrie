@@ -1,5 +1,36 @@
-export function package_compiler_compile_asts(file_contents, mode) {
-return package_compiler_compile_asts_with_options(file_contents, mode, null);
+export function package_compiler_topological_sort(analyzer, file_contents) {
+let file_names = Object.keys(file_contents);
+let visited = {};
+let sorted = [];
+let i = 0;
+while ((i < file_names.length)) {
+visited[file_names[i]] = false;
+i = (i + 1);
+}
+let j = 0;
+while ((j < file_names.length)) {
+package_compiler_simple_dfs_visit(analyzer, file_names[j], visited, sorted);
+j = (j + 1);
+}
+return {"sorted": sorted, "error": null};
+}
+export function package_compiler_simple_dfs_visit(analyzer, file_path, visited, sorted) {
+if (visited[file_path]) {
+return;
+}
+visited[file_path] = true;
+let dependencies = analyzer.dependencies[file_path];
+if ((dependencies != null)) {
+let i = 0;
+while ((i < dependencies.length)) {
+package_compiler_simple_dfs_visit(analyzer, dependencies[i], visited, sorted);
+i = (i + 1);
+}
+}
+sorted.push(file_path);
+}
+export function package_compiler_set_compile_mode(manager, mode) {
+manager.mode = mode;
 }
 export function package_compiler_compile_asts_with_options(file_contents, mode, options) {
 let manager = new package_compiler_NamespaceManager();
@@ -256,37 +287,6 @@ stmt.uniqueName = package_compiler_get_fully_qualified_name(manager, stmt.name, 
 j = (j + 1);
 }
 return ast;
-}
-export function package_compiler_topological_sort(analyzer, file_contents) {
-let file_names = Object.keys(file_contents);
-let visited = {};
-let sorted = [];
-let i = 0;
-while ((i < file_names.length)) {
-visited[file_names[i]] = false;
-i = (i + 1);
-}
-let j = 0;
-while ((j < file_names.length)) {
-package_compiler_simple_dfs_visit(analyzer, file_names[j], visited, sorted);
-j = (j + 1);
-}
-return {"sorted": sorted, "error": null};
-}
-export function package_compiler_simple_dfs_visit(analyzer, file_path, visited, sorted) {
-if (visited[file_path]) {
-return;
-}
-visited[file_path] = true;
-let dependencies = analyzer.dependencies[file_path];
-if ((dependencies != null)) {
-let i = 0;
-while ((i < dependencies.length)) {
-package_compiler_simple_dfs_visit(analyzer, dependencies[i], visited, sorted);
-i = (i + 1);
-}
-}
-sorted.push(file_path);
 }
 export function package_compiler_is_main_namespace(namespace_path) {
 if ((namespace_path == null)) {
@@ -662,8 +662,8 @@ i = (i + 1);
 }
 return result;
 }
-export function package_compiler_set_compile_mode(manager, mode) {
-manager.mode = mode;
+export function package_compiler_compile_asts(file_contents, mode) {
+return package_compiler_compile_asts_with_options(file_contents, mode, null);
 }
 export function package_compiler_generate_single_js(file_contents) {
 return package_compiler_compile_asts(file_contents, "repl");
