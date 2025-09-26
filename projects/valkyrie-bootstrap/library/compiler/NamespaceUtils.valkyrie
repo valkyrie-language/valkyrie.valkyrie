@@ -3,212 +3,210 @@ namespace package::compiler;
 using package::parser::Node;
 using package::compiler::NamespaceManager;
 
-class NamespaceUtils {
-    # Check if a namespace is a main namespace (ends with !)
-    static is_main_namespace(namespace_path: String) -> Bool {
-        if namespace_path == null {
-            return false;
-        }
-        return namespace_path.endsWith("!");
+# Check if a namespace is a main namespace (ends with !)
+micro is_main_namespace(namespace_path: String) -> Bool {
+    if namespace_path == null {
+        return false;
     }
-    
-    # Get main namespace name (remove the ! suffix)
-    static get_main_namespace_name(namespace_path: String) -> String {
-        if NamespaceUtils.is_main_namespace(namespace_path) {
-            return namespace_path.substring(0, namespace_path.length - 1);
-        }
-        return namespace_path;
+    return namespace_path.endsWith("!");
+}
+
+# Get main namespace name (remove the ! suffix)
+micro get_main_namespace_name(namespace_path: String) -> String {
+    if is_main_namespace(namespace_path) {
+        return namespace_path.substring(0, namespace_path.length - 1);
     }
-    
-    # Add symbol to namespace
-    static add_symbol_to_namespace(manager: NamespaceManager, namespace_path: String, symbol_name: String, symbol_type: String, symbol_data: Node, file_path: String) {
-        if manager.namespaces[namespace_path] == null {
-            manager.namespaces[namespace_path] = {
-                "symbols": {},
-                "files": []
-            };
-        }
-        
-        let namespace_data = manager.namespaces[namespace_path];
-        
-        # Add symbol
-        namespace_data.symbols[symbol_name] = {
-            "type": symbol_type,
-            "data": symbol_data,
-            "filePath": file_path
+    return namespace_path;
+}
+
+# Add symbol to namespace
+micro add_symbol_to_namespace(manager: NamespaceManager, namespace_path: String, symbol_name: String, symbol_type: String, symbol_data: Node, file_path: String) {
+    if manager.namespaces[namespace_path] == null {
+        manager.namespaces[namespace_path] = {
+            "symbols": {},
+            "files": []
         };
-        
-        # Add file to namespace (if not exists)
-        let file_exists = false;
-        let i = 0;
-        while i < namespace_data.files.length {
-            if namespace_data.files[i] == file_path {
-                file_exists = true;
-                break;
+    }
+    
+    let namespace_data = manager.namespaces[namespace_path];
+    
+    # Add symbol
+    namespace_data.symbols[symbol_name] = {
+        "type": symbol_type,
+        "data": symbol_data,
+        "filePath": file_path
+    };
+    
+    # Add file to namespace (if not exists)
+    let file_exists = false;
+    let i = 0;
+    while i < namespace_data.files.length {
+        if namespace_data.files[i] == file_path {
+            file_exists = true;
+            break;
+        }
+        i = i + 1;
+    }
+    
+    if !file_exists {
+        namespace_data.files.push(file_path);
+    }
+}
+
+# Add using import
+micro add_using_import(manager: NamespaceManager, using_path: String, is_global: Bool) {
+    if manager.usings[manager.current_file] == null {
+        manager.usings[manager.current_file] = [];
+    }
+    
+    let using_info = {
+        "namespace": using_path,
+        "isGlobal": is_global
+    };
+    
+    manager.usings[manager.current_file].push(using_info);
+}
+
+# Find symbol namespace
+micro find_symbol_namespace(manager: NamespaceManager, symbol_name: String, symbol_type: String) -> String {
+    let namespace_keys = Object.keys(manager.namespaces);
+    let i = 0;
+    while i < namespace_keys.length {
+        let namespace_name = namespace_keys[i];
+        let namespace_data = manager.namespaces[namespace_name];
+        if namespace_data != null && namespace_data.symbols != null {
+            let symbol = namespace_data.symbols[symbol_name];
+            if symbol != null && symbol.type == symbol_type {
+                return namespace_name;
             }
-            i = i + 1;
         }
-        
-        if !file_exists {
-            namespace_data.files.push(file_path);
-        }
+        i = i + 1;
+    }
+    return "";
+}
+
+# Get fully qualified name
+micro get_fully_qualified_name(manager: NamespaceManager, symbol_name: String, namespace_path: String) -> String {
+    if namespace_path == "" || namespace_path == null {
+        return symbol_name;
     }
     
-    # Add using import
-    static add_using_import(manager: NamespaceManager, using_path: String, is_global: Bool) {
-        if manager.usings[manager.current_file] == null {
-            manager.usings[manager.current_file] = [];
-        }
-        
-        let using_info = {
-            "namespace": using_path,
-            "isGlobal": is_global
-        };
-        
-        manager.usings[manager.current_file].push(using_info);
-    }
+    let clean_namespace = get_main_namespace_name(namespace_path);
+    return clean_namespace.replace("::", "_") + "_" + symbol_name;
+}
+
+# Validate namespace rules
+micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
+    let has_namespace = false;
+    let has_main_namespace = false;
     
-    # Find symbol namespace
-    static find_symbol_namespace(manager: NamespaceManager, symbol_name: String, symbol_type: String) -> String {
-        let namespace_keys = Object.keys(manager.namespaces);
-        let i = 0;
-        while i < namespace_keys.length {
-            let namespace_name = namespace_keys[i];
-            let namespace_data = manager.namespaces[namespace_name];
-            if namespace_data != null && namespace_data.symbols != null {
-                let symbol = namespace_data.symbols[symbol_name];
-                if symbol != null && symbol.type == symbol_type {
-                    return namespace_name;
-                }
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+        
+        if stmt.type == "NamespaceStatement" {
+            has_namespace = true;
+            if stmt.isMainNamespace {
+                has_main_namespace = true;
             }
-            i = i + 1;
         }
-        return "";
+        
+        i = i + 1;
     }
     
-    # Get fully qualified name
-    static get_fully_qualified_name(manager: NamespaceManager, symbol_name: String, namespace_path: String) -> String {
-        if namespace_path == "" || namespace_path == null {
-            return symbol_name;
-        }
-        
-        let clean_namespace = NamespaceUtils.get_main_namespace_name(namespace_path);
-        return clean_namespace.replace("::", "_") + "_" + symbol_name;
-    }
-    
-    # Validate namespace rules
-    static validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
-        let has_namespace = false;
-        let has_main_namespace = false;
-        
-        let i = 0;
-        while i < ast.statements.length {
-            let stmt = ast.statements[i];
-            
-            if stmt.type == "NamespaceStatement" {
-                has_namespace = true;
-                if stmt.isMainNamespace {
-                    has_main_namespace = true;
-                }
-            }
-            
-            i = i + 1;
-        }
-        
-        if mode == "standard" && !has_namespace {
-            return {
-                "success": false,
-                "error": "Standard mode requires at least one namespace declaration"
-            };
-        }
-        
-        if mode == "standard" && !has_main_namespace {
-            return {
-                "success": false,
-                "error": "Standard mode requires exactly one main namespace (ending with !)"
-            };
-        }
-        
+    if mode == "standard" && !has_namespace {
         return {
-            "success": true,
-            "error": null
+            "success": false,
+            "error": "Standard mode requires at least one namespace declaration"
         };
     }
     
-    # Find namespace provider
-    static find_namespace_provider(namespace_path: String, file_contents: Map<String, String>) -> String {
-        let file_names = Object.keys(file_contents);
+    if mode == "standard" && !has_main_namespace {
+        return {
+            "success": false,
+            "error": "Standard mode requires exactly one main namespace (ending with !)"
+        };
+    }
+    
+    return {
+        "success": true,
+        "error": null
+    };
+}
+
+# Find namespace provider
+micro find_namespace_provider(namespace_path: String, file_contents: Map<String, String>) -> String {
+    let file_names = Object.keys(file_contents);
+    let i = 0;
+    while i < file_names.length {
+        let file_name = file_names[i];
+        let content = file_contents[file_name];
+        
+        # Simple check if contains namespace declaration
+        if content.indexOf("namespace " + namespace_path) >= 0 {
+            return file_name;
+        }
+        
+        i = i + 1;
+    }
+    return null;
+}
+
+# Resolve symbol
+micro resolve_symbol(manager: NamespaceManager, symbol_name: String, current_namespace: String, current_file: String) -> Map<String, String> {
+    # First search in current namespace
+    let current_namespace_data = manager.namespaces[current_namespace];
+    if current_namespace_data != null && current_namespace_data.symbols != null {
+        let symbol = current_namespace_data.symbols[symbol_name];
+        if symbol != null {
+            return {
+                "found": true,
+                "symbol": symbol,
+                "namespace": current_namespace
+            };
+        }
+    }
+
+    # Then search in using imports
+    let file_usings = manager.usings[current_file];
+    if file_usings != null {
         let i = 0;
-        while i < file_names.length {
-            let file_name = file_names[i];
-            let content = file_contents[file_name];
-            
-            # Simple check if contains namespace declaration
-            if content.indexOf("namespace " + namespace_path) >= 0 {
-                return file_name;
+        while i < file_usings.length {
+            let using_info = file_usings[i];
+            let using_namespace = using_info["namespace"];
+
+            let using_namespace_data = manager.namespaces[using_namespace];
+            if using_namespace_data != null && using_namespace_data.symbols != null {
+                let symbol = using_namespace_data.symbols[symbol_name];
+                if symbol != null {
+                    return {
+                        "found": true,
+                        "symbol": symbol,
+                        "namespace": using_namespace
+                    };
+                }
             }
-            
+
             i = i + 1;
         }
-        return null;
     }
-    
-    # Resolve symbol
-    static resolve_symbol(manager: NamespaceManager, symbol_name: String, current_namespace: String, current_file: String) -> Map<String, String> {
-        # First search in current namespace
-        let current_namespace_data = manager.namespaces[current_namespace];
-        if current_namespace_data != null && current_namespace_data.symbols != null {
-            let symbol = current_namespace_data.symbols[symbol_name];
-            if symbol != null {
-                return {
-                    "found": true,
-                    "symbol": symbol,
-                    "namespace": current_namespace
-                };
-            }
+
+    # Finally search in global namespace
+    let global_namespace_data = manager.namespaces[""];
+    if global_namespace_data != null && global_namespace_data.symbols != null {
+        let symbol = global_namespace_data.symbols[symbol_name];
+        if symbol != null {
+            return {
+                "found": true,
+                "symbol": symbol,
+                "namespace": ""
+            };
         }
-
-        # Then search in using imports
-        let file_usings = manager.usings[current_file];
-        if file_usings != null {
-            let i = 0;
-            while i < file_usings.length {
-                let using_info = file_usings[i];
-                let using_namespace = using_info["namespace"];
-
-                let using_namespace_data = manager.namespaces[using_namespace];
-                if using_namespace_data != null && using_namespace_data.symbols != null {
-                    let symbol = using_namespace_data.symbols[symbol_name];
-                    if symbol != null {
-                        return {
-                            "found": true,
-                            "symbol": symbol,
-                            "namespace": using_namespace
-                        };
-                    }
-                }
-
-                i = i + 1;
-            }
-        }
-
-        # Finally search in global namespace
-        let global_namespace_data = manager.namespaces[""];
-        if global_namespace_data != null && global_namespace_data.symbols != null {
-            let symbol = global_namespace_data.symbols[symbol_name];
-            if symbol != null {
-                return {
-                    "found": true,
-                    "symbol": symbol,
-                    "namespace": ""
-                };
-            }
-        }
-
-        return {
-            "found": false,
-            "symbol": null,
-            "namespace": null
-        };
     }
+
+    return {
+        "found": false,
+        "symbol": null,
+        "namespace": null
+    };
 }

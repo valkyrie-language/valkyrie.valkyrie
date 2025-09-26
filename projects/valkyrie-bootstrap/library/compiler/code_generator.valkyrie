@@ -48,17 +48,17 @@ micro resolve_multiple_namespaces(ast: Node) -> Node {
             
         } else if stmt.type == "UsingStatement" {
             let using_path = join_name_path(stmt.path, "::");
-            let is_global = NamespaceUtils.is_main_namespace(using_path);
-            NamespaceUtils.add_using_import(manager, using_path, is_global);
+            let is_global = is_main_namespace(using_path);
+            add_using_import(manager, using_path, is_global);
             
         } else if stmt.type == "MicroDeclaration" {
-            NamespaceUtils.add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "function", stmt, manager.current_file);
+            add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "function", stmt, manager.current_file);
             
         } else if stmt.type == "ClassDeclaration" {
-            NamespaceUtils.add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "class", stmt, manager.current_file);
+            add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "class", stmt, manager.current_file);
             
         } else if stmt.type == "LetStatement" {
-            NamespaceUtils.add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "variable", stmt, manager.current_file);
+            add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "variable", stmt, manager.current_file);
         }
         
         i = i + 1;
@@ -70,13 +70,13 @@ micro resolve_multiple_namespaces(ast: Node) -> Node {
         let stmt = ast.statements[j];
         
         if stmt.type == "MicroDeclaration" {
-            stmt.uniqueName = NamespaceUtils.get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
+            stmt.uniqueName = get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
             
         } else if stmt.type == "ClassDeclaration" {
-            stmt.uniqueName = NamespaceUtils.get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
+            stmt.uniqueName = get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
             
         } else if stmt.type == "LetStatement" {
-            stmt.uniqueName = NamespaceUtils.get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
+            stmt.uniqueName = get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
         }
         
         j = j + 1;

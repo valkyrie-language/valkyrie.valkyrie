@@ -50,7 +50,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
                     
                     if stmt.type == "UsingStatement" {
                         let using_path = join_name_path(stmt.path, "::");
-                        let provider_file = NamespaceUtils.find_namespace_provider(using_path, file_contents);
+                        let provider_file = find_namespace_provider(using_path, file_contents);
                         if provider_file != null && provider_file != file_name {
                             compiler.dependency_analyzer.dependencies[file_name].push(provider_file);
                         }
@@ -111,7 +111,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
             continue;
         }
         
-        let validation_result = NamespaceUtils.validate_namespace_rules(ast, compiler.options.mode);
+        let validation_result = validate_namespace_rules(ast, compiler.options.mode);
         if !validation_result.success {
             add_error_to_diagnostics(compiler.diagnostics, validation_result.error, 0, 0, file_name);
             # Continue processing instead of returning
@@ -139,8 +139,8 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
                 
             } else if stmt.type == "UsingStatement" {
                 let using_path = join_name_path(stmt.path, "::");
-                let is_global = NamespaceUtils.is_main_namespace(using_path);
-                NamespaceUtils.add_using_import(compiler.namespace_manager, using_path, is_global);
+                let is_global = is_main_namespace(using_path);
+                add_using_import(compiler.namespace_manager, using_path, is_global);
                 
             } else if stmt.type == "JSImportStatement" {
                 js_import_statements.push(stmt);
@@ -148,17 +148,17 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
             } else if stmt.type == "LetStatement" {
                 stmt.sourceNamespace = current_namespace;
                 variable_statements.push(stmt);
-                NamespaceUtils.add_symbol_to_namespace(compiler.namespace_manager, current_namespace, stmt.name, "variable", stmt, file_name);
+                add_symbol_to_namespace(compiler.namespace_manager, current_namespace, stmt.name, "variable", stmt, file_name);
                 
             } else if stmt.type == "MicroDeclaration" {
                 stmt.sourceNamespace = current_namespace;
                 function_statements.push(stmt);
-                NamespaceUtils.add_symbol_to_namespace(compiler.namespace_manager, current_namespace, stmt.name, "function", stmt, file_name);
+                add_symbol_to_namespace(compiler.namespace_manager, current_namespace, stmt.name, "function", stmt, file_name);
                 
             } else if stmt.type == "ClassDeclaration" {
                 stmt.sourceNamespace = current_namespace;
                 class_statements.push(stmt);
-                NamespaceUtils.add_symbol_to_namespace(compiler.namespace_manager, current_namespace, stmt.name, "class", stmt, file_name);
+                add_symbol_to_namespace(compiler.namespace_manager, current_namespace, stmt.name, "class", stmt, file_name);
                 
             } else {
                 execution_statements.push(stmt);
@@ -223,21 +223,21 @@ micro generate_unique_names_with_compiler(compiler: Compiler, function_statement
     let m = 0;
     while m < function_statements.length {
         let func_stmt = function_statements[m];
-        func_stmt.uniqueName = NamespaceUtils.get_fully_qualified_name(compiler.namespace_manager, func_stmt.name, func_stmt.sourceNamespace);
+        func_stmt.uniqueName = get_fully_qualified_name(compiler.namespace_manager, func_stmt.name, func_stmt.sourceNamespace);
         m = m + 1;
     }
     
     let n = 0;
     while n < class_statements.length {
         let class_stmt = class_statements[n];
-        class_stmt.uniqueName = NamespaceUtils.get_fully_qualified_name(compiler.namespace_manager, class_stmt.name, class_stmt.sourceNamespace);
+        class_stmt.uniqueName = get_fully_qualified_name(compiler.namespace_manager, class_stmt.name, class_stmt.sourceNamespace);
         n = n + 1;
     }
     
     let o = 0;
     while o < variable_statements.length {
         let var_stmt = variable_statements[o];
-        var_stmt.uniqueName = NamespaceUtils.get_fully_qualified_name(compiler.namespace_manager, var_stmt.name, var_stmt.sourceNamespace);
+        var_stmt.uniqueName = get_fully_qualified_name(compiler.namespace_manager, var_stmt.name, var_stmt.sourceNamespace);
         o = o + 1;
     }
 }
@@ -280,8 +280,8 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
             modified_stmt.name = func_stmt.uniqueName;
         }
         
-        # Resolve identifiers in function body using new IdentifierResolver class  
-        modified_stmt.body = IdentifierResolver.resolve_identifiers_in_statement(func_stmt.body, compiler.namespace_manager, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+        # Resolve identifiers in function body using IdentifierResolver functions
+        modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, compiler.namespace_manager, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
         integrated_ast.statements.push(modified_stmt);
         r = r + 1;
     }
@@ -305,7 +305,7 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
                 let resolved_member = Object.assign({}, member);
                 # Only resolve for methods and constructors that have bodies
                 if (member.type == "MemberStatement" || member.type == "ConstructorStatement") && member.body != null {
-                    resolved_member.body = IdentifierResolver.resolve_identifiers_in_statement(member.body, compiler.namespace_manager, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+                    resolved_member.body = resolve_identifiers_in_statement(member.body, compiler.namespace_manager, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
                 }
                 resolved_members.push(resolved_member);
                 m = m + 1;
@@ -320,7 +320,7 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
     # Add execution statements with resolved identifiers
     let t = 0;
     while t < execution_statements.length {
-        let resolved_stmt = IdentifierResolver.resolve_identifiers_in_statement(execution_statements[t], compiler.namespace_manager, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+        let resolved_stmt = resolve_identifiers_in_statement(execution_statements[t], compiler.namespace_manager, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
