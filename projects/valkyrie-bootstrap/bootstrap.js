@@ -61,7 +61,11 @@ export function copyDir(src, dest) {
 
 // --- New Compiler Logic using _.valkyrie functions ---
 
-export async function compileSourceWithCompiler(source, compiler) {
+export async function compileSourceWithCompiler(
+    source,
+    compiler,
+    isTest = false
+) {
     try {
         // Use the existing compiler function
         if (
@@ -69,7 +73,10 @@ export async function compileSourceWithCompiler(source, compiler) {
             "function"
         ) {
             const result =
-                compiler.package_compiler_package_compiler_compile_text(source);
+                compiler.package_compiler_package_compiler_compile_text(
+                    source,
+                    isTest
+                );
 
             // Handle results with diagnostics
             if (result && typeof result === "object" && result.diagnostics) {
@@ -114,14 +121,6 @@ export async function compileSourceWithCompiler(source, compiler) {
                 };
             }
 
-            // Check for legacy string error format (fallback)
-            if (typeof result === "string" && result.startsWith("Error:")) {
-                return {
-                    success: false,
-                    error: `编译错误: ${result.substring(7)}`, // Remove "Error: " prefix
-                };
-            }
-
             // Handle new format with diagnostics - result is object with success, code, and diagnostics
             if (
                 result &&
@@ -154,12 +153,17 @@ export async function compileSourceWithCompiler(source, compiler) {
 export async function compileFileWithCompiler(
     inputPath,
     outputPath,
-    compilerParts
+    compilerParts,
+    options = {}
 ) {
     try {
         log(`Compiling file: ${path.relative(__dirname, inputPath)}`);
         const source = fs.readFileSync(inputPath, "utf8");
-        const result = await compileSourceWithCompiler(source, compilerParts);
+        const result = await compileSourceWithCompiler(
+            source,
+            compilerParts,
+            options.isTest
+        );
 
         if (!result.success) {
             error(
@@ -169,6 +173,11 @@ export async function compileFileWithCompiler(
         }
 
         fs.writeFileSync(outputPath, result.code, "utf8");
+        console.log("Output Path before write:", outputPath);
+        console.log(
+            "Result Code Length before write:",
+            result.code ? result.code.length : 0
+        );
         return true;
     } catch (err) {
         error(
@@ -238,29 +247,14 @@ export async function generateSingleFileWithCompiler(
                     fileContents,
                     options
                 );
-
             // Check if result is an error object
             if (
                 result &&
                 typeof result === "object" &&
                 result.success === false
             ) {
-                // Format diagnostic messages
-                let errorMessages = [];
-                if (result.diagnostics && result.diagnostics.length > 0) {
-                    for (const diag of result.diagnostics) {
-                        if (diag.type === "error") {
-                            errorMessages.push(
-                                `${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
-                            );
-                        }
-                    }
-                }
-                const errorText =
-                    errorMessages.length > 0
-                        ? errorMessages.join("; ")
-                        : "Unknown compilation error";
-                throw new Error(`js target compile failed: ${errorText}`);
+                console.error(`解析失败: ${JSON.stringify(result)}`);
+                throw new Error(JSON.stringify(result));
             }
 
             // Handle new format with diagnostics - result is object with success, code, and diagnostics
@@ -343,7 +337,7 @@ export async function generateSingleFileWithCompiler(
                 const errorText =
                     errorMessages.length > 0
                         ? errorMessages.join("; ")
-                        : "Unknown compilation error";
+                        : "Unknown compilation error2";
                 throw new Error(`js target compile failed: ${errorText}`);
             }
 
@@ -394,8 +388,8 @@ export async function generateSingleFileWithCompiler(
                 "package_compiler_generate_single_js function not found in compiler module"
             );
         }
-    } catch (err) {
-        error(err);
+    } catch (e) {
+        console.error("生成失败:", e);
         return false;
     }
 }
@@ -771,8 +765,44 @@ Examples:
 `);
 }
 
+async function runJavaScriptFile(jsFilePath) {
+    try {
+        // 使用动态 import 加载模块
+        const module = await import(`file://${path.resolve(jsFilePath)}`);
+
+        // 查找并执行所有导出的函数
+        const exportedFunctions = Object.keys(module).filter(
+            (key) => typeof module[key] === "function"
+        );
+
+        if (exportedFunctions.length === 0) {
+            log(`No exported functions found in ${path.basename(jsFilePath)}`);
+            return true;
+        }
+
+        let allPassed = true;
+        for (const funcName of exportedFunctions) {
+            try {
+                log(`Running function: ${funcName}`);
+                const result = module[funcName]();
+                log(`✅ Function ${funcName} executed successfully`);
+            } catch (funcError) {
+                error(`❌ Function ${funcName} failed: ${funcError.message}`);
+                allPassed = false;
+            }
+        }
+
+        return allPassed;
+    } catch (err) {
+        error(
+            `Failed to run JavaScript file ${path.basename(jsFilePath)}: ${err.message}`
+        );
+        return false;
+    }
+}
+
 async function compileTestDirectory(useStage0 = false) {
-    log("Compiling all test files...");
+    log("Starting test compilation...");
     try {
         // 确保测试输出目录存在
         ensureDir(PATHS.dist);
@@ -804,7 +834,9 @@ async function compileTestDirectory(useStage0 = false) {
 
         log(`Found ${testFiles.length} test files to compile`);
 
-        let successCount = 0;
+        let compileSuccessCount = 0;
+        let runSuccessCount = 0;
+        const compiledFiles = [];
 
         // 编译每个测试文件
         for (const testFile of testFiles) {
@@ -820,20 +852,56 @@ async function compileTestDirectory(useStage0 = false) {
                 await compileFileWithCompiler(
                     inputPath,
                     outputPath,
-                    compilerParts
+                    compilerParts,
+                    { isTest: true }
                 )
             ) {
                 log(`✅ Test file compiled successfully: ${testFile}`);
-                successCount++;
+                compileSuccessCount++;
+                compiledFiles.push(outputPath);
             } else {
                 error(`❌ Failed to compile test file: ${testFile}`);
             }
         }
 
         log(
-            `Test compilation completed: ${successCount}/${testFiles.length} files successful`
+            `Test compilation completed: ${compileSuccessCount}/${testFiles.length} files successful`
         );
-        return successCount === testFiles.length;
+
+        // 运行编译成功的 JavaScript 文件
+        if (compiledFiles.length > 0) {
+            log("Starting test execution...");
+
+            for (const jsFile of compiledFiles) {
+                const fileName = path.basename(jsFile);
+                log(`Running test file: ${fileName}`);
+
+                if (await runJavaScriptFile(jsFile)) {
+                    log(`✅ Test file executed successfully: ${fileName}`);
+                    runSuccessCount++;
+                } else {
+                    error(`❌ Test file execution failed: ${fileName}`);
+                }
+            }
+
+            log(
+                `Test execution completed: ${runSuccessCount}/${compiledFiles.length} files successful`
+            );
+        }
+
+        const allTestsPassed =
+            compileSuccessCount === testFiles.length &&
+            runSuccessCount === compiledFiles.length;
+
+        if (allTestsPassed) {
+            log("🎉 All tests passed!");
+        } else {
+            error(
+                `❌ Some tests failed. Compile: ${compileSuccessCount}/${testFiles.length}, Run: ${runSuccessCount}/${compiledFiles.length}`
+            );
+        }
+
+        return allTestsPassed;
     } catch (err) {
         error(`Test compilation failed: ${err.message}`);
         console.error(err.stack);
@@ -857,7 +925,7 @@ async function compileSingleFile(inputPath, useStage0 = false) {
         }
 
         // 生成输出文件路径（与源文件同目录，扩展名改为 .js）
-        const outputPath = inputPath.replace(/\.vk$/, ".js");
+        const outputPath = inputPath.replace(/\.(vk|valkyrie)$/, ".js");
 
         log(
             `Compiling single file: ${path.relative(process.cwd(), inputPath)}`

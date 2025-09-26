@@ -16,7 +16,7 @@ micro parse_pattern_expression(parser) {
                 let member_name = parser.current_token.value;
                 parser.advance();
                 
-                let node = parser.mark_node("StaticMemberAccess");
+                let node = parser.make_node("StaticMemberAccess");
                 node.object = name;
                 node.member = member_name;
                 return node;
@@ -29,28 +29,28 @@ micro parse_pattern_expression(parser) {
                 return error;
             }
         } else {
-            let node = parser.mark_node("TypeIdentifier");
+            let node = parser.make_node("TypeIdentifier");
             node.name = name;
             return node;
         }
     } else if token.`type` == "STRING" {
         parser.advance();
-        let node = parser.mark_node("StringLiteral");
+        let node = parser.make_node("StringLiteral");
         node.value = token.value;
         return node;
     } else if token.`type` == "NUMBER" {
         parser.advance();
-        let node = parser.mark_node("NumberLiteral");
+        let node = parser.make_node("NumberLiteral");
         node.value = token.value;
         return node;
     } else if token.`type` == "BOOLEAN" {
         parser.advance();
-        let node = parser.mark_node("BooleanLiteral");
+        let node = parser.make_node("BooleanLiteral");
         node.value = token.value;
         return node;
     } else if token.`type` == "KEYWORD" && (token.value == "true" || token.value == "false") {
         parser.advance();
-        let node = parser.mark_node("BooleanLiteral");
+        let node = parser.make_node("BooleanLiteral");
         node.value = token.value;
         return node;
     } else {

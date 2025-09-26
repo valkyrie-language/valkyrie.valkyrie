@@ -14,7 +14,7 @@ using package::parser::Node;
 using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
 using package::compiler::CompilerDiagnostics;
-using package::compiler::NamespaceManager;
+using package::compiler::ScopeManager;
 using package::compiler::NamespaceUtils;
 using package::compiler::IdentifierResolver;
 using package::compiler::Compiler;
@@ -75,7 +75,7 @@ micro compile_asts_with_options(file_contents: Map<String, String>, mode: String
 
 # Resolve multiple namespaces (legacy function, kept for compatibility)
 micro resolve_multiple_namespaces(ast: Node) -> Node {
-    let manager = new NamespaceManager();
+    let manager = new ScopeManager();
 
     # First pass: collect all namespaces and symbols
     let i = 0;
@@ -119,6 +119,12 @@ micro resolve_multiple_namespaces(ast: Node) -> Node {
             stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
 
         } else if stmt.`type` == "LetStatement" {
+            stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
+
+        } else if stmt.`type` == "FlagsDeclaration" {
+            stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
+
+        } else if stmt.`type` == "EidosDeclaration" {
             stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
         }
 

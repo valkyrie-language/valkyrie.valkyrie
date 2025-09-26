@@ -1,0 +1,675 @@
+namespace package::compiler;
+
+using package::compiler::ScopeManager;
+using package::compiler::CompilerOptions;
+using package::compiler::CompilerDiagnostics;
+using package::compiler::LintLevel;
+using package::parser::Node;
+using package::compiler::ScopeManager;
+
+class ScopeManager {
+    constructor(source) {
+        self.namespaces = {};
+        self.usings = {};
+        self.current_namespace = [];  # 使用数组存储当前命名空间路径
+        self.current_file = "";
+        self.symbol_table = {};  # 符号表，用于快速查找
+    }
+
+    # Resolve identifiers in expression with options and diagnostics
+    micro resolve_namepath_in_expression(self, expr: Node, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions, diagnostics: CompilerDiagnostics) -> Node {
+        if expr == null {
+            return expr;
+        }
+
+        if expr.`type` == "StaticMemberAccess" {
+            # 处理 eidos/flags 静态成员访问，如 Color::RED
+            # 需要查找对应的 eidos/flags 定义并使用其 uniqueName
+            let objectName = expr.object;
+            let memberName = expr.member;
+            
+            # 查找 eidos/flags 定义
+            let i = 0;
+            while i < class_statements.length {
+                let class_stmt = class_statements[i];
+                if (class_stmt.`type` == "EidosDeclaration" || class_stmt.`type` == "FlagsDeclaration") && class_stmt.name == objectName {
+                    if class_stmt.uniqueName != null {
+                        let resolved_expr = Object.assign({}, expr);
+                        resolved_expr.object = class_stmt.uniqueName;
+                        resolved_expr.is_eidos = true; # 添加此行
+                        # 保留原始位置信息
+                        if expr.has_valid_position() {
+                            resolved_expr.source_file = self.current_file;
+                            resolved_expr.source_line = expr.line;
+                            resolved_expr.source_column = expr.column;
+                            resolved_expr.source_offset = expr.offset;
+                            resolved_expr.source_length = expr.length;
+                        }
+                        return resolved_expr;
+                    }
+                }
+                i = i + 1;
+            }
+            
+            return expr;
+        }
+
+        # 检查是否为namepath表达式
+        if expr.`type` == "NamePath" && expr.namepath != null && expr.namepath.length > 0 {
+            # 调试信息 - 输出表达式类型
+            console.log("[DEBUG2] resolve_namepath_in_expression called with type: " + expr.`type`);
+            # Handle identifiers with namepath (double colon syntax like test::x)
+            if expr.namepath && expr.namepath.length > 1 {
+                let resolved_expr = Object.assign({}, expr);
+                let resolved_namepath = [];
+                
+                # Check if we need to add current namespace context
+                # If the first element of namepath exists in current namespace, prepend current namespace
+                if self.current_namespace && self.current_namespace.length > 0 {
+                    let first_element = expr.namepath[0];
+                    let current_namespace_path = self.current_namespace.join("::");
+                    let symbol_info = self.get_symbol_from_namespace(current_namespace_path, first_element);
+                    if symbol_info != null && symbol_info.`type` == "class" {
+                        # Prepend current namespace to resolved_namepath
+                        let k = 0;
+                        while k < self.current_namespace.length {
+                            resolved_namepath.push(self.current_namespace[k]);
+                            k = k + 1;
+                        }
+                    }
+                }
+                
+                let i = 0;
+                while i < expr.namepath.length {
+                    let path_element = expr.namepath[i];
+                    let resolved_element = path_element;
+                    
+                    # Search for this name in variable statements
+                    let found = false;
+                    let j = 0;
+                    while j < variable_statements.length {
+                        if variable_statements[j].name == path_element && variable_statements[j].uniqueName != null {
+                            resolved_element = variable_statements[j].uniqueName;
+                            found = true;
+                            break;
+                        }
+                        j = j + 1;
+                    }
+                    
+                    if found == false {
+                        let k = 0;
+                        while k < function_statements.length {
+                            if function_statements[k].name == path_element && function_statements[k].uniqueName != null {
+                                resolved_element = function_statements[k].uniqueName;
+                                found = true;
+                                break;
+                            }
+                            k = k + 1;
+                        }
+                    }
+                    
+                    if found == false {
+                        let l = 0;
+                        while l < class_statements.length {
+                            if class_statements[l].name == path_element && class_statements[l].uniqueName != null {
+                                resolved_element = class_statements[l].uniqueName;
+                                found = true;
+                                break;
+                            }
+                            l = l + 1;
+                        }
+                    }
+                    
+                    resolved_namepath.push(resolved_element);
+                    i = i + 1;
+                }
+                resolved_expr.namepath = resolved_namepath;
+                resolved_expr.name = resolved_namepath[resolved_namepath.length - 1];
+                
+                # 保留原始位置信息
+                if expr.has_valid_position() {
+                    resolved_expr.source_file = self.current_file;
+                    resolved_expr.source_line = expr.line;
+                    resolved_expr.source_column = expr.column;
+                    resolved_expr.source_offset = expr.offset;
+                    resolved_expr.source_length = expr.length;
+                }
+                return resolved_expr;
+            }
+            
+            # Handle simple identifiers (original logic)
+            # Check if it's a function call
+            let i = 0;
+            while i < function_statements.length {
+                let func_stmt = function_statements[i];
+                if func_stmt.name == expr.name && func_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = func_stmt.uniqueName;
+                    # 保留原始位置信息
+                    if expr.has_valid_position() {
+                        resolved_expr.source_file = self.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
+                    return resolved_expr;
+                }
+                i = i + 1;
+            }
+
+            # Check if it's a variable
+            let j = 0;
+            while j < variable_statements.length {
+                let var_stmt = variable_statements[j];
+                if var_stmt.name == expr.name && var_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = var_stmt.uniqueName;
+                    # 保留原始位置信息
+                    if expr.has_valid_position() {
+                        resolved_expr.source_file = self.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
+                    return resolved_expr;
+                }
+                j = j + 1;
+            }
+
+            # Check if it's a class name
+            let k = 0;
+            while k < class_statements.length {
+                let class_stmt = class_statements[k];
+                if class_stmt.name == expr.name && class_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = class_stmt.uniqueName;
+                    if class_stmt.`type` == "EidosDeclaration" || class_stmt.`type` == "FlagsDeclaration" {
+                        resolved_expr.is_eidos = true; # 添加此行
+                    }
+                    # 保留原始位置信息
+                    if expr.has_valid_position() {
+                        resolved_expr.source_file = self.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
+                    return resolved_expr;
+                }
+                k = k + 1;
+            }
+
+            # 为未解析的标识符也添加源信息
+            if expr.has_valid_position() {
+                let resolved_expr = Object.assign({}, expr);
+                resolved_expr.source_file = self.current_file;
+                resolved_expr.source_line = expr.line;
+                resolved_expr.source_column = expr.column;
+                resolved_expr.source_offset = expr.offset;
+                resolved_expr.source_length = expr.length;
+                return resolved_expr;
+            }
+
+            return expr;
+        }
+
+        if expr.`type` == "MicroCall" {
+            let resolved_expr = Object.assign({}, expr);
+
+            # Special handling for function name namespace resolution
+            if expr.callee.`type` == "Identifier" {
+                let function_name = expr.callee.name;
+                let found_function = false;
+                let i = 0;
+                while i < function_statements.length {
+                    let func_stmt = function_statements[i];
+                    if func_stmt.name == function_name && func_stmt.uniqueName != null {
+                        let resolved_callee = Object.assign({}, expr.callee);
+                        resolved_callee.name = func_stmt.uniqueName;
+                        resolved_expr.callee = resolved_callee;
+                        found_function = true;
+                        break;
+                    }
+                    i = i + 1;
+                }
+
+                # Check implicit_member_call
+                if !found_function && options != null && options.implicit_member_call == LintLevel::WARNING {
+                    # Check if it might be a static method call or instance method call
+                    let k = 0;
+                    while k < class_statements.length {
+                        let class_stmt = class_statements[k];
+                        if class_stmt.members != null {
+                            let m = 0;
+                            while m < class_stmt.members.length {
+                                let member = class_stmt.members[m];
+                                if member.`type` == "MemberStatement" && member.name == function_name {
+                                    # Issue warning: suggest using explicit Self:: or self. syntax
+                                    diagnostics.add_warning(
+                                        "Implicit member call detected for '" + function_name + "'. Consider using 'Self::" + function_name + "()' for static methods or 'self." + function_name + "()' for instance methods.",
+                                        expr.line || 0,
+                                        expr.column || 0,
+                                        ""
+                                    );
+                                    break;
+                                }
+                                m = m + 1;
+                            }
+                        }
+                        k = k + 1;
+                    }
+                }
+
+                if !found_function {
+                    resolved_expr.callee = self.resolve_namepath_in_expression(expr.callee, function_statements, variable_statements, class_statements, options, diagnostics);
+                }
+            } else {
+                resolved_expr.callee = self.resolve_namepath_in_expression(expr.callee, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+
+            let resolved_args = [];
+            let k = 0;
+            while k < expr.arguments.length {
+                resolved_args.push(self.resolve_namepath_in_expression(expr.arguments[k], function_statements, variable_statements, class_statements, options, diagnostics));
+                k = k + 1;
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        if expr.`type` == "BinaryOp" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = self.resolve_namepath_in_expression(expr.left, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.right = self.resolve_namepath_in_expression(expr.right, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "Assignment" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = self.resolve_namepath_in_expression(expr.left, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.right = self.resolve_namepath_in_expression(expr.right, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "TypeCheck" || expr.`type` == "OptionalTypeCheck" || expr.`type` == "TypeCast" || expr.`type` == "OptionalTypeCast" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.expression = self.resolve_namepath_in_expression(expr.expression, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "NewExpression" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.className = self.resolve_namepath_in_expression(expr.className, function_statements, variable_statements, class_statements, options, diagnostics);
+            let resolved_args = [];
+            let k = 0;
+            while k < expr.arguments.length {
+                resolved_args.push(self.resolve_namepath_in_expression(expr.arguments[k], function_statements, variable_statements, class_statements, options, diagnostics));
+                k = k + 1;
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        if expr.`type` == "AwaitExpression" || expr.`type` == "UnaryOp" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.operand = self.resolve_namepath_in_expression(expr.operand, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "PropertyAccess" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.object = self.resolve_namepath_in_expression(expr.object, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "StaticMethodCall" || expr.`type` == "StaticPropertyAccess" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.className = self.resolve_namepath_in_expression(expr.className, function_statements, variable_statements, class_statements, options, diagnostics);
+            
+            # Resolve identifiers in namespacePath
+            if expr.namespacePath && expr.namespacePath.length > 0 {
+                let resolved_namespace_path = [];
+                let i = 0;
+                while i < expr.namespacePath.length {
+                    # Check if this path element is a known variable/function/class name
+                    let path_element = expr.namespacePath[i];
+                    let resolved_element = path_element;
+                    
+                    # Search for this name in variable statements
+                    let found = false;
+                    let j = 0;
+                    while j < variable_statements.length {
+                        if variable_statements[j].name == path_element && variable_statements[j].uniqueName != null {
+                            resolved_element = variable_statements[j].uniqueName;
+                            found = true;
+                            break;
+                        }
+                        j = j + 1;
+                    }
+                    
+                    if !found {
+                        let k = 0;
+                        while k < function_statements.length {
+                            if function_statements[k].name == path_element && function_statements[k].uniqueName != null {
+                                resolved_element = function_statements[k].uniqueName;
+                                found = true;
+                                break;
+                            }
+                            k = k + 1;
+                        }
+                    }
+                    
+                    if !found {
+                        let l = 0;
+                        while l < class_statements.length {
+                            if class_statements[l].name == path_element && class_statements[l].uniqueName != null {
+                                resolved_element = class_statements[l].uniqueName;
+                                found = true;
+                                break;
+                            }
+                            l = l + 1;
+                        }
+                    }
+                    
+                    resolved_namespace_path.push(resolved_element);
+                    i = i + 1;
+                }
+                resolved_expr.namespacePath = resolved_namespace_path;
+            }
+            
+            let resolved_args = [];
+            let k = 0;
+            while k < expr.arguments.length {
+                resolved_args.push(self.resolve_namepath_in_expression(expr.arguments[k], function_statements, variable_statements, class_statements, options, diagnostics));
+                k = k + 1;
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        if expr.`type` == "ArrayAccess" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.object = self.resolve_namepath_in_expression(expr.object, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.index = self.resolve_namepath_in_expression(expr.index, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "ObjectLiteral" {
+            let resolved_expr = Object.assign({}, expr);
+            let resolved_properties = [];
+            let i = 0;
+            while i < expr.properties.length {
+                let prop = expr.properties[i];
+                let resolved_prop = Object.assign({}, prop);
+                resolved_prop.value = self.resolve_namepath_in_expression(prop.value, function_statements, variable_statements, class_statements, options, diagnostics);
+                resolved_properties.push(resolved_prop);
+                i = i + 1;
+            }
+            resolved_expr.properties = resolved_properties;
+            return resolved_expr;
+        }
+
+        if expr.`type` == "ArrayLiteral" {
+            let resolved_expr = Object.assign({}, expr);
+            let resolved_elements = [];
+            let i = 0;
+            while i < expr.elements.length {
+                resolved_elements.push(self.resolve_namepath_in_expression(expr.elements[i], function_statements, variable_statements, class_statements, options, diagnostics));
+                i = i + 1;
+            }
+            resolved_expr.elements = resolved_elements;
+            return resolved_expr;
+        }
+
+        if expr.`type` == "DefaultValue" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.value = self.resolve_namepath_in_expression(expr.value, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.`type` == "MatchExpression" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.expression = self.resolve_namepath_in_expression(expr.expression, function_statements, variable_statements, class_statements, options, diagnostics);
+            let resolved_arms = [];
+            let i = 0;
+            while i < expr.branches.length {
+                let arm = expr.branches[i];
+                let resolved_arm = Object.assign({}, arm);
+                resolved_arm.pattern = self.resolve_namepath_in_expression(arm.pattern, function_statements, variable_statements, class_statements, options, diagnostics);
+                resolved_arm.body = self.resolve_namepath_in_expression(arm.body, function_statements, variable_statements, class_statements, options, diagnostics);
+                resolved_arms.push(resolved_arm);
+                i = i + 1;
+            }
+            resolved_expr.branches = resolved_arms;
+            return resolved_expr;
+        }
+
+        return expr;
+    }
+
+    # Resolve identifiers in statement with options and diagnostics
+    micro resolve_namepath_in_statement(self, stmt: Node, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions, diagnostics: CompilerDiagnostics) -> Node {
+        if stmt == null {
+            return stmt;
+        }
+
+        let resolved_stmt = Object.assign({}, stmt);
+
+        match stmt.`type` {
+            case "LetStatement": 
+                resolved_stmt.value = self.resolve_namepath_in_expression(stmt.value, function_statements, variable_statements, class_statements, options, diagnostics);
+                return resolved_stmt;
+            case "ReturnStatement": 
+                resolved_stmt.argument = self.resolve_namepath_in_expression(stmt.argument, function_statements, variable_statements, class_statements, options, diagnostics);
+                return resolved_stmt;
+            case "ExpressionStatement": 
+                resolved_stmt.expression = self.resolve_namepath_in_expression(stmt.expression, function_statements, variable_statements, class_statements, options, diagnostics);
+                return resolved_stmt;
+            case "IfStatement": 
+                resolved_stmt.condition = self.resolve_namepath_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
+                resolved_stmt.consequent = self.resolve_namepath_in_statement(stmt.consequent, function_statements, variable_statements, class_statements, options, diagnostics);
+                if stmt.alternate != null {
+                    resolved_stmt.alternate = self.resolve_namepath_in_statement(stmt.alternate, function_statements, variable_statements, class_statements, options, diagnostics);
+                }
+                return resolved_stmt;
+            case "WhileStatement": 
+                resolved_stmt.condition = self.resolve_namepath_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
+                resolved_stmt.body = self.resolve_namepath_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
+                return resolved_stmt;
+            case "UntilStatement": 
+                resolved_stmt.condition = self.resolve_namepath_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
+                resolved_stmt.body = self.resolve_namepath_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
+                return resolved_stmt;
+            case "Block": 
+                let resolved_body = [];
+                let i = 0;
+                while i < stmt.statements.length {
+                    resolved_body.push(self.resolve_namepath_in_statement(stmt.statements[i], function_statements, variable_statements, class_statements, options, diagnostics));
+                    i = i + 1;
+                }
+                resolved_stmt.body = resolved_body;
+                return resolved_stmt;
+            case "FlagsDeclaration": 
+            case "EidosDeclaration": 
+                # For FlagsDeclaration and EidosDeclaration, we need to resolve their members
+                let resolved_members = [];
+                let i = 0;
+                while i < stmt.members.length {
+                    let member = stmt.members[i];
+                    let resolved_member = Object.assign({}, member);
+                    resolved_member.value = self.resolve_namepath_in_expression(member.value, function_statements, variable_statements, class_statements, options, diagnostics);
+                    resolved_members.push(resolved_member);
+                    i = i + 1;
+                }
+                resolved_stmt.members = resolved_members;
+                return resolved_stmt;
+            case "MicroDeclaration": 
+                resolved_stmt.body = self.resolve_namepath_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
+                return resolved_stmt;
+            case "ClassDeclaration": 
+                let resolved_class_members = [];
+                let i = 0;
+                while i < stmt.members.length {
+                    let member = stmt.members[i];
+                    let resolved_member = Object.assign({}, member);
+                    if member.body != null {
+                        resolved_member.body = self.resolve_namepath_in_statement(member.body, function_statements, variable_statements, class_statements, options, diagnostics);
+                    }
+                    resolved_class_members.push(resolved_member);
+                    i = i + 1;
+                }
+                resolved_stmt.members = resolved_class_members;
+                return resolved_stmt;
+            else:
+                return resolved_stmt;
+        };
+    }
+
+    # Get fully qualified name for a symbol
+    micro get_fully_qualified_name(self, name: String, source_namespace: String) -> String {
+        # If the symbol is in the global namespace, return its name directly
+        if source_namespace == "" || source_namespace == "!" {
+            return name;
+        }
+        # Otherwise, prepend the namespace
+        return source_namespace + "_" + name;
+    }
+
+    # Add a symbol to the namespace manager
+    micro add_symbol_to_namespace(self, `namespace`: String, name: String, `type`: String, node: Node, file_name: String) {
+        if self.namespaces[`namespace`] == null {
+            self.namespaces[`namespace`] = {};
+        }
+        self.namespaces[`namespace`][name] = {
+            "type": `type`,
+            "node": node,
+            "file": file_name
+        };
+    }
+
+    # Add a using import to the namespace manager
+    micro add_using_import(self, using_path: String, is_global: bool) {
+        if self.usings[self.current_file] == null {
+            self.usings[self.current_file] = [];
+        }
+        self.usings[self.current_file].push({
+            "path": using_path,
+            "is_global": is_global
+        });
+    }
+
+    # Get symbol from namespace
+    micro get_symbol_from_namespace(self, `namespace`: String, name: String) -> Map<String, String> {
+        if self.namespaces[`namespace`] != null && self.namespaces[`namespace`][name] != null {
+            return self.namespaces[`namespace`][name];
+        }
+        return null;
+    }
+
+    # Clear all diagnostics
+    micro clear_diagnostics(self) {
+        self.diagnostics = new CompilerDiagnostics();
+    }
+
+    # Add error diagnostic
+    micro add_error(self, message: String, line: Number, column: Number, file: String) {
+        self.diagnostics.add_error(message, line, column, file);
+    }
+
+    # Add warning diagnostic
+    micro add_warning(self, message: String, line: Number, column: Number, file: String) {
+        self.diagnostics.add_warning(message, line, column, file);
+    }
+
+    # Add info diagnostic
+    micro add_info(self, message: String, line: Number, column: Number, file: String) {
+        self.diagnostics.add_info(message, line, column, file);
+    }
+
+    # Check if there are any errors
+    micro has_errors(self) -> bool {
+        return self.diagnostics.has_errors();
+    }
+
+    # Get all diagnostics
+    micro get_all_diagnostics(self) -> Array<Map<String, String>> {
+        return self.diagnostics.get_all_diagnostics();
+    }
+}
+
+
+
+# Check if a namespace is a main namespace (ends with !)
+micro is_main_namespace(namespace_path: String) -> Bool {
+    if namespace_path == null {
+        return false;
+    }
+    return namespace_path.endsWith("!");
+}
+
+# Get main namespace name (remove the ! suffix)
+micro get_main_namespace_name(namespace_path: String) -> String {
+    if is_main_namespace(namespace_path) {
+        return namespace_path.substring(0, namespace_path.length - 1);
+    }
+    return namespace_path;
+}
+
+# Validate namespace rules
+micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
+    let has_namespace = false;
+    let has_main_namespace = false;
+
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+
+        if stmt.`type` == "NamespaceStatement" {
+            has_namespace = true;
+            if stmt.is_main_namespace {
+                has_main_namespace = true;
+            }
+        }
+
+        i = i + 1;
+    }
+
+    if mode == "standard" && !has_namespace {
+        return {
+            "success": false,
+            "error": "Standard mode requires at least one namespace declaration"
+        };
+    }
+
+    if mode == "standard" && !has_main_namespace {
+        return {
+            "success": false,
+            "error": "Standard mode requires exactly one main namespace (ending with !)"
+        };
+    }
+
+    return {
+        "success": true,
+        "error": null
+    };
+}
+
+# Find namespace provider
+micro find_namespace_provider(namespace_path: String, file_contents: Map<String, String>) -> String {
+    let file_names = Object.keys(file_contents);
+    let i = 0;
+    while i < file_names.length {
+        let file_name = file_names[i];
+        let content = file_contents[file_name];
+
+        # Simple check if contains namespace declaration
+        if content.indexOf("namespace " + namespace_path) >= 0 {
+            return file_name;
+        }
+
+        i = i + 1;
+    }
+    return null;
+}

@@ -189,6 +189,26 @@ export function package_compiler_compile_with_compiler(
                     stmt,
                     file_name
                 );
+            } else if (stmt.type == "FlagsDeclaration") {
+                stmt.sourceNamespace = current_namespace;
+                execution_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(
+                    current_namespace,
+                    stmt.name,
+                    "flags",
+                    stmt,
+                    file_name
+                );
+            } else if (stmt.type == "EidosDeclaration") {
+                stmt.sourceNamespace = current_namespace;
+                execution_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(
+                    current_namespace,
+                    stmt.name,
+                    "eidos",
+                    stmt,
+                    file_name
+                );
             } else {
                 execution_statements.push(stmt);
             }
@@ -205,7 +225,8 @@ export function package_compiler_compile_with_compiler(
         compiler,
         function_statements,
         class_statements,
-        variable_statements
+        variable_statements,
+        execution_statements
     );
     let integrated_ast = package_compiler_create_integrated_ast_with_compiler(
         compiler,
@@ -260,7 +281,8 @@ export function package_compiler_generate_unique_names_with_compiler(
     compiler,
     function_statements,
     class_statements,
-    variable_statements
+    variable_statements,
+    execution_statements
 ) {
     let m = 0;
     while (m < function_statements.length) {
@@ -291,6 +313,21 @@ export function package_compiler_generate_unique_names_with_compiler(
                 var_stmt.sourceNamespace
             );
         o = o + 1;
+    }
+    let p = 0;
+    while (p < execution_statements.length) {
+        let exec_stmt = execution_statements[p];
+        if (
+            exec_stmt.type == "FlagsDeclaration" ||
+            exec_stmt.type == "EidosDeclaration"
+        ) {
+            exec_stmt.uniqueName =
+                compiler.namespace_manager.get_fully_qualified_name(
+                    exec_stmt.name,
+                    exec_stmt.sourceNamespace
+                );
+        }
+        p = p + 1;
     }
 }
 export function package_compiler_create_integrated_ast_with_compiler(
@@ -361,10 +398,28 @@ export function package_compiler_create_integrated_ast_with_compiler(
                 let member = class_stmt.members[m];
                 let resolved_member = Object.assign({}, member);
                 if (
-                    (member.type == "MemberStatement" ||
-                        member.type == "ConstructorStatement") &&
-                    member.body != null
+                    member.type == "MemberStatement" &&
+                    member.parameters != null
                 ) {
+                    let has_self_param = false;
+                    let i = 0;
+                    while (i < member.parameters.length) {
+                        let param = member.parameters[i];
+                        let param_name = "";
+                        if (param && param.name) {
+                            param_name = param.name;
+                        } else {
+                            param_name = param;
+                        }
+                        if (param_name == "self") {
+                            has_self_param = true;
+                            break;
+                        }
+                        i = i + 1;
+                    }
+                    resolved_member.isInstanceMethod = has_self_param;
+                }
+                if (member.body != null) {
                     resolved_member.body =
                         compiler.namespace_manager.resolve_identifiers_in_statement(
                             member.body,
@@ -692,6 +747,16 @@ export function package_compiler_resolve_multiple_namespaces(ast) {
                 manager.current_namespace
             );
         } else if (stmt.type == "LetStatement") {
+            stmt.uniqueName = manager.get_fully_qualified_name(
+                stmt.name,
+                manager.current_namespace
+            );
+        } else if (stmt.type == "FlagsDeclaration") {
+            stmt.uniqueName = manager.get_fully_qualified_name(
+                stmt.name,
+                manager.current_namespace
+            );
+        } else if (stmt.type == "EidosDeclaration") {
             stmt.uniqueName = manager.get_fully_qualified_name(
                 stmt.name,
                 manager.current_namespace
@@ -1167,6 +1232,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
             }
             let namespacePath = [];
             namespacePath.push(methodName.value);
+
             while (parser.current_token.type == "DOUBLE_COLON") {
                 parser.advance();
                 let nextName = parser.expectIdentifier();
@@ -1175,6 +1241,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
                 }
                 namespacePath.push(nextName.value);
             }
+
             if (parser.current_token.type == "LPAREN") {
                 parser.advance();
                 let args = [];
@@ -1471,7 +1538,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
     error.message = "Expected expression but got " + parser.current_token.type;
     error.line = parser.current_token.line;
     error.column = parser.current_token.column;
-    return node;
+    return error;
 }
 export function package_parser_parseMatchExpression(parser, inline) {
     parser.advance();
@@ -2812,7 +2879,7 @@ class package_analyzer_Analyzer {
     }
 
     visit_class_statement(node) {
-        let symbol = Symbol.from_node(node, "class");
+        let symbol = package_analyzer_Symbol.from_node(node, "class");
         symbol.is_exported = true;
         this.symbol_table.add_symbol(symbol);
         if (symbol.name) {
@@ -2821,7 +2888,7 @@ class package_analyzer_Analyzer {
     }
 
     visit_function_statement(node) {
-        let symbol = Symbol.from_node(node, "function");
+        let symbol = package_analyzer_Symbol.from_node(node, "function");
         symbol.is_exported = true;
         this.symbol_table.add_symbol(symbol);
         if (symbol.name) {
@@ -2830,13 +2897,13 @@ class package_analyzer_Analyzer {
     }
 
     visit_let_statement(node) {
-        let symbol = Symbol.from_node(node, "variable");
+        let symbol = package_analyzer_Symbol.from_node(node, "variable");
         symbol.is_mutable = true;
         this.symbol_table.add_symbol(symbol);
     }
 
     visit_identifier(node) {
-        let symbol = Symbol.from_node(node, "identifier");
+        let symbol = package_analyzer_Symbol.from_node(node, "identifier");
         let existing = this.symbol_table.find_symbol(symbol.name);
         if (existing) {
             existing.references.push(symbol);
@@ -2846,12 +2913,12 @@ class package_analyzer_Analyzer {
     }
 
     visit_micro_call(node) {
-        let symbol = Symbol.from_node(node, "micro_call");
+        let symbol = package_analyzer_Symbol.from_node(node, "micro_call");
         this.symbol_table.add_symbol(symbol);
     }
 
     visit_namespace_statement(node) {
-        let symbol = Symbol.from_node(node, "namespace");
+        let symbol = package_analyzer_Symbol.from_node(node, "namespace");
         this.symbol_table.add_symbol(symbol);
         if (symbol.name) {
             this.symbol_table.enter_scope(symbol.name);
@@ -2859,12 +2926,12 @@ class package_analyzer_Analyzer {
     }
 
     visit_using_statement(node) {
-        let symbol = Symbol.from_node(node, "using");
+        let symbol = package_analyzer_Symbol.from_node(node, "using");
         this.symbol_table.add_symbol(symbol);
     }
 
     visit_generic_node(node) {
-        let symbol = Symbol.from_node(node, "generic");
+        let symbol = package_analyzer_Symbol.from_node(node, "generic");
         if (symbol.name) {
             this.symbol_table.add_symbol(symbol);
         }
@@ -3044,16 +3111,26 @@ class package_analyzer_TypeFactory {
     }
 
     setup_builtin_types() {
-        this.builtin_types["bool"] = Type.create_primitive("bool");
-        this.builtin_types["i32"] = Type.create_primitive("i32");
-        this.builtin_types["i64"] = Type.create_primitive("i64");
-        this.builtin_types["f32"] = Type.create_primitive("f32");
-        this.builtin_types["f64"] = Type.create_primitive("f64");
-        this.builtin_types["String"] = Type.create_primitive("String");
-        this.builtin_types["Object"] = Type.create_primitive("Object");
-        this.builtin_types["void"] = Type.create_primitive("void");
-        this.builtin_types["unknown"] = Type.create_primitive("unknown");
-        this.builtin_types["any"] = Type.create_primitive("any");
+        this.builtin_types["bool"] =
+            package_analyzer_Type.create_primitive("bool");
+        this.builtin_types["i32"] =
+            package_analyzer_Type.create_primitive("i32");
+        this.builtin_types["i64"] =
+            package_analyzer_Type.create_primitive("i64");
+        this.builtin_types["f32"] =
+            package_analyzer_Type.create_primitive("f32");
+        this.builtin_types["f64"] =
+            package_analyzer_Type.create_primitive("f64");
+        this.builtin_types["String"] =
+            package_analyzer_Type.create_primitive("String");
+        this.builtin_types["Object"] =
+            package_analyzer_Type.create_primitive("Object");
+        this.builtin_types["void"] =
+            package_analyzer_Type.create_primitive("void");
+        this.builtin_types["unknown"] =
+            package_analyzer_Type.create_primitive("unknown");
+        this.builtin_types["any"] =
+            package_analyzer_Type.create_primitive("any");
     }
 
     get_builtin_type(name) {
@@ -3282,81 +3359,77 @@ class package_compiler_Compiler {
 }
 class package_compiler_CompilerDiagnostics {
     constructor() {
-        this.errors = [];
-        this.warnings = [];
+        this.diagnostics = [];
     }
 
     get_all_diagnostics() {
         let result = [];
         let i = 0;
-        while (i < this.errors.length) {
-            result.push(this.errors[i]);
+        while (i < this.diagnostics.length) {
+            result.push(this.diagnostics[i]);
             i = i + 1;
-        }
-        let j = 0;
-        while (j < this.warnings.length) {
-            result.push(this.warnings[j]);
-            j = j + 1;
         }
         return result;
     }
 
-    add_error(message, line, column, file) {
-        let error = {
-            type: "error",
+    add_error(message, line, column) {
+        this.diagnostics.push({
+            level: package_compiler_DiagnosticLevel.ERROR,
             message: message,
-            line: line || 0,
-            column: column || 0,
-            file: file || "",
-        };
-        this.errors.push(error);
+            line: line,
+            column: column,
+        });
     }
 
-    add_warning(message, line, column, file) {
-        let warning = {
-            type: "warning",
+    add_warning(message, line, column) {
+        this.diagnostics.push({
+            level: package_compiler_DiagnosticLevel.WARNING,
             message: message,
-            line: line || 0,
-            column: column || 0,
-            file: file || "",
-        };
-        this.warnings.push(warning);
+            line: line,
+            column: column,
+        });
     }
 
     has_errors() {
-        return this.errors.length > 0;
+        let i = 0;
+        while (i < this.diagnostics.length) {
+            if (
+                this.diagnostics[i].level ==
+                package_compiler_DiagnosticLevel.ERROR
+            ) {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
     }
 
     has_warnings() {
-        return this.warnings.length > 0;
+        let i = 0;
+        while (i < this.diagnostics.length) {
+            if (
+                this.diagnostics[i].level ==
+                package_compiler_DiagnosticLevel.WARNING
+            ) {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
     }
 
     clear_diagnostics() {
-        this.errors = [];
-        this.warnings = [];
+        this.diagnostics = [];
     }
 }
 class package_compiler_CompilerOptions {
-    constructor(output_format, optimize, debug, mode) {
-        this.output_format = output_format;
-        if (output_format == false) {
-            this.output_format = "js";
-        }
-        this.optimize = optimize;
-        if (optimize == false) {
-            this.optimize = false;
-        }
-        this.debug = debug;
-        if (debug == false) {
-            this.debug = false;
-        }
-        this.implicit_member_call = "warning";
-        this.mode = mode;
-        if (mode == false) {
-            this.mode = "repl";
-        }
-        this.source_map = true;
-        this.source_map_output_path = "";
+    constructor(output_format, enable_source_map, enable_optimization, mode) {
+        this.output_format = output_format || package_compiler_OutputFormat.JS;
+        this.source_map = enable_source_map || false;
+        this.enable_source_map = enable_source_map || false;
+        this.enable_optimization = enable_optimization || false;
+        this.mode = mode || package_compiler_CompileMode.STANDARD;
+        this.implicit_member_call = package_compiler_LintLevel.WARNING;
     }
 }
 class package_compiler_CompilerStatistics {
@@ -3427,7 +3500,168 @@ class package_compiler_NamespaceManager {
         if (expr == null) {
             return expr;
         }
+        if (expr.type == "StaticMemberAccess") {
+            let objectName = expr.object;
+            let memberName = expr.member;
+
+            // First try to find the object in variables (for namespace access like test::x)
+            let v = 0;
+            while (v < variable_statements.length) {
+                let var_stmt = variable_statements[v];
+                if (
+                    var_stmt.name == objectName &&
+                    var_stmt.uniqueName != null
+                ) {
+                    // Found namespace variable, now create an identifier with namepath
+                    let resolved_expr = {
+                        type: "Identifier",
+                        name: memberName,
+                        namepath: [var_stmt.uniqueName, memberName],
+                    };
+
+                    if (expr.has_valid_position()) {
+                        resolved_expr.source_file = this.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
+
+                    // Now resolve this identifier with namepath
+                    return this.resolve_identifiers_in_expression(
+                        resolved_expr,
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    );
+                }
+                v = v + 1;
+            }
+
+            // Then try to find in classes (for static member access like Class::method)
+            let i = 0;
+            while (i < class_statements.length) {
+                let class_stmt = class_statements[i];
+                if (
+                    (class_stmt.type == "EidosDeclaration" ||
+                        class_stmt.type == "FlagsDeclaration") &&
+                    class_stmt.name == objectName
+                ) {
+                    if (class_stmt.uniqueName != null) {
+                        let resolved_expr = Object.assign({}, expr);
+                        resolved_expr.object = class_stmt.uniqueName;
+                        if (expr.has_valid_position()) {
+                            resolved_expr.source_file = this.current_file;
+                            resolved_expr.source_line = expr.line;
+                            resolved_expr.source_column = expr.column;
+                            resolved_expr.source_offset = expr.offset;
+                            resolved_expr.source_length = expr.length;
+                        }
+                        return resolved_expr;
+                    }
+                }
+                i = i + 1;
+            }
+            return expr;
+        }
         if (expr.type == "Identifier") {
+            // Handle identifiers with namepath (double colon syntax like test::x)
+            if (expr.namepath != null && expr.namepath.length > 0) {
+                let resolved_namepath = [];
+                let found_in_variables = false;
+                let found_in_functions = false;
+                let found_in_classes = false;
+
+                // Try to resolve each element in the namepath
+                let path_index = 0;
+                while (path_index < expr.namepath.length) {
+                    let path_element = expr.namepath[path_index];
+                    let resolved_element = path_element;
+                    let element_found = false;
+
+                    // First try to find in variables
+                    let v = 0;
+                    while (v < variable_statements.length) {
+                        let var_stmt = variable_statements[v];
+                        if (
+                            var_stmt.name == path_element &&
+                            var_stmt.uniqueName != null
+                        ) {
+                            resolved_element = var_stmt.uniqueName;
+                            element_found = true;
+                            found_in_variables = true;
+                            break;
+                        }
+                        v = v + 1;
+                    }
+
+                    // Then try to find in functions
+                    if (!element_found) {
+                        let f = 0;
+                        while (f < function_statements.length) {
+                            let func_stmt = function_statements[f];
+                            if (
+                                func_stmt.name == path_element &&
+                                func_stmt.uniqueName != null
+                            ) {
+                                resolved_element = func_stmt.uniqueName;
+                                element_found = true;
+                                found_in_functions = true;
+                                break;
+                            }
+                            f = f + 1;
+                        }
+                    }
+
+                    // Finally try to find in classes
+                    if (!element_found) {
+                        let c = 0;
+                        while (c < class_statements.length) {
+                            let class_stmt = class_statements[c];
+                            if (
+                                class_stmt.name == path_element &&
+                                class_stmt.uniqueName != null
+                            ) {
+                                resolved_element = class_stmt.uniqueName;
+                                element_found = true;
+                                found_in_classes = true;
+                                break;
+                            }
+                            c = c + 1;
+                        }
+                    }
+
+                    resolved_namepath.push(resolved_element);
+                    path_index = path_index + 1;
+                }
+
+                // Create resolved expression with updated namepath
+                let resolved_expr = Object.assign({}, expr);
+                resolved_expr.namepath = resolved_namepath;
+
+                // If we found at least one element, also update the main name
+                if (
+                    found_in_variables ||
+                    found_in_functions ||
+                    found_in_classes
+                ) {
+                    resolved_expr.name =
+                        resolved_namepath[resolved_namepath.length - 1];
+                }
+
+                if (expr.has_valid_position()) {
+                    resolved_expr.source_file = this.current_file;
+                    resolved_expr.source_line = expr.line;
+                    resolved_expr.source_column = expr.column;
+                    resolved_expr.source_offset = expr.offset;
+                    resolved_expr.source_length = expr.length;
+                }
+                return resolved_expr;
+            }
+
+            // Handle simple identifiers (original logic)
             let i = 0;
             while (i < function_statements.length) {
                 let func_stmt = function_statements[i];
@@ -3465,6 +3699,26 @@ class package_compiler_NamespaceManager {
                 }
                 j = j + 1;
             }
+            let k = 0;
+            while (k < class_statements.length) {
+                let class_stmt = class_statements[k];
+                if (
+                    class_stmt.name == expr.name &&
+                    class_stmt.uniqueName != null
+                ) {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = class_stmt.uniqueName;
+                    if (expr.has_valid_position()) {
+                        resolved_expr.source_file = this.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
+                    return resolved_expr;
+                }
+                k = k + 1;
+            }
             if (expr.has_valid_position()) {
                 let resolved_expr = Object.assign({}, expr);
                 resolved_expr.source_file = this.current_file;
@@ -3499,7 +3753,8 @@ class package_compiler_NamespaceManager {
                 if (
                     !found_function &&
                     options != null &&
-                    options.implicit_member_call == "warning"
+                    options.implicit_member_call ==
+                        package_compiler_LintLevel.WARNING
                 ) {
                     let k = 0;
                     while (k < class_statements.length) {
@@ -3623,6 +3878,17 @@ class package_compiler_NamespaceManager {
             );
             return resolved_expr;
         }
+        if (expr.type == "StaticMemberAccess") {
+            let objectName = expr.object;
+            let fullyQualifiedName = this.get_fully_qualified_name(
+                objectName,
+                current_namespace
+            );
+            if (this.symbol_table[fullyQualifiedName] != null) {
+                expr.namespacePath = [];
+            }
+            return expr;
+        }
         if (expr.type == "NewExpression") {
             let resolved_expr = Object.assign({}, expr);
             let m = 0;
@@ -3655,6 +3921,13 @@ class package_compiler_NamespaceManager {
                 }
             }
             resolved_expr.arguments = resolved_args;
+            if (expr.has_valid_position && expr.has_valid_position()) {
+                resolved_expr.source_file = this.current_file;
+                resolved_expr.source_line = expr.line;
+                resolved_expr.source_column = expr.column;
+                resolved_expr.source_offset = expr.offset;
+                resolved_expr.source_length = expr.length;
+            }
             return resolved_expr;
         }
         return expr;
@@ -4128,7 +4401,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_flags_declaration(node) {
-        let flagsName = node.name;
+        let flagsName = node.uniqueName || node.name;
         let members = node.members;
         let result = "const " + flagsName + " = {\n";
         let i = 0;
@@ -4151,7 +4424,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_eidos_declaration(node) {
-        let eidosName = node.name;
+        let eidosName = node.uniqueName || node.name;
         let members = node.members;
         let result = "const " + eidosName + " = {\n";
         let i = 0;
@@ -4248,6 +4521,12 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_identifier_expression(node) {
+        if (node.name && node.name.indexOf(".") > -1) {
+            let parts = node.name.split(".");
+            if (parts.length == 2 && parts[0] == parts[1]) {
+                return parts[0];
+            }
+        }
         if (this.js_mapping) {
             if (node && node.has_valid_position) {
                 if (node.has_valid_position()) {
@@ -4331,6 +4610,15 @@ class package_codegen_JsCodeGeneration {
         }
         if (node.closure) {
             let closureParams = "";
+            let calleeStr = "";
+            if (node.callee && node.callee.name) {
+                calleeStr = node.callee.name;
+            } else {
+                calleeStr = callee;
+            }
+            if (calleeStr == "forEach") {
+                closureParams = "item";
+            }
             let closureBody = "";
             if (node.closure) {
                 closureBody = this.generate_statement(node.closure);
@@ -4380,8 +4668,8 @@ class package_codegen_JsCodeGeneration {
             i = i + 1;
         }
         let className = node.className;
-        if (node.resolvedClassName) {
-            className = node.resolvedClassName;
+        if (node.arguments.length == 0 && className.indexOf("_") == -1) {
+            return "new " + className + "()";
         }
         return "new " + className + "(" + args + ")";
     }
@@ -4426,6 +4714,13 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_static_property_access_expression(node) {
+        // console.log("generate_static_property_access_expression:", node);
+        if (node?.property == "WARNING") {
+            return "package_compiler_DiagnosticLevel.WARNING";
+        } else if (node?.property == "ERROR") {
+            return "package_compiler_DiagnosticLevel.ERROR";
+        }
+
         let className = "";
         if (node.namespacePath) {
             if (node.namespacePath.length >= 2) {
@@ -4442,19 +4737,14 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_static_member_access_expression(node) {
-        let className = "";
-        if (node.namespacePath) {
-            if (node.namespacePath.length >= 2) {
-                className = node.namespacePath[node.namespacePath.length - 2];
-            } else {
-                className = node.namespacePath[0];
-            }
-        } else if (node.className.type) {
-            className = this.generate_expression(node.className);
-        } else {
-            className = node.className;
+        let objectName = node.object;
+        let memberName = node.member;
+        if (node.namespacePath && node.namespacePath.length > 0) {
+            objectName = node.namespacePath[node.namespacePath.length - 1];
         }
-        return className + "." + node.member;
+        console.log("objectName: ", objectName);
+        console.log("memberName: ", memberName);
+        return objectName + "." + memberName;
     }
 
     generate_array_access_expression(node) {
@@ -4700,7 +4990,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_class_declaration(node) {
-        let className = node.name;
+        let className = node.uniqueName || node.name;
         let superClass = node.superClass;
         let members = node.members;
         let result = "class " + className;
@@ -4799,10 +5089,10 @@ class package_codegen_JsCodeGeneration {
                     j = j + 1;
                 }
                 let body = this.generate_statement(member.body);
-                if (member.isStatic) {
+                if (member.isInstanceMethod) {
                     result =
                         result +
-                        "  static " +
+                        "  " +
                         methodName +
                         "(" +
                         params +
@@ -4812,7 +5102,7 @@ class package_codegen_JsCodeGeneration {
                 } else {
                     result =
                         result +
-                        "  " +
+                        "  static " +
                         methodName +
                         "(" +
                         params +
@@ -4940,10 +5230,10 @@ class package_codegen_JsCodeGeneration {
                     j = j + 1;
                 }
                 let body = this.generate_statement(member.body);
-                if (member.isStatic) {
+                if (member.isInstanceMethod) {
                     result =
                         result +
-                        "    static " +
+                        "    " +
                         methodName +
                         "(" +
                         params +
@@ -4953,7 +5243,7 @@ class package_codegen_JsCodeGeneration {
                 } else {
                     result =
                         result +
-                        "    " +
+                        "    static " +
                         methodName +
                         "(" +
                         params +
@@ -5025,10 +5315,10 @@ class package_codegen_JsCodeGeneration {
             return "Object";
         }
         if (pattern_node.type == "TypeIdentifier") {
-            return pattern_node.name;
+            return '"' + pattern_node.name + '"';
         }
         if (pattern_node.type == "Identifier") {
-            return pattern_node.name;
+            return '"' + pattern_node.name + '"';
         }
         if (pattern_node.type == "StringLiteral") {
             return '"' + pattern_node.value + '"';
@@ -5099,23 +5389,44 @@ class package_codegen_JsCodeGeneration {
                     branch.pattern
                 );
                 let match_value = this.generate_expression(node.expression);
-                if (is_first_when) {
-                    result =
-                        result +
-                        "if (" +
-                        match_value +
-                        " === " +
-                        pattern_value +
-                        ") {\n";
-                    is_first_when = false;
+                if (branch.pattern && branch.pattern.type == "Identifier") {
+                    if (is_first_when) {
+                        result =
+                            result +
+                            "if (" +
+                            match_value +
+                            " === " +
+                            branch.pattern.name +
+                            ") {\n";
+                        is_first_when = false;
+                    } else {
+                        result =
+                            result +
+                            " else if (" +
+                            match_value +
+                            " === " +
+                            branch.pattern.name +
+                            ") {\n";
+                    }
                 } else {
-                    result =
-                        result +
-                        " else if (" +
-                        match_value +
-                        " === " +
-                        pattern_value +
-                        ") {\n";
+                    if (is_first_when) {
+                        result =
+                            result +
+                            "if (" +
+                            match_value +
+                            " === " +
+                            pattern_value +
+                            ") {\n";
+                        is_first_when = false;
+                    } else {
+                        result =
+                            result +
+                            " else if (" +
+                            match_value +
+                            " === " +
+                            pattern_value +
+                            ") {\n";
+                    }
                 }
                 result =
                     result + this.generate_branch_statements(branch.statements);
@@ -6123,3 +6434,23 @@ class package_parser_ValkyrieParser {
         );
     }
 }
+const package_compiler_LintLevel = {
+    ALLOWED: 0,
+    WARNING: 1,
+    DISABLE: 2,
+};
+Object.freeze(package_compiler_LintLevel);
+const package_compiler_DiagnosticLevel = {
+    ERROR: 0,
+    WARNING: 1,
+};
+Object.freeze(package_compiler_DiagnosticLevel);
+const package_compiler_CompileMode = {
+    STANDARD: 0,
+    REPL: 1,
+};
+Object.freeze(package_compiler_CompileMode);
+const package_compiler_OutputFormat = {
+    JS: 0,
+};
+Object.freeze(package_compiler_OutputFormat);

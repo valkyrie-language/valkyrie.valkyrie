@@ -28,10 +28,11 @@ micro test_flags_usage() {
     return read_perm;
 }
 
+let primary_color = Color::RED;
+let secondary_color = Color::GREEN;
+
 micro test_eidos_usage() {
-    let primary_color = Color::RED;
-    let secondary_color = Color::GREEN;
-    
+
     # 测试 eidos 比较
     if primary_color == Color::RED {
         return true;

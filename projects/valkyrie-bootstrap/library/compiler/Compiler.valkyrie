@@ -7,7 +7,7 @@ using package::parser::Node;
 using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
 using package::compiler::CompilerDiagnostics;
-using package::compiler::NamespaceManager;
+using package::compiler::ScopeManager;
 using package::compiler::NamespaceUtils;
 using package::compiler::IdentifierResolver;
 using package::codegen::join_name_path;
@@ -16,16 +16,16 @@ class Compiler {
     constructor(options: CompilerOptions) {
         self.options = options || new CompilerOptions();
         self.diagnostics = new CompilerDiagnostics();
-        self.namespace_manager = new NamespaceManager();
+        self.namespace_manager = new ScopeManager();
         self.dependency_analyzer = new DependencyAnalyzer();
     }
 }
 
 # Main compilation function with multiple diagnostics support
-micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, String>) -> Map<String, String> {
+micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, String>) {
     # Reset state
     compiler.diagnostics.clear_diagnostics();
-    compiler.namespace_manager = new NamespaceManager();
+    compiler.namespace_manager = new ScopeManager();
     compiler.dependency_analyzer = new DependencyAnalyzer();
 
     # Analyze dependencies - first pass: collect using dependencies
@@ -129,7 +129,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
 
                     # In standard mode, check for duplicate main namespaces
                     if compiler.options.mode == "standard" {
-                        if compiler.namespace_manager.namespaces[current_namespace] != null {
+                        if compiler.namespace_manager.namespaces.get(current_namespace) != null {
                             let clean_name = current_namespace.substring(0, current_namespace.length - 1);
                             compiler.diagnostics.add_error("Duplicate main namespace '" + clean_name + "' found. Each main namespace must have a unique name.", 0, 0, file_name);
                         }
@@ -160,6 +160,16 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
                 class_statements.push(stmt);
                 compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "class", stmt, file_name);
 
+            } else if stmt.`type` == "FlagsDeclaration" {
+                stmt.sourceNamespace = current_namespace;
+                execution_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "flags", stmt, file_name);
+
+            } else if stmt.`type` == "EidosDeclaration" {
+                stmt.sourceNamespace = current_namespace;
+                execution_statements.push(stmt);
+                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "eidos", stmt, file_name);
+
             } else {
                 execution_statements.push(stmt);
             }
@@ -176,7 +186,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
     }
 
     # Generate unique names
-    generate_unique_names_with_compiler(compiler, function_statements, class_statements, variable_statements);
+    generate_unique_names_with_compiler(compiler, function_statements, class_statements, variable_statements, execution_statements);
 
     # Create integrated AST
     let integrated_ast = create_integrated_ast_with_compiler(compiler, js_import_statements, variable_statements, function_statements, class_statements, execution_statements);
@@ -209,7 +219,7 @@ micro check_duplicate_main_namespaces_with_compiler(compiler: Compiler) {
         let current_name = main_namespace_names[duplicate_index];
         let check_index = duplicate_index + 1;
         while check_index < main_namespace_names.length {
-            if main_namespace_names[check_index] == current_name {
+            if compiler.namespace_manager.namespaces.get(current_name) != null {
                 compiler.diagnostics.add_error("Duplicate main namespace '" + current_name + "' found. Each main namespace must have a unique name.", 0, 0, "");
             }
             check_index = check_index + 1;
@@ -219,7 +229,7 @@ micro check_duplicate_main_namespaces_with_compiler(compiler: Compiler) {
 }
 
 # Generate unique names for statements
-micro generate_unique_names_with_compiler(compiler: Compiler, function_statements: Array<Node>, class_statements: Array<Node>, variable_statements: Array<Node>) {
+micro generate_unique_names_with_compiler(compiler: Compiler, function_statements: Array<Node>, class_statements: Array<Node>, variable_statements: Array<Node>, execution_statements: Array<Node>) {
     let m = 0;
     while m < function_statements.length {
         let func_stmt = function_statements[m];
@@ -239,6 +249,16 @@ micro generate_unique_names_with_compiler(compiler: Compiler, function_statement
         let var_stmt = variable_statements[o];
         var_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(var_stmt.name, var_stmt.sourceNamespace);
         o = o + 1;
+    }
+    
+    # Generate unique names for flags and eidos declarations in execution statements
+    let p = 0;
+    while p < execution_statements.length {
+        let exec_stmt = execution_statements[p];
+        if exec_stmt.`type` == "FlagsDeclaration" || exec_stmt.`type` == "EidosDeclaration" {
+            exec_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(exec_stmt.name, exec_stmt.sourceNamespace);
+        }
+        p = p + 1;
     }
 }
 
@@ -281,7 +301,7 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
         }
         
         # Resolve identifiers in function body using IdentifierResolver functions
-        modified_stmt.body = compiler.namespace_manager.resolve_identifiers_in_statement(func_stmt.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+        modified_stmt.body = compiler.namespace_manager.resolve_namepath_in_statement(func_stmt.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
         integrated_ast.statements.push(modified_stmt);
         r = r + 1;
     }
@@ -303,9 +323,31 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
             while m < class_stmt.members.length {
                 let member = class_stmt.members[m];
                 let resolved_member = Object.assign({}, member);
+                
+                # 分析方法是否为实例方法（有self参数）
+                if member.`type` == "MemberStatement" && member.parameters != null {
+                    let has_self_param = false;
+                    let i = 0;
+                    while i < member.parameters.length {
+                        let param = member.parameters[i];
+                        let param_name = "";
+                        if param && param.name {
+                            param_name = param.name;
+                        } else {
+                            param_name = param;
+                        }
+                        if param_name == "self" {
+                            has_self_param = true;
+                            break;
+                        }
+                        i = i + 1;
+                    }
+                    resolved_member.isInstanceMethod = has_self_param;
+                }
+                
                 # Only resolve for methods and constructors that have bodies
-                if (member.`type` == "MemberStatement" || member.`type` == "ConstructorStatement") && member.body != null {
-                    resolved_member.body = compiler.namespace_manager.resolve_identifiers_in_statement(member.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+                if member.body != null {
+                    resolved_member.body = compiler.namespace_manager.resolve_namepath_in_statement(member.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
                 }
                 resolved_members.push(resolved_member);
                 m = m + 1;
@@ -320,7 +362,7 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
     # Add execution statements with resolved identifiers
     let t = 0;
     while t < execution_statements.length {
-        let resolved_stmt = compiler.namespace_manager.resolve_identifiers_in_statement(execution_statements[t], function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
+        let resolved_stmt = compiler.namespace_manager.resolve_namepath_in_statement(execution_statements[t], function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
         integrated_ast.statements.push(resolved_stmt);
         t = t + 1;
     }
