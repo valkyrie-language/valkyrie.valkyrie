@@ -3,11 +3,24 @@ namespace package::compiler;
 
 class CompilerOptions {
     constructor(output_format, optimize, debug, mode) {
-        self.output_format = output_format || "js";
-        self.optimize = optimize || false;
-        self.debug = debug || false;
+        self.output_format = output_format;
+        if output_format == false {
+            self.output_format = "js";
+        }
+        self.optimize = optimize;
+        if optimize == false {
+            self.optimize = false;
+        }
+        self.debug = debug;
+        if debug == false {
+            self.debug = false;
+        }
         self.implicit_member_call = "warning";
-        self.mode = mode || "repl";
+        self.mode = mode;
+        if mode == false {
+            self.mode = "repl";
+        }
         self.source_map = true;
+        self.source_map_output_path = "";
     }
 }

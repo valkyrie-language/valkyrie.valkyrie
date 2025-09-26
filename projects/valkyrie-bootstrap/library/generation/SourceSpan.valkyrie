@@ -1,0 +1,49 @@
+namespace package::generation;
+
+# SourceSpan represents a span of source code with position information
+class SourceSpan {
+    constructor(file_name, start_line, start_column, end_line, end_column) {
+        self.file_name = file_name;
+        if file_name == false {
+            self.file_name = "";
+        }
+        self.start_line = start_line;
+        if start_line == false {
+            self.start_line = 1;
+        }
+        self.start_column = start_column;
+        if start_column == false {
+            self.start_column = 1;
+        }
+        self.end_line = end_line;
+        if end_line == false {
+            self.end_line = 1;
+        }
+        self.end_column = end_column;
+        if end_column == false {
+            self.end_column = 1;
+        }
+    }
+    
+    # Check if this span is valid
+    micro is_valid(self) {
+        if self.start_line > 0 {
+            if self.start_column > 0 {
+                if self.end_line >= self.start_line {
+                    if self.end_line > self.start_line {
+                        return true;
+                    } else {
+                        return self.end_column >= self.start_column;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    
+    # Get a string representation of this span
+    micro to_string(self) {
+        return self.file_name + ":" + self.start_line + ":" + self.start_column + 
+               "-" + self.end_line + ":" + self.end_column;
+    }
+}

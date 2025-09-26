@@ -61,8 +61,7 @@ export function copyDir(src, dest) {
 
 // --- New Compiler Logic using _.valkyrie functions ---
 
-export async function compileSourceWithCompiler(source, compilerParts) {
-    const { compiler } = compilerParts;
+export async function compileSourceWithCompiler(source, compiler) {
     try {
         // Use the existing compiler function
         if (
@@ -218,7 +217,8 @@ export function readLibraryFiles(libraryDir) {
 export async function generateSingleFileWithCompiler(
     libraryDir,
     outputPath,
-    compilerParts
+    compilerParts,
+    options = {}
 ) {
     try {
         log(
@@ -230,8 +230,96 @@ export async function generateSingleFileWithCompiler(
 
         // Use generateSingleJS function from the compiler
         if (
+            typeof compiler.package_compiler_generate_single_js_with_options ===
+            "function"
+        ) {
+            const result =
+                compiler.package_compiler_generate_single_js_with_options(
+                    fileContents,
+                    options
+                );
+
+            // Check if result is an error object
+            if (
+                result &&
+                typeof result === "object" &&
+                result.success === false
+            ) {
+                // Format diagnostic messages
+                let errorMessages = [];
+                if (result.diagnostics && result.diagnostics.length > 0) {
+                    for (const diag of result.diagnostics) {
+                        if (diag.type === "error") {
+                            errorMessages.push(
+                                `${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
+                            );
+                        }
+                    }
+                }
+                const errorText =
+                    errorMessages.length > 0
+                        ? errorMessages.join("; ")
+                        : "Unknown compilation error";
+                throw new Error(`js target compile failed: ${errorText}`);
+            }
+
+            // Handle new format with diagnostics - result is object with success, code, and diagnostics
+            if (
+                result &&
+                typeof result === "object" &&
+                result.success === true
+            ) {
+                const code = result.code;
+                const sourceMap = result.source_map;
+                const diags = result.diagnostics || [];
+
+                // Log diagnostics if any
+                if (diags.length > 0) {
+                    log(`Generated with ${diags.length} diagnostics`);
+                    for (const diag of diags) {
+                        if (diag.type === "error") {
+                            error(
+                                `Diagnostic: ${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
+                            );
+                        } else if (diag.type === "warning") {
+                            log(
+                                `Warning: ${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
+                            );
+                        }
+                    }
+                }
+
+                ensureDir(path.dirname(outputPath));
+                fs.writeFileSync(outputPath, code, "utf8");
+
+                // Write source map if available
+                if (sourceMap && options.source_map_output_path) {
+                    const sourceMapPath = options.source_map_output_path;
+                    ensureDir(path.dirname(sourceMapPath));
+                    fs.writeFileSync(sourceMapPath, sourceMap, "utf8");
+                    log(
+                        `Source map generated: ${path.relative(__dirname, sourceMapPath)}`
+                    );
+                }
+
+                const stats = fs.statSync(outputPath);
+                log(`Single file generated successfully (${stats.size} bytes)`);
+                return true;
+            }
+
+            // Handle legacy format - result could be string or object with code
+            const code = typeof result === "string" ? result : result.code;
+
+            ensureDir(path.dirname(outputPath));
+            fs.writeFileSync(outputPath, code, "utf8");
+
+            const stats = fs.statSync(outputPath);
+            log(`Single file generated successfully (${stats.size} bytes)`);
+            return true;
+        } else if (
             typeof compiler.package_compiler_generate_single_js === "function"
         ) {
+            // Fallback to original function without options
             const result =
                 compiler.package_compiler_generate_single_js(fileContents);
 
@@ -241,7 +329,22 @@ export async function generateSingleFileWithCompiler(
                 typeof result === "object" &&
                 result.success === false
             ) {
-                throw new Error(`单文件生成失败: ${result.error}`);
+                // Format diagnostic messages
+                let errorMessages = [];
+                if (result.diagnostics && result.diagnostics.length > 0) {
+                    for (const diag of result.diagnostics) {
+                        if (diag.type === "error") {
+                            errorMessages.push(
+                                `${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
+                            );
+                        }
+                    }
+                }
+                const errorText =
+                    errorMessages.length > 0
+                        ? errorMessages.join("; ")
+                        : "Unknown compilation error";
+                throw new Error(`js target compile failed: ${errorText}`);
             }
 
             // Handle new format with diagnostics - result is object with success, code, and diagnostics
@@ -297,45 +400,7 @@ export async function generateSingleFileWithCompiler(
     }
 }
 
-// --- Directory Compilation using Compiler.js ---
-
-export async function compileDirectory(inputDir, outputDir, compilerParts) {
-    log(
-        `Compiling directory: ${path.relative(__dirname, inputDir)} -> ${path.relative(__dirname, outputDir)}`
-    );
-    ensureDir(outputDir);
-
-    const files = fs
-        .readdirSync(inputDir)
-        .filter((f) => f.endsWith(".valkyrie"));
-    for (const file of files) {
-        const inputPath = path.join(inputDir, file);
-        const outputPath = path.join(
-            outputDir,
-            file.replace(".valkyrie", ".js")
-        );
-        if (
-            !(await compileFileWithCompiler(
-                inputPath,
-                outputPath,
-                compilerParts
-            ))
-        ) {
-            error(
-                `Failed to compile directory ${path.relative(__dirname, inputDir)}. Compilation stopped at ${file}.`
-            );
-            return false;
-        }
-    }
-
-    log(
-        `Compilation completed: ${files.length}/${files.length} files successful`
-    );
-    return true;
-}
-
 // --- Comparison Logic ---
-
 export function generateDetailedDiff(content1, content2, filename) {
     const lines1 = content1.split("\n");
     const lines2 = content2.split("\n");
@@ -523,9 +588,7 @@ async function loadThisGenerationCompiler() {
     );
     log("Bootstrap compiler loaded.");
 
-    return {
-        compiler: bootstrapCompiler,
-    };
+    return bootstrapCompiler;
 }
 
 async function loadNextGenerationCompiler() {
@@ -535,9 +598,7 @@ async function loadNextGenerationCompiler() {
     );
     log("Stage-0 compiler loaded.");
 
-    return {
-        compiler: stage0Compiler,
-    };
+    return stage0Compiler;
 }
 
 async function bootstrap() {
@@ -557,11 +618,21 @@ async function bootstrap() {
         // Step 2: Use bootstrap compiler to generate stage-0 single file
         log("Step 2: Generating stage-0 single file with bootstrap compiler");
         const stage0OutputPath = path.join(PATHS.stage0, "index.js");
+        const stage0SourceMapPath = path.join(PATHS.stage0, "index.js.map");
+        const stage0Options = {
+            output_format: "js",
+            optimize: false,
+            debug: false,
+            mode: "repl",
+            source_map: true,
+            source_map_output_path: stage0SourceMapPath,
+        };
         if (
             !(await generateSingleFileWithCompiler(
                 PATHS.library,
                 stage0OutputPath,
-                bootstrapCompilerParts
+                { compiler: bootstrapCompilerParts },
+                stage0Options
             ))
         ) {
             throw new Error("Stage-0 compilation failed");
@@ -571,11 +642,21 @@ async function bootstrap() {
         log("Step 3: Generating stage-1 single file with stage-0 compiler");
         const stage0CompilerParts = await loadNextGenerationCompiler();
         const stage1OutputPath = path.join(PATHS.stage1, "index.js");
+        const stage1SourceMapPath = path.join(PATHS.stage1, "index.js.map");
+        const stage1Options = {
+            output_format: "js",
+            optimize: false,
+            debug: false,
+            mode: "repl",
+            source_map: true,
+            source_map_output_path: stage1SourceMapPath,
+        };
         if (
             !(await generateSingleFileWithCompiler(
                 PATHS.library,
                 stage1OutputPath,
-                stage0CompilerParts
+                { compiler: stage0CompilerParts },
+                stage1Options
             ))
         ) {
             throw new Error("Stage-1 compilation failed");

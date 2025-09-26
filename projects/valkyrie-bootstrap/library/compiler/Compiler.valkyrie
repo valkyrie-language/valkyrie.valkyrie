@@ -339,12 +339,20 @@ micro create_compilation_result_with_diagnostics(compiler: Compiler, integrated_
     }
     
     if integrated_ast != null {
-        let generator = new JsCodeGeneration("    ");
+        let generator = new JsCodeGeneration("    ", compiler.options);
         let generated = generator.generate(integrated_ast);
+        let source_map = generator.get_source_map();
+        
+        # Convert source map to JSON string if it exists
+        let source_map_json = false;
+        if source_map {
+            source_map_json = source_map.to_json();
+        }
         
         return {
             "success": true,
             "code": generated,
+            "source_map": source_map_json,
             "diagnostics": compiler.diagnostics.get_all_diagnostics()
         };
     } else {

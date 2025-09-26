@@ -1,0 +1,40 @@
+namespace package::generation;
+
+# SourceMap represents a complete source map with all mapping information
+class SourceMap {
+    constructor() {
+        self.version = 3;
+        self.sources = [];
+        self.sources_content = [];
+        self.names = [];
+        self.mappings = "";
+        self.file = "";
+    }
+    
+    # Add a source file to the source map (simplified for bootstrap)
+    micro add_source(self, file_name, content) {
+        # For bootstrap phase, just return a simple index
+        return 0;
+    }
+    
+    # Add a name to the names array (simplified for bootstrap)
+    micro add_name(self, name) {
+        # For bootstrap phase, just return a simple index
+        return 0;
+    }
+    
+    # Set the generated file name
+    micro set_file(self, file_name) {
+        self.file = file_name;
+    }
+    
+    # Set the mappings string
+    micro set_mappings(self, mappings) {
+        self.mappings = mappings;
+    }
+    
+    # Convert to JSON string (simplified for bootstrap)
+    micro to_json(self) {
+        return "{\"version\":" + self.version + ",\"sources\":[],\"sourcesContent\":[],\"names\":[],\"mappings\":\"" + self.mappings + "\",\"file\":\"" + self.file + "\"}";
+    }
+}

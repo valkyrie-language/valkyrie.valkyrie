@@ -1,2 +1,7 @@
-namespace package::codegen;
+namespace package::generation;
 
+using package::generation::JsCodeGeneration;
+using package::generation::JsSourceMapping;
+using package::generation::SourceSpan;
+using package::generation::SourceMap;
+using package::generation::SourceMapBuilder;

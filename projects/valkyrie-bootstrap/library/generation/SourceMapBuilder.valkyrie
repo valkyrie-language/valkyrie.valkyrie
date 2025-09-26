@@ -1,0 +1,63 @@
+namespace package::generation;
+
+using package::generation::SourceMap;
+
+# SourceMapBuilder helps build source maps incrementally
+class SourceMapBuilder {
+    constructor() {
+        self.source_map = new SourceMap();
+        self.mappings = [];
+        self.current_generated_line = 1;
+        self.current_generated_column = 0;
+    }
+    
+    # Add a source file and return its index
+    micro add_source(self, file_name, content) {
+        return self.source_map.add_source(file_name, content);
+    }
+    
+    # Add a name and return its index
+    micro add_name(self, name) {
+        return self.source_map.add_name(name);
+    }
+    
+    # Set the generated file name
+    micro set_file(self, file_name) {
+        self.source_map.set_file(file_name);
+    }
+    
+    # Add a mapping between generated and original positions (simplified for bootstrap)
+    micro add_mapping(self, generated_line, generated_column, source_index, original_line, original_column, name_index) {
+        # For bootstrap phase, skip complex mapping storage
+        # Just store basic info if needed
+    }
+    
+    # Add a simple mapping from a SourceSpan
+    micro add_span_mapping(self, generated_line, generated_column, source_span, source_index) {
+        self.add_mapping(
+            generated_line, 
+            generated_column, 
+            source_index, 
+            source_span.start_line, 
+            source_span.start_column, 
+            false
+        );
+    }
+    
+    # Build the final source map
+    micro build(self) {
+        # For bootstrap phase, we'll create a simplified source map
+        # This is a simplified implementation
+        let mappings_str = self.encode_mappings();
+        self.source_map.set_mappings(mappings_str);
+        
+        return self.source_map;
+    }
+    
+    # Simple encoding of mappings (basic implementation)
+    micro encode_mappings(self) {
+        # For now, return empty string - full VLQ encoding would be complex
+        # This is a placeholder for the actual VLQ encoding implementation
+        return "";
+    }
+}

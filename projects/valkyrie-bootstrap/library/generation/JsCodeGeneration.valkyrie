@@ -2,13 +2,34 @@ namespace package::codegen;
 
 using package::parser::Node;
 using package::codegen::join_name_path;
+using package::generation::SourceMapBuilder;
+using package::generation::JsSourceMapping;
 
 # JavaScript Code Generation Write Buffer with proper indentation management
 class JsCodeGeneration {
-    constructor(indent_text: String) {
+    constructor(indent_text: String, options) {
         self.buffer = "";
         self.indent_level = 0;
-        self.indent_text = indent_text || "    ";
+        self.indent_text = indent_text;
+        if indent_text == false {
+            self.indent_text = "    ";
+        }
+        self.options = options;
+        
+        # Initialize source map support
+        if options {
+            if options.source_map {
+                self.source_map_builder = new SourceMapBuilder();
+                self.js_mapping = new JsSourceMapping(self.source_map_builder);
+            } else {
+                self.source_map_builder = false;
+                self.js_mapping = false;
+            }
+        } else {
+            self.source_map_builder = false;
+            self.js_mapping = false;
+        }
+        self.source_files = {};
     }
     
     micro indent(self) {
@@ -23,6 +44,10 @@ class JsCodeGeneration {
     
     micro write(self, text: String) {
         self.buffer = self.buffer + text;
+        # Update source map position if enabled
+        if self.js_mapping {
+            self.js_mapping.generate_with_mapping(text, false, 0);
+        }
     }
     
     micro write_line(self, text: String) {
@@ -32,11 +57,36 @@ class JsCodeGeneration {
             current_indent = current_indent + self.indent_text;
             i = i + 1;
         }
-        self.buffer = self.buffer + current_indent + text + "\n";
+        let full_line = current_indent + text + "\n";
+        self.buffer = self.buffer + full_line;
+        # Update source map position if enabled
+        if self.js_mapping {
+            self.js_mapping.generate_with_mapping(full_line, false, 0);
+        }
+    }
+    
+    # Write with source mapping information
+    micro write_with_mapping(self, text: String, source_span) {
+        self.buffer = self.buffer + text;
+        if self.js_mapping {
+            if source_span {
+                self.js_mapping.generate_with_mapping(text, source_span, 0);
+            } else {
+                self.js_mapping.generate_with_mapping(text, false, 0);
+            }
+        }
     }
     
     micro to_string(self) {
         return self.buffer;
+    }
+    
+    # Get the generated source map
+    micro get_source_map(self) {
+        if self.source_map_builder {
+            return self.source_map_builder.build();
+        }
+        return false;
     }
     
     # 工具方法：字符串替换
@@ -149,10 +199,14 @@ class JsCodeGeneration {
                     params = params + ", ";
                 }
                 let param = node.parameters[i];
-                if param && param.name {
-                    params = params + param.name;
+                if param {
+                    if param.name {
+                        params = params + param.name;
+                    } else {
+                        params = params + "param" + i;
+                    }
                 } else {
-                    params = params + param;
+                    params = params + "param" + i;
                 }
                 i = i + 1;
             }
@@ -623,3 +677,49 @@ micro join_name_path(names: Array<String>, separator: String) -> String {
     }
     return result;
 }
+
+    # Add source file for source mapping
+    micro add_source_file(self, file_name: String, content: String) -> Number {
+        if (self.source_map_builder) {
+            if (!self.source_files[file_name]) {
+                self.source_files[file_name] = self.source_map_builder.add_source(file_name, content);
+            }
+            return self.source_files[file_name];
+        }
+        return 0;
+    }
+    
+    # Write with source mapping
+    micro write_with_mapping(self, text: String, source_span, source_index) {
+        if (self.js_mapping && source_span) {
+            self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
+        } else {
+            self.buffer = self.buffer + text;
+        }
+    }
+    
+    # Write line with source mapping
+    micro write_line_with_mapping(self, text: String, source_span, source_index) {
+        let current_indent = "";
+        let i = 0;
+        while i < self.indent_level {
+            current_indent = current_indent + self.indent_text;
+            i = i + 1;
+        }
+        
+        if (self.js_mapping && source_span) {
+            self.buffer = self.buffer + current_indent;
+            self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
+            self.buffer = self.buffer + self.js_mapping.generate_newline();
+        } else {
+            self.buffer = self.buffer + current_indent + text + "\n";
+        }
+    }
+    
+    # Get the generated source map
+    micro get_source_map(self) {
+        if (self.source_map_builder) {
+            return self.source_map_builder.build();
+        }
+        return false;
+    }

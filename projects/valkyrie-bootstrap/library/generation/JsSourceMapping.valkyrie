@@ -1,0 +1,75 @@
+namespace package::generation;
+
+# JsSourceMapping provides utilities for mapping JavaScript code to source
+class JsSourceMapping {
+    constructor(source_map_builder) {
+        self.builder = source_map_builder;
+        self.current_line = 1;
+        self.current_column = 0;
+    }
+    
+    # Track the current position in generated code
+    micro update_position(self, line, column) {
+        self.current_line = line;
+        self.current_column = column;
+    }
+    
+    # Add a mapping for a generated code segment
+    micro map_segment(self, source_span, source_index) {
+        if source_span {
+            if source_span.is_valid() {
+                self.builder.add_span_mapping(
+                    self.current_line,
+                    self.current_column,
+                    source_span,
+                    source_index
+                );
+            }
+        }
+    }
+    
+    # Generate code with mapping
+    micro generate_with_mapping(self, code, source_span, source_index) {
+        self.map_segment(source_span, source_index);
+        
+        # Update position based on generated code (simplified)
+        # For bootstrap, just count newlines manually
+        let i = 0;
+        let newline_count = 0;
+        while i < code.length {
+            if code[i] == "\n" {
+                newline_count = newline_count + 1;
+            }
+            i = i + 1;
+        }
+        
+        if newline_count > 0 {
+            self.current_line = self.current_line + newline_count;
+            # Find last line length (simplified)
+            self.current_column = 0;
+        } else {
+            self.current_column = self.current_column + code.length;
+        }
+        
+        return code;
+    }
+    
+    # Generate a newline and update position
+    micro generate_newline(self) {
+        self.current_line = self.current_line + 1;
+        self.current_column = 0;
+        return "\n";
+    }
+    
+    # Generate indentation
+    micro generate_indent(self, level) {
+        let indent = "";
+        let i = 0;
+        while i < level {
+            indent = indent + "    ";
+            i = i + 1;
+        }
+        self.current_column = self.current_column + indent.length;
+        return indent;
+    }
+}
