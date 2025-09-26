@@ -1,0 +1,49 @@
+namespace package::optimizer;
+
+using package::analyzer::SymbolTable;
+
+# TransformPipeline 管理多个变换的执行
+# 按顺序应用各种优化变换
+class TransformPipeline {
+    constructor() {
+        # 存储所有的变换对象
+        self.transforms = [];
+    }
+    
+    # 添加一个变换到管道中
+    micro add_transform(self, transform) {
+        self.transforms.push(transform);
+    }
+    
+    # 执行所有变换
+    # 按添加顺序依次应用每个变换
+    micro run(self, symbol_table: SymbolTable) -> SymbolTable {
+        let current_table = symbol_table;
+        let i = 0;
+        
+        # 遍历所有变换
+        while i < self.transforms.length {
+            let transform = self.transforms[i];
+            
+            # 检查是否应该应用此变换
+            if transform.should_apply(current_table) {
+                # 应用变换
+                current_table = transform.transform(current_table);
+            }
+            
+            i = i + 1;
+        }
+        
+        return current_table;
+    }
+    
+    # 获取管道中变换的数量
+    micro get_transform_count(self) -> Number {
+        return self.transforms.length;
+    }
+    
+    # 清空所有变换
+    micro clear(self) {
+        self.transforms = [];
+    }
+}

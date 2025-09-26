@@ -1,0 +1,51 @@
+namespace package::optimizer;
+
+using package::optimizer::TransformPipeline;
+using package::optimizer::transforms::ConstantFoldingTransform;
+using package::analyzer::SymbolTable;
+
+# 优化器 - 编译器优化层的入口点
+# 管理和执行各种代码优化变换
+class Optimizer {
+    
+    constructor() {
+        # 初始化变换流水线
+        self.pipeline = new TransformPipeline();
+        
+        # 设置默认的优化变换
+        self.setup_default_transforms();
+    }
+    
+    # 设置默认的优化变换
+    micro setup_default_transforms(self) {
+        # 添加常量折叠变换
+        let constant_folding = new ConstantFoldingTransform();
+        self.pipeline.add_transform(constant_folding);
+        
+        # 未来可以添加更多变换：
+        # - 死代码消除
+        # - 内联优化
+        # - 循环优化
+        # - 等等
+    }
+    
+    # 对符号表执行优化
+    micro optimize(self, symbol_table: SymbolTable) -> SymbolTable {
+        return self.pipeline.run_transforms(symbol_table);
+    }
+    
+    # 添加自定义变换
+    micro add_transform(self, transform) {
+        self.pipeline.add_transform(transform);
+    }
+    
+    # 获取当前变换数量
+    micro get_transform_count(self) -> i32 {
+        return self.pipeline.get_transform_count();
+    }
+    
+    # 清空所有变换
+    micro clear_transforms(self) {
+        self.pipeline.clear_transforms();
+    }
+}

@@ -1,0 +1,53 @@
+namespace package::optimizer::transforms;
+
+using package::optimizer::Transform;
+using package::analyzer::SymbolTable;
+
+# 常量折叠变换
+# 将编译时可计算的表达式替换为常量值
+class ConstantFoldingTransform {
+    
+    constructor() {
+        # 组合 Transform 基础功能
+        self.base_transform = new Transform("ConstantFolding");
+    }
+    
+    # 执行常量折叠变换
+    micro transform(self, symbol_table: SymbolTable) -> SymbolTable {
+        # 创建新的符号表副本，避免修改原始数据
+        let new_table = self.clone_symbol_table(symbol_table);
+        
+        # 遍历符号表中的所有符号
+        self.fold_constants_in_table(new_table);
+        
+        return new_table;
+    }
+    
+    # 在符号表中执行常量折叠
+    micro fold_constants_in_table(self, symbol_table: SymbolTable) {
+        # 简化实现：目前只是标记需要优化的符号
+        # 实际实现会遍历符号的 AST 节点并进行常量计算
+        
+        # 这里可以添加具体的常量折叠逻辑
+        # 例如：2 + 3 -> 5, true && false -> false 等
+    }
+    
+    # 克隆符号表（简化实现）
+    micro clone_symbol_table(self, original: SymbolTable) -> SymbolTable {
+        # 简化实现：创建新的符号表
+        # 实际实现需要深度复制所有符号和作用域
+        let new_table = new SymbolTable();
+        return new_table;
+    }
+    
+    # 检查是否应该应用常量折叠
+    micro should_apply(self, symbol_table: SymbolTable) -> bool {
+        # 总是应用常量折叠优化
+        return true;
+    }
+    
+    # 获取变换名称
+    micro get_name(self) -> String {
+        return self.base_transform.get_name();
+    }
+}

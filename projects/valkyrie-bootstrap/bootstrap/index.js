@@ -2853,8 +2853,9 @@ class package_compiler_NamespaceManager {
     constructor(source) {
         this.namespaces = {};
         this.usings = {};
-        this.current_namespace = "";
+        this.current_namespace = [];
         this.current_file = "";
+        this.symbol_table = {};
     }
 
     resolve_identifiers_in_expression(
@@ -3251,11 +3252,23 @@ class package_compiler_NamespaceManager {
         symbol_data,
         file_path
     ) {
-        if (this.namespaces[namespace_path] == null) {
-            this.namespaces[namespace_path] = { symbols: {}, files: [] };
+        let namespace_key = namespace_path;
+        if (this.namespaces[namespace_key] == null) {
+            this.namespaces[namespace_key] = { symbols: {}, files: [] };
         }
-        let namespace_data = this.namespaces[namespace_path];
+        let namespace_data = this.namespaces[namespace_key];
         namespace_data.symbols[symbol_name] = {
+            type: symbol_type,
+            data: symbol_data,
+            filePath: file_path,
+        };
+        let fully_qualified_name = this.get_fully_qualified_name(
+            symbol_name,
+            namespace_path
+        );
+        this.symbol_table[fully_qualified_name] = {
+            namespace: namespace_path,
+            name: symbol_name,
             type: symbol_type,
             data: symbol_data,
             filePath: file_path,
@@ -3303,12 +3316,41 @@ class package_compiler_NamespaceManager {
         if (namespace_path == "" || namespace_path == null) {
             return symbol_name;
         }
-        let clean_namespace =
-            package_compiler_get_main_namespace_name(namespace_path);
-        return clean_namespace.replace("::", "_") + "_" + symbol_name;
+        let namespace_parts = this.parse_namespace_path(namespace_path);
+        if (namespace_parts.length == 0) {
+            return symbol_name;
+        }
+        let qualified_name = namespace_parts.join("_") + "_" + symbol_name;
+        return qualified_name;
+    }
+
+    parse_namespace_path(namespace_path) {
+        if (namespace_path == "" || namespace_path == null) {
+            return [];
+        }
+        let clean_path = namespace_path;
+        if (clean_path.endsWith("!")) {
+            clean_path = clean_path.substring(0, clean_path.length - 1);
+        }
+        if (clean_path == "") {
+            return [];
+        }
+        return clean_path.split("::");
     }
 
     resolve_symbol(symbol_name, current_namespace, current_file) {
+        let fully_qualified_name = this.get_fully_qualified_name(
+            symbol_name,
+            current_namespace
+        );
+        let symbol_entry = this.symbol_table[fully_qualified_name];
+        if (symbol_entry != null) {
+            return {
+                found: true,
+                symbol: symbol_entry,
+                namespace: current_namespace,
+            };
+        }
         let current_namespace_data = this.namespaces[current_namespace];
         if (
             current_namespace_data != null &&
@@ -3329,6 +3371,19 @@ class package_compiler_NamespaceManager {
             while (i < file_usings.length) {
                 let using_info = file_usings[i];
                 let using_namespace = using_info["namespace"];
+                let using_qualified_name = this.get_fully_qualified_name(
+                    symbol_name,
+                    using_namespace
+                );
+                let using_symbol_entry =
+                    this.symbol_table[using_qualified_name];
+                if (using_symbol_entry != null) {
+                    return {
+                        found: true,
+                        symbol: using_symbol_entry,
+                        namespace: using_namespace,
+                    };
+                }
                 let using_namespace_data = this.namespaces[using_namespace];
                 if (
                     using_namespace_data != null &&
@@ -5074,6 +5129,105 @@ class package_lexer_ValkyrieLexer {
             }
         }
         return tokens;
+    }
+}
+class package_optimizer_Optimizer {
+    constructor() {
+        this.pipeline = new package_optimizer_TransformPipeline();
+        this.setup_default_transforms();
+    }
+
+    setup_default_transforms() {
+        let constant_folding =
+            new package_optimizer_transforms_ConstantFoldingTransform();
+        this.pipeline.add_transform(constant_folding);
+    }
+
+    optimize(symbol_table) {
+        return this.pipeline.run_transforms(symbol_table);
+    }
+
+    add_transform(transform) {
+        this.pipeline.add_transform(transform);
+    }
+
+    get_transform_count() {
+        return this.pipeline.get_transform_count();
+    }
+
+    clear_transforms() {
+        this.pipeline.clear_transforms();
+    }
+}
+class package_optimizer_Transform {
+    constructor(name) {
+        this.name = name;
+    }
+
+    get_name() {
+        return this.name;
+    }
+
+    set_name(name) {
+        this.name = name;
+    }
+}
+class package_optimizer_TransformPipeline {
+    constructor() {
+        this.transforms = [];
+    }
+
+    add_transform(transform) {
+        this.transforms.push(transform);
+    }
+
+    run(symbol_table) {
+        let current_table = symbol_table;
+        let i = 0;
+        while (i < this.transforms.length) {
+            let transform = this.transforms[i];
+            if (transform.should_apply(current_table)) {
+                current_table = transform.transform(current_table);
+            }
+            i = i + 1;
+        }
+        return current_table;
+    }
+
+    get_transform_count() {
+        return this.transforms.length;
+    }
+
+    clear() {
+        this.transforms = [];
+    }
+}
+class package_optimizer_transforms_ConstantFoldingTransform {
+    constructor() {
+        this.base_transform = new package_optimizer_Transform(
+            "ConstantFolding"
+        );
+    }
+
+    transform(symbol_table) {
+        let new_table = this.clone_symbol_table(symbol_table);
+        this.fold_constants_in_table(new_table);
+        return new_table;
+    }
+
+    fold_constants_in_table(symbol_table) {}
+
+    clone_symbol_table(original) {
+        let new_table = new package_analyzer_SymbolTable();
+        return new_table;
+    }
+
+    should_apply(symbol_table) {
+        return true;
+    }
+
+    get_name() {
+        return this.base_transform.get_name();
     }
 }
 class package_parser_Node {

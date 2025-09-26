@@ -1,0 +1,22 @@
+namespace package::optimizer;
+
+using package::analyzer::SymbolTable;
+
+# Transform 基础类
+# 提供变换的基本功能，其他变换类通过组合使用
+class Transform {
+    constructor(name: String) {
+        # 变换的名称，用于调试和日志
+        self.name = name;
+    }
+    
+    # 获取变换名称
+    micro get_name(self) -> String {
+        return self.name;
+    }
+    
+    # 设置变换名称
+    micro set_name(self, name: String) {
+        self.name = name;
+    }
+}

@@ -10,8 +10,9 @@ class NamespaceManager {
     constructor(source) {
         self.namespaces = {};
         self.usings = {};
-        self.current_namespace = "";
+        self.current_namespace = [];  # 使用数组存储当前命名空间路径
         self.current_file = "";
+        self.symbol_table = {};  # 符号表，用于快速查找
     }
 
     # Resolve identifiers in expression with options and diagnostics
@@ -253,19 +254,32 @@ class NamespaceManager {
 
         return stmt;
     }
-    # Add symbol to namespace
+    # Add symbol to namespace with improved symbol table management
     micro add_symbol_to_namespace(self, namespace_path: String, symbol_name: String, symbol_type: String, symbol_data: Node, file_path: String) {
-        if self.namespaces[namespace_path] == null {
-            self.namespaces[namespace_path] = {
+        # 使用数组形式的命名空间路径作为键
+        let namespace_key = namespace_path;
+        
+        if self.namespaces[namespace_key] == null {
+            self.namespaces[namespace_key] = {
                 "symbols": {},
                 "files": []
             };
         }
 
-        let namespace_data = self.namespaces[namespace_path];
+        let namespace_data = self.namespaces[namespace_key];
 
-        # Add symbol
+        # Add symbol to namespace
         namespace_data.symbols[symbol_name] = {
+            "type": symbol_type,
+            "data": symbol_data,
+            "filePath": file_path
+        };
+        
+        # Add to global symbol table for fast lookup
+        let fully_qualified_name = self.get_fully_qualified_name(symbol_name, namespace_path);
+        self.symbol_table[fully_qualified_name] = {
+            "namespace": namespace_path,
+            "name": symbol_name,
             "type": symbol_type,
             "data": symbol_data,
             "filePath": file_path
@@ -316,19 +330,58 @@ class NamespaceManager {
         }
         return "";
     }
-    # Get fully qualified name
+    # Get fully qualified name using array-based approach
     micro get_fully_qualified_name(self, symbol_name: String, namespace_path: String) -> String {
         if namespace_path == "" || namespace_path == null {
             return symbol_name;
         }
 
-        let clean_namespace = get_main_namespace_name(namespace_path);
-        return clean_namespace.replace("::", "_") + "_" + symbol_name;
+        # 将命名空间路径转换为数组
+        let namespace_parts = self.parse_namespace_path(namespace_path);
+        
+        # 使用 join 连接命名空间部分
+        if namespace_parts.length == 0 {
+            return symbol_name;
+        }
+        
+        let qualified_name = namespace_parts.join("_") + "_" + symbol_name;
+        return qualified_name;
+    }
+    
+    # Parse namespace path into array
+    micro parse_namespace_path(self, namespace_path: String) -> Array<String> {
+        if namespace_path == "" || namespace_path == null {
+            return [];
+        }
+        
+        # 移除主命名空间标记 "!"
+        let clean_path = namespace_path;
+        if clean_path.endsWith("!") {
+            clean_path = clean_path.substring(0, clean_path.length - 1);
+        }
+        
+        # 按 "::" 分割命名空间路径
+        if clean_path == "" {
+            return [];
+        }
+        
+        return clean_path.split("::");
     }
 
-    # Resolve symbol
+    # Resolve symbol using improved symbol table
     micro resolve_symbol(self, symbol_name: String, current_namespace: String, current_file: String) -> Map<String, String> {
-        # First search in current namespace
+        # First try to find in symbol table using fully qualified name
+        let fully_qualified_name = self.get_fully_qualified_name(symbol_name, current_namespace);
+        let symbol_entry = self.symbol_table[fully_qualified_name];
+        if symbol_entry != null {
+            return {
+                "found": true,
+                "symbol": symbol_entry,
+                "namespace": current_namespace
+            };
+        }
+        
+        # Fallback: search in current namespace
         let current_namespace_data = self.namespaces[current_namespace];
         if current_namespace_data != null && current_namespace_data.symbols != null {
             let symbol = current_namespace_data.symbols[symbol_name];
@@ -348,7 +401,19 @@ class NamespaceManager {
             while i < file_usings.length {
                 let using_info = file_usings[i];
                 let using_namespace = using_info["namespace"];
+                
+                # Try symbol table first for using imports
+                let using_qualified_name = self.get_fully_qualified_name(symbol_name, using_namespace);
+                let using_symbol_entry = self.symbol_table[using_qualified_name];
+                if using_symbol_entry != null {
+                    return {
+                        "found": true,
+                        "symbol": using_symbol_entry,
+                        "namespace": using_namespace
+                    };
+                }
 
+                # Fallback to namespace lookup
                 let using_namespace_data = self.namespaces[using_namespace];
                 if using_namespace_data != null && using_namespace_data.symbols != null {
                     let symbol = using_namespace_data.symbols[symbol_name];
