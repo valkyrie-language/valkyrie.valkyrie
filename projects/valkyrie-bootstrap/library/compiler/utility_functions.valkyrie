@@ -129,22 +129,3 @@ micro set_compile_mode(manager: NamespaceManager, mode: String) {
     manager.mode = mode;
 }
 
-# 简单深度优先搜索访问
-micro simple_dfs_visit(file_path: String, analyzer: DependencyAnalyzer, visited: Map<String, Bool>, sorted: Array<String>) {
-    if visited[file_path] {
-        return;
-    }
-    
-    visited[file_path] = true;
-    
-    let dependencies = analyzer.dependencies[file_path];
-    if dependencies != null {
-        let i = 0;
-        while i < dependencies.length {
-            simple_dfs_visit(dependencies[i], analyzer, visited, sorted);
-            i = i + 1;
-        }
-    }
-    
-    sorted.push(file_path);
-}

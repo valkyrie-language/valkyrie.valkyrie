@@ -8,29 +8,7 @@ using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
 using package::codegen::join_name_path;
 
-# 拓扑排序 (简化版，不检测循环依赖)
-micro topological_sort(analyzer: DependencyAnalyzer, file_contents: Map<String, String>) -> Array<String> {
-    let file_names = Object.keys(file_contents);
-    let visited = {};
-    let sorted = [];
-    
-    let i = 0;
-    while i < file_names.length {
-        visited[file_names[i]] = false;
-        i = i + 1;
-    }
-    
-    let j = 0;
-    while j < file_names.length {
-        simple_dfs_visit(file_names[j], analyzer, visited, sorted);
-        j = j + 1;
-    }
-    
-    return {
-        "sorted": sorted,
-        "error": null
-    };
-}
+
 
 # 生成单一JS文件的主函数
 micro compile_asts(file_contents: Map<String, String>, mode: String) -> String {
