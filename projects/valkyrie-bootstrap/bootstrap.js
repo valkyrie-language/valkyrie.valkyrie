@@ -71,13 +71,30 @@ export async function compileSourceWithCompiler(source, compilerParts) {
         ) {
             const result =
                 compiler.package_compiler_package_compiler_compile_text(source);
-            if (result.startsWith("Error:")) {
+
+            // Check if result is an error object
+            if (
+                result &&
+                typeof result === "object" &&
+                result.success === false
+            ) {
                 return {
                     success: false,
-                    error: result,
+                    error: `编译错误: ${result.error}`,
                 };
             }
-            return { success: true, code: result };
+
+            // Check for legacy string error format (fallback)
+            if (typeof result === "string" && result.startsWith("Error:")) {
+                return {
+                    success: false,
+                    error: `编译错误: ${result.substring(7)}`, // Remove "Error: " prefix
+                };
+            }
+
+            // Handle success case - result could be string or object with code
+            const code = typeof result === "string" ? result : result.code;
+            return { success: true, code: code };
         } else {
             throw new Error(
                 "package_compiler_package_compiler_compile_text function not found in compiler module"
@@ -86,7 +103,7 @@ export async function compileSourceWithCompiler(source, compilerParts) {
     } catch (err) {
         return {
             success: false,
-            error: `Exception during compilation: ${err.message}\n${err.stack}`,
+            error: `编译异常: ${err.message}\n${err.stack}`,
         };
     }
 }
@@ -103,7 +120,7 @@ export async function compileFileWithCompiler(
 
         if (!result.success) {
             error(
-                `Failed to compile ${path.relative(__dirname, inputPath)}: ${result.error}`
+                `编译失败 ${path.relative(__dirname, inputPath)}: ${result.error}`
             );
             return false;
         }
@@ -112,7 +129,7 @@ export async function compileFileWithCompiler(
         return true;
     } catch (err) {
         error(
-            `Exception while compiling file ${path.relative(__dirname, inputPath)}: ${err.message}`
+            `编译异常 ${path.relative(__dirname, inputPath)}: ${err.message}`
         );
         return false;
     }
@@ -174,8 +191,20 @@ export async function generateSingleFileWithCompiler(
             const result =
                 compiler.package_compiler_generate_single_js(fileContents);
 
+            // Check if result is an error object
+            if (
+                result &&
+                typeof result === "object" &&
+                result.success === false
+            ) {
+                throw new Error(`单文件生成失败: ${result.error}`);
+            }
+
+            // Handle success case - result could be string or object with code
+            const code = typeof result === "string" ? result : result.code;
+
             ensureDir(path.dirname(outputPath));
-            fs.writeFileSync(outputPath, result, "utf8");
+            fs.writeFileSync(outputPath, code, "utf8");
 
             const stats = fs.statSync(outputPath);
             log(`Single file generated successfully (${stats.size} bytes)`);
@@ -186,7 +215,7 @@ export async function generateSingleFileWithCompiler(
             );
         }
     } catch (err) {
-        error(`Failed to generate single file: ${err.message}`);
+        error(err);
         return false;
     }
 }

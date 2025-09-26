@@ -96,7 +96,50 @@ micro generateExpression(node: Node) -> String {
             i = i + 1;
         }
         
+        # 检查是否有尾随闭包
+        if node.closure {
+            # 生成尾随闭包的 JavaScript 代码
+            let closureParams = "";
+            # 尾随闭包通常没有参数，或者参数在调用时推断
+            
+            let closureBody = "";
+            if node.closure {
+                # closure 是一个 Block 节点
+                closureBody = generateStatement(node.closure);
+            }
+            
+            # 如果有普通参数，添加逗号分隔
+            if args.length > 0 {
+                args = args + ", ";
+            }
+            args = args + "function(" + closureParams + ") " + closureBody;
+        }
+        
         return callee + "(" + args + ")";
+    }
+    
+    if node.type == "AnonymousFunction" {
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            let param = node.parameters[i];
+            if param && param.name {
+                params = params + param.name;
+            } else {
+                params = params + param;
+            }
+            i = i + 1;
+        }
+        
+        let body = "";
+        if node.body {
+            body = generateStatement(node.body);
+        }
+        
+        return "function(" + params + ") " + body;
     }
     
     if node.type == "NewExpression" {
