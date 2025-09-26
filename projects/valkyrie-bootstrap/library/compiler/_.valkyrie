@@ -8,6 +8,11 @@ using package::codegen::generate;
 using package::lexer::Token;
 using package::compiler::CompilerOptions;
 
+# 生成单一JS文件的主函数
+micro compile_asts(file_contents: Map<String, String>, mode: String) -> String {
+    return compile_asts_with_options(file_contents, mode, null);
+}
+
 # REPL模式的单一JS文件生成
 micro generate_single_js(file_contents: Map<String, String>) -> String {
     return compile_asts(file_contents, "repl");

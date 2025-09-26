@@ -30,8 +30,8 @@ importers:
   projects/legion:
     dependencies:
       '@valkyrie-language/valkyrie-bootstrap':
-        specifier: ^0.0.1
-        version: 0.0.1
+        specifier: ^0.0.2
+        version: 0.0.2
 
   projects/valkyrie-bootstrap: {}
 
@@ -701,8 +701,8 @@ packages:
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
 
-  '@valkyrie-language/valkyrie-bootstrap@0.0.1':
-    resolution: {integrity: sha512-5lfviGCziFXnXDLfHxdAC6dUJPj40kDS8gx0TP9Vvx2Z8ePkS5yQIfVMLxw+IZOCanDXdEzwWq0NVlL3wEGoXA==}
+  '@valkyrie-language/valkyrie-bootstrap@0.0.2':
+    resolution: {integrity: sha512-jpsFFMtn57H61jzCdpTo7NP8YAJ49k4/EOEt0EETlgA7F2fpS2Qc9Dk6eYlFl1B3LlOccTByRpeSQ9XDW+e1Jw==}
     engines: {node: '>=14.0.0'}
     hasBin: true
 
@@ -3005,7 +3005,7 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
-  '@valkyrie-language/valkyrie-bootstrap@0.0.1': {}
+  '@valkyrie-language/valkyrie-bootstrap@0.0.2': {}
 
   '@vitejs/plugin-vue@5.2.4(vite@5.4.20(@types/node@24.5.2)(terser@5.44.0))(vue@3.5.21(typescript@5.9.2))':
     dependencies:

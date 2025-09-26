@@ -173,7 +173,7 @@ class JsCodeGeneration {
                 body = self.generate_statement(node.body);
             }
 
-            return "function(" + params + ") " + body;
+            return "micro(" + params + ") " + body;
         }
 
         if node.type == "NewExpression" {
