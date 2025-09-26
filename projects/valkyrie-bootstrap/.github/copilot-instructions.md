@@ -39,7 +39,7 @@ The Valkyrie language is still in bootstrap phase - **avoid introducing complex 
 - **Classes, Traits**: `PascalCase`
 - **Singletons**: `UPPER_SNAKE_CASE`
 - **Functions (micro), Fields, Methods**: `snake_case`
-- **Flags, Eidos**: `UPPER_SNAKE_CASE`
+- **Flags, Eidos(enums)**: `UPPER_SNAKE_CASE`
 
 ### Example Valkyrie Code:
 ```valkyrie

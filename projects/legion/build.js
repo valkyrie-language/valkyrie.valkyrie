@@ -1,5 +1,5 @@
 import fs from "fs";
-import {package_compiler_generateSingleJSFromAnalysis} from "@valkyrie-language/valkyrie-bootstrap";
+import {package_compiler_generate_single_js} from "@valkyrie-language/valkyrie-bootstrap";
 import {execSync} from "child_process";
 import path from "path";
 
@@ -24,6 +24,9 @@ class LegionBootstrap {
         this.distDir = path.join(this.projectRoot, buildSettings.outputDir || 'dist');
         this.libraryDir = path.join(this.projectRoot, 'library');
         this.binaryDir = path.join(this.projectRoot, 'binary');
+        
+        // 移除 build 目录的使用，直接使用 dist 目录
+        this.buildDir = this.distDir;
 
         // 确保输出目录存在
         this.ensureDirectoryExists(this.distDir);
@@ -106,8 +109,11 @@ class LegionBootstrap {
         }
 
         // 使用 Valkyrie 编译器生成单个 JS 文件
-        const compiledCode = package_compiler_generateSingleJSFromAnalysis(fileContents, 'standard');
-
+        const result = package_compiler_generate_single_js(fileContents);
+        
+        // 处理编译结果
+        const compiledCode = (result && typeof result === 'object' && result.code) ? result.code : result;
+        
         const outputPath = path.join(this.distDir, 'index.js');
         fs.writeFileSync(outputPath, compiledCode);
         console.log(`✓ 库文件编译完成: ${outputPath}`);
@@ -156,7 +162,10 @@ class LegionBootstrap {
             [path.basename(srcPath)]: sourceCode
         };
 
-        let compiledCode = package_compiler_generateSingleJSFromAnalysis(fileContents, 'standard');
+        const result = package_compiler_generate_single_js(fileContents);
+        
+        // 处理编译结果
+        let compiledCode = (result && typeof result === 'object' && result.code) ? result.code : result;
 
         // 添加库导入
         compiledCode = `// 导入库文件\nimport * as library from './index.js';\n\n` + compiledCode;

@@ -2,7 +2,7 @@
     "name": "legion",
     "version": "1.0.0",
     "source": "src",
-    "build": "build",
+    "build": "dist",
     "main": "src/main.vk",
     "target": "javascript",
     "dependencies": [
