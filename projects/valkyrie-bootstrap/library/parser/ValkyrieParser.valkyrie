@@ -32,4 +32,8 @@ class ValkyrieParser {
         self.advance();
         return token;
     }
+    
+    micro mark_node(self, node_type: String) {
+        return new Node(node_type, self.current_token.offset, self.current_token.length, self.current_token.line, self.current_token.column);
+    }
 }

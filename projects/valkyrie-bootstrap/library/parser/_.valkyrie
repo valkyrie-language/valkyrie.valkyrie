@@ -89,7 +89,7 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
     }
 
     # 创建ExpressionStatement节点
-    let stmt = new Node("ExpressionStatement");
+    let stmt = parser.mark_node("ExpressionStatement");
     stmt.expression = expr;
     return stmt;
 }
@@ -116,7 +116,7 @@ micro parseLetStatement(parser: ValkyrieParser) -> Node {
         return semicolon;
     }
 
-    let node = new Node("LetStatement");
+    let node = parser.mark_node("LetStatement");
     node.name = name.value;
     node.value = value;
     return node;
@@ -147,7 +147,7 @@ micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
     let semicolon = parser.expect("SEMICOLON");
     if (semicolon.type == "ParseError") { return semicolon; }
 
-    let node = new Node("NamespaceStatement");
+    let node = parser.mark_node("NamespaceStatement");
     node.path = path;
     node.isMainNamespace = isMainNamespace;
     return node;
@@ -171,7 +171,7 @@ micro parseUsingStatement(parser: ValkyrieParser) -> Node {
     let semicolon = parser.expect("SEMICOLON");
     if (semicolon.type == "ParseError") { return semicolon; }
 
-    let node = new Node("UsingStatement");
+    let node = parser.mark_node("UsingStatement");
     node.path = path;
     return node;
 }
@@ -244,7 +244,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     let body = parseStatement(parser);
     if body.type == "ParseError" { return body; }
 
-    let node = new Node("JSAttributeStatement");
+    let node = parser.mark_node("JSAttributeStatement");
     node.modulePath = modulePath.value;
     node.importName = importName.value;
     node.functionName = functionName.value;
@@ -301,7 +301,7 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = new Node("MicroDeclaration");
+    let node = parser.mark_node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.returnType = returnType;
@@ -484,7 +484,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             return body;
         }
 
-        let ctorNode = new Node("ConstructorStatement");
+        let ctorNode = parser.mark_node("ConstructorStatement");
         ctorNode.parameters = params;
         ctorNode.body = body;
         return ctorNode;
@@ -560,7 +560,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             i = i + 1;
         }
 
-        let methodNode = new Node("MemberStatement");
+        let methodNode = parser.mark_node("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
         methodNode.returnType = returnType;
@@ -608,7 +608,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
                     return semicolon;
                 }
 
-                let node = new Node("Property");
+                let node = parser.mark_node("Property");
                 node.name = name.value;
                 node.typeAnnotation = typeAnnotation;
                 node.initializer = initValue;
@@ -653,7 +653,7 @@ micro parse_function_declaration(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = new Node("MicroDeclaration");
+    let node = parser.mark_node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.body = body;
@@ -672,7 +672,7 @@ micro parseIfStatement(parser: ValkyrieParser) -> Node {
         return thenBranch;
     }
 
-    let node = new Node("IfStatement");
+    let node = parser.mark_node("IfStatement");
     node.condition = condition;
     node.thenBranch = thenBranch;
     node.elseBranch = null;
@@ -701,7 +701,7 @@ micro parseWhileStatement(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = new Node("WhileStatement");
+    let node = parser.mark_node("WhileStatement");
     node.condition = condition;
     node.body = body;
     return node;
@@ -719,7 +719,7 @@ micro parseUntilStatement(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = new Node("UntilStatement");
+    let node = parser.mark_node("UntilStatement");
     node.condition = condition;
     node.body = body;
     return node;
@@ -728,7 +728,7 @@ micro parseUntilStatement(parser: ValkyrieParser) -> Node {
 micro parseReturnStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'return'
 
-    let node = new Node("ReturnStatement");
+    let node = parser.mark_node("ReturnStatement");
 
     if parser.current_token.type == "SEMICOLON" {
         node.value = null;
@@ -769,7 +769,7 @@ micro parse_function_block(parser: ValkyrieParser) -> Node {
         return rbrace;
     }
 
-    let node = new Node("Block");
+    let node = parser.mark_node("Block");
     node.statements = statements;
     return node;
 }
@@ -785,7 +785,7 @@ micro parseProgram(parser: ValkyrieParser) -> Node {
         statements.push(stmt);
     }
 
-    let node = new Node("Program");
+    let node = parser.mark_node("Program");
     node.statements = statements;
     return node;
 }

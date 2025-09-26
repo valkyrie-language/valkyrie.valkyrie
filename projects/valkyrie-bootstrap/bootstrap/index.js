@@ -745,24 +745,6 @@ export function package_codegen_add_source_file(self, file_name, content) {
     }
     return 0;
 }
-export function package_codegen_write_with_mapping(
-    self,
-    text,
-    source_span,
-    source_index
-) {
-    if (this.js_mapping && source_span) {
-        this.buffer =
-            this.buffer +
-            this.js_mapping.generate_with_mapping(
-                text,
-                source_span,
-                source_index
-            );
-    } else {
-        this.buffer = this.buffer + text;
-    }
-}
 export function package_codegen_write_line_with_mapping(
     self,
     text,
@@ -788,12 +770,6 @@ export function package_codegen_write_line_with_mapping(
     } else {
         this.buffer = this.buffer + current_indent + text + "\n";
     }
-}
-export function package_codegen_get_source_map(self) {
-    if (this.source_map_builder) {
-        return this.source_map_builder.build();
-    }
-    return false;
 }
 export function package_lexer_is_whitespace(ch) {
     return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
@@ -886,7 +862,7 @@ export function package_parser_parsePatternExpression(parser) {
     let token = parser.current_token;
     if (token.type == "IDENTIFIER") {
         parser.advance();
-        let node = new package_parser_Node("TypeIdentifier");
+        let node = parser.mark_node("TypeIdentifier");
         node.name = token.value;
         return node;
     } else {
@@ -992,12 +968,12 @@ export function package_parser_parseExpressionWithPrecedence(
             }
             right = package_parser_parsePatternExpression(parser);
             if (isOptional) {
-                let node = new package_parser_Node("OptionalTypeCheck");
+                let node = parser.mark_node("OptionalTypeCheck");
                 node.expression = left;
                 node.pattern = right;
                 left = node;
             } else {
-                let node = new package_parser_Node("TypeCheck");
+                let node = parser.mark_node("TypeCheck");
                 node.expression = left;
                 node.pattern = right;
                 left = node;
@@ -1010,12 +986,12 @@ export function package_parser_parseExpressionWithPrecedence(
             }
             right = package_parser_parseTypeExpression(parser);
             if (isOptional) {
-                let node = new package_parser_Node("OptionalTypeCast");
+                let node = parser.mark_node("OptionalTypeCast");
                 node.expression = left;
                 node.targetType = right;
                 left = node;
             } else {
-                let node = new package_parser_Node("TypeCast");
+                let node = parser.mark_node("TypeCast");
                 node.expression = left;
                 node.targetType = right;
                 left = node;
@@ -1030,12 +1006,12 @@ export function package_parser_parseExpressionWithPrecedence(
                 return right;
             }
             if (tokenType == "ASSIGN") {
-                let node = new package_parser_Node("Assignment");
+                let node = parser.mark_node("Assignment");
                 node.left = left;
                 node.right = right;
                 left = node;
             } else {
-                let node = new package_parser_Node("BinaryOp");
+                let node = parser.mark_node("BinaryOp");
                 node.left = left;
                 node.operator = op;
                 node.right = right;
@@ -1062,7 +1038,7 @@ export function package_parser_parseUnaryExpression(parser, inline) {
         if (operand && operand.type == "ParseError") {
             return operand;
         }
-        let node = new package_parser_Node("UnaryOp");
+        let node = parser.mark_node("UnaryOp");
         node.operator = op;
         node.operand = operand;
         return node;
@@ -1110,7 +1086,7 @@ export function package_parser_parseNewExpression(parser, inline) {
     if (rparen.type == "ParseError") {
         return rparen;
     }
-    let node = new package_parser_Node("NewExpression");
+    let node = parser.mark_node("NewExpression");
     node.className = className.value;
     node.arguments = args;
     return node;
@@ -1161,7 +1137,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
                 }
                 hasTrailingClosure = true;
             }
-            let callNode = new package_parser_Node("MicroCall");
+            let callNode = parser.mark_node("MicroCall");
             callNode.callee = expr;
             callNode.arguments = args;
             if (hasTrailingClosure) {
@@ -1172,7 +1148,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
             parser.advance();
             if (parser.current_token.type == "AWAIT") {
                 parser.advance();
-                let awaitNode = new package_parser_Node("AwaitExpression");
+                let awaitNode = parser.mark_node("AwaitExpression");
                 awaitNode.argument = expr;
                 expr = awaitNode;
             } else {
@@ -1180,7 +1156,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
                 if (property && property.type == "ParseError") {
                     return property;
                 }
-                let accessNode = new package_parser_Node("PropertyAccess");
+                let accessNode = parser.mark_node("PropertyAccess");
                 accessNode.object = expr;
                 accessNode.property = property.value;
                 expr = accessNode;
@@ -1231,9 +1207,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
                 if (rparen && rparen.type == "ParseError") {
                     return rparen;
                 }
-                let staticCallNode = new package_parser_Node(
-                    "StaticMethodCall"
-                );
+                let staticCallNode = parser.mark_node("StaticMethodCall");
                 staticCallNode.namespacePath = namespacePath;
                 staticCallNode.methodName =
                     namespacePath[namespacePath.length - 1];
@@ -1242,9 +1216,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
                 staticCallNode.arguments = args;
                 expr = staticCallNode;
             } else {
-                let staticAccessNode = new package_parser_Node(
-                    "StaticPropertyAccess"
-                );
+                let staticAccessNode = parser.mark_node("StaticPropertyAccess");
                 staticAccessNode.namespacePath = namespacePath;
                 staticAccessNode.property =
                     namespacePath[namespacePath.length - 1];
@@ -1266,7 +1238,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
             if (rbracket && rbracket.type == "ParseError") {
                 return rbracket;
             }
-            let accessNode = new package_parser_Node("ArrayAccess");
+            let accessNode = parser.mark_node("ArrayAccess");
             accessNode.object = expr;
             accessNode.index = index;
             expr = accessNode;
@@ -1280,21 +1252,21 @@ export function package_parser_parseAtomicExpression(parser, inline) {
     if (parser.current_token.type == "NUMBER") {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("Number");
+        let node = parser.mark_node("Number");
         node.value = value;
         return node;
     }
     if (parser.current_token.type == "STRING") {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("String");
+        let node = parser.mark_node("String");
         node.value = value;
         return node;
     }
     if (parser.current_token.type == "BOOLEAN") {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("Boolean");
+        let node = parser.mark_node("Boolean");
         node.value = value;
         return node;
     }
@@ -1306,15 +1278,15 @@ export function package_parser_parseAtomicExpression(parser, inline) {
             if (closure && closure.type == "ParseError") {
                 return closure;
             }
-            let callNode = new package_parser_Node("MicroCall");
-            let identifierNode = new package_parser_Node("Identifier");
+            let callNode = parser.mark_node("MicroCall");
+            let identifierNode = parser.mark_node("Identifier");
             identifierNode.name = name;
             callNode.callee = identifierNode;
             callNode.arguments = [];
             callNode.closure = closure;
             return callNode;
         }
-        let node = new package_parser_Node("Identifier");
+        let node = parser.mark_node("Identifier");
         node.name = name;
         return node;
     }
@@ -1336,7 +1308,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
         if (body && body.type == "ParseError") {
             return body;
         }
-        let node = new package_parser_Node("AnonymousFunction");
+        let node = parser.mark_node("AnonymousFunction");
         node.parameters = params;
         node.body = body;
         return node;
@@ -1349,12 +1321,12 @@ export function package_parser_parseAtomicExpression(parser, inline) {
         ) {
             let name = "Self";
             parser.advance();
-            let node = new package_parser_Node("Identifier");
+            let node = parser.mark_node("Identifier");
             node.name = name;
             return node;
         } else {
             parser.advance();
-            let node = new package_parser_Node("ThisExpression");
+            let node = parser.mark_node("ThisExpression");
             return node;
         }
     }
@@ -1396,7 +1368,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
         if (rparen && rparen.type == "ParseError") {
             return rparen;
         }
-        let node = new package_parser_Node("NewExpression");
+        let node = parser.mark_node("NewExpression");
         node.className = className.value;
         node.arguments = args;
         return node;
@@ -1419,7 +1391,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
     }
     if (parser.current_token.type == "LBRACKET") {
         parser.advance();
-        let node = new package_parser_Node("ArrayLiteral");
+        let node = parser.mark_node("ArrayLiteral");
         node.elements = [];
         if (parser.current_token.type != "RBRACKET") {
             let element = package_parser_parseExpressionWithPrecedence(
@@ -1452,7 +1424,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
     }
     if (parser.current_token.type == "LBRACE" && !inline) {
         parser.advance();
-        let node = new package_parser_Node("ObjectLiteral");
+        let node = parser.mark_node("ObjectLiteral");
         node.properties = [];
         if (parser.current_token.type != "RBRACE") {
             while (
@@ -1473,7 +1445,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
                 if (value && value.type == "ParseError") {
                     return value;
                 }
-                let propertyNode = new package_parser_Node("Property");
+                let propertyNode = parser.mark_node("Property");
                 propertyNode.key = key;
                 propertyNode.value = value;
                 node.properties.push(propertyNode);
@@ -1528,7 +1500,7 @@ export function package_parser_parseTypedParameter(parser) {
     if (paramName && paramName.type == "ParseError") {
         return paramName;
     }
-    let node = new package_parser_Node("Parameter");
+    let node = parser.mark_node("Parameter");
     node.name = paramName.value;
     node.typeAnnotation = null;
     node.defaultValue = null;
@@ -1602,22 +1574,22 @@ export function package_parser_parseTypeExpressionWithPrecedence(
             return right;
         }
         if (tokenType == "ARROW") {
-            let node = new package_parser_Node("FunctionType");
+            let node = parser.mark_node("FunctionType");
             node.parameterType = left;
             node.returnType = right;
             left = node;
         } else if (tokenType == "PIPE") {
-            let node = new package_parser_Node("UnionType");
+            let node = parser.mark_node("UnionType");
             node.left = left;
             node.right = right;
             left = node;
         } else if (tokenType == "AMPERSAND") {
-            let node = new package_parser_Node("IntersectionType");
+            let node = parser.mark_node("IntersectionType");
             node.left = left;
             node.right = right;
             left = node;
         } else {
-            let node = new package_parser_Node("BinaryTypeOp");
+            let node = parser.mark_node("BinaryTypeOp");
             node.left = left;
             node.operator = op;
             node.right = right;
@@ -1640,7 +1612,7 @@ export function package_parser_parseUnaryTypeExpression(parser) {
         if (operand && operand.type == "ParseError") {
             return operand;
         }
-        let node = new package_parser_Node("VarianceType");
+        let node = parser.mark_node("VarianceType");
         node.variance = op;
         node.operand = operand;
         return node;
@@ -1655,12 +1627,12 @@ export function package_parser_parsePostfixTypeExpression(parser) {
     while (true) {
         if (parser.current_token.type == "QUESTION") {
             parser.advance();
-            let node = new package_parser_Node("NullableType");
+            let node = parser.mark_node("NullableType");
             node.baseType = expr;
             expr = node;
         } else if (parser.current_token.type == "BANG") {
             parser.advance();
-            let node = new package_parser_Node("NonNullType");
+            let node = parser.mark_node("NonNullType");
             node.baseType = expr;
             expr = node;
         } else if (parser.current_token.type == "LT") {
@@ -1685,7 +1657,7 @@ export function package_parser_parsePostfixTypeExpression(parser) {
             if (gt && gt.type == "ParseError") {
                 return gt;
             }
-            let node = new package_parser_Node("GenericType");
+            let node = parser.mark_node("GenericType");
             node.baseType = expr;
             node.typeArguments = typeArgs;
             expr = node;
@@ -1695,7 +1667,7 @@ export function package_parser_parsePostfixTypeExpression(parser) {
             if (rbracket && rbracket.type == "ParseError") {
                 return rbracket;
             }
-            let node = new package_parser_Node("ArrayType");
+            let node = parser.mark_node("ArrayType");
             node.elementType = expr;
             expr = node;
         } else {
@@ -1708,7 +1680,7 @@ export function package_parser_parseAtomicTypeExpression(parser) {
     if (parser.current_token.type == "IDENTIFIER") {
         let name = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("TypeIdentifier");
+        let node = parser.mark_node("TypeIdentifier");
         node.name = name;
         return node;
     }
@@ -1749,7 +1721,7 @@ export function package_parser_parseAtomicTypeExpression(parser) {
         if (elements.length == 1) {
             return elements[0];
         } else {
-            let node = new package_parser_Node("TupleType");
+            let node = parser.mark_node("TupleType");
             node.elements = elements;
             return node;
         }
@@ -1772,7 +1744,7 @@ export function package_parser_parseAtomicTypeExpression(parser) {
                 if (valueType && valueType.type == "ParseError") {
                     return valueType;
                 }
-                let propertyNode = new package_parser_Node("TypeProperty");
+                let propertyNode = parser.mark_node("TypeProperty");
                 propertyNode.key = key;
                 propertyNode.valueType = valueType;
                 properties.push(propertyNode);
@@ -1787,14 +1759,14 @@ export function package_parser_parseAtomicTypeExpression(parser) {
         if (rbrace && rbrace.type == "ParseError") {
             return rbrace;
         }
-        let node = new package_parser_Node("ObjectType");
+        let node = parser.mark_node("ObjectType");
         node.properties = properties;
         return node;
     }
     if (parser.current_token.type == "STRING") {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("LiteralType");
+        let node = parser.mark_node("LiteralType");
         node.value = value;
         node.literalType = "string";
         return node;
@@ -1802,7 +1774,7 @@ export function package_parser_parseAtomicTypeExpression(parser) {
     if (parser.current_token.type == "NUMBER") {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("LiteralType");
+        let node = parser.mark_node("LiteralType");
         node.value = value;
         node.literalType = "number";
         return node;
@@ -1810,7 +1782,7 @@ export function package_parser_parseAtomicTypeExpression(parser) {
     if (parser.current_token.type == "BOOLEAN") {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new package_parser_Node("LiteralType");
+        let node = parser.mark_node("LiteralType");
         node.value = value;
         node.literalType = "boolean";
         return node;
@@ -1932,7 +1904,7 @@ export function package_parser_parseStatement(parser) {
     if (semicolon && semicolon.type == "ParseError") {
         return semicolon;
     }
-    let stmt = new package_parser_Node("ExpressionStatement");
+    let stmt = parser.mark_node("ExpressionStatement");
     stmt.expression = expr;
     return stmt;
 }
@@ -1954,7 +1926,7 @@ export function package_parser_parseLetStatement(parser) {
     if (semicolon && semicolon.type == "ParseError") {
         return semicolon;
     }
-    let node = new package_parser_Node("LetStatement");
+    let node = parser.mark_node("LetStatement");
     node.name = name.value;
     node.value = value;
     return node;
@@ -1984,7 +1956,7 @@ export function package_parser_parseNamespaceStatement(parser) {
     if (semicolon.type == "ParseError") {
         return semicolon;
     }
-    let node = new package_parser_Node("NamespaceStatement");
+    let node = parser.mark_node("NamespaceStatement");
     node.path = path;
     node.isMainNamespace = isMainNamespace;
     return node;
@@ -2009,7 +1981,7 @@ export function package_parser_parseUsingStatement(parser) {
     if (semicolon.type == "ParseError") {
         return semicolon;
     }
-    let node = new package_parser_Node("UsingStatement");
+    let node = parser.mark_node("UsingStatement");
     node.path = path;
     return node;
 }
@@ -2083,7 +2055,7 @@ export function package_parser_parseAttributeStatement(parser) {
     if (body.type == "ParseError") {
         return body;
     }
-    let node = new package_parser_Node("JSAttributeStatement");
+    let node = parser.mark_node("JSAttributeStatement");
     node.modulePath = modulePath.value;
     node.importName = importName.value;
     node.functionName = functionName.value;
@@ -2129,7 +2101,7 @@ export function package_parser_parseMicroFunctionDeclaration(parser) {
     if (body && body.type == "ParseError") {
         return body;
     }
-    let node = new package_parser_Node("MicroDeclaration");
+    let node = parser.mark_node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.returnType = returnType;
@@ -2281,7 +2253,7 @@ export function package_parser_parseClassMember(parser) {
         if (body && body.type == "ParseError") {
             return body;
         }
-        let ctorNode = new package_parser_Node("ConstructorStatement");
+        let ctorNode = parser.mark_node("ConstructorStatement");
         ctorNode.parameters = params;
         ctorNode.body = body;
         return ctorNode;
@@ -2340,7 +2312,7 @@ export function package_parser_parseClassMember(parser) {
             }
             i = i + 1;
         }
-        let methodNode = new package_parser_Node("MemberStatement");
+        let methodNode = parser.mark_node("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
         methodNode.returnType = returnType;
@@ -2383,7 +2355,7 @@ export function package_parser_parseClassMember(parser) {
                 if (semicolon && semicolon.type == "ParseError") {
                     return semicolon;
                 }
-                let node = new package_parser_Node("Property");
+                let node = parser.mark_node("Property");
                 node.name = name.value;
                 node.typeAnnotation = typeAnnotation;
                 node.initializer = initValue;
@@ -2422,7 +2394,7 @@ export function package_parser_parse_function_declaration(parser) {
     if (body && body.type == "ParseError") {
         return body;
     }
-    let node = new package_parser_Node("MicroDeclaration");
+    let node = parser.mark_node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.body = body;
@@ -2438,7 +2410,7 @@ export function package_parser_parseIfStatement(parser) {
     if (thenBranch && thenBranch.type == "ParseError") {
         return thenBranch;
     }
-    let node = new package_parser_Node("IfStatement");
+    let node = parser.mark_node("IfStatement");
     node.condition = condition;
     node.thenBranch = thenBranch;
     node.elseBranch = null;
@@ -2462,7 +2434,7 @@ export function package_parser_parseWhileStatement(parser) {
     if (body && body.type == "ParseError") {
         return body;
     }
-    let node = new package_parser_Node("WhileStatement");
+    let node = parser.mark_node("WhileStatement");
     node.condition = condition;
     node.body = body;
     return node;
@@ -2477,14 +2449,14 @@ export function package_parser_parseUntilStatement(parser) {
     if (body && body.type == "ParseError") {
         return body;
     }
-    let node = new package_parser_Node("UntilStatement");
+    let node = parser.mark_node("UntilStatement");
     node.condition = condition;
     node.body = body;
     return node;
 }
 export function package_parser_parseReturnStatement(parser) {
     parser.advance();
-    let node = new package_parser_Node("ReturnStatement");
+    let node = parser.mark_node("ReturnStatement");
     if (parser.current_token.type == "SEMICOLON") {
         node.value = null;
     } else {
@@ -2520,7 +2492,7 @@ export function package_parser_parse_function_block(parser) {
     if (rbrace && rbrace.type == "ParseError") {
         return rbrace;
     }
-    let node = new package_parser_Node("Block");
+    let node = parser.mark_node("Block");
     node.statements = statements;
     return node;
 }
@@ -2533,7 +2505,7 @@ export function package_parser_parseProgram(parser) {
         }
         statements.push(stmt);
     }
-    let node = new package_parser_Node("Program");
+    let node = parser.mark_node("Program");
     node.statements = statements;
     return node;
 }
@@ -2705,6 +2677,13 @@ class package_compiler_NamespaceManager {
                 ) {
                     let resolved_expr = Object.assign({}, expr);
                     resolved_expr.name = func_stmt.uniqueName;
+                    if (expr.has_valid_position()) {
+                        resolved_expr.source_file = this.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
                     return resolved_expr;
                 }
                 i = i + 1;
@@ -2715,9 +2694,25 @@ class package_compiler_NamespaceManager {
                 if (var_stmt.name == expr.name && var_stmt.uniqueName != null) {
                     let resolved_expr = Object.assign({}, expr);
                     resolved_expr.name = var_stmt.uniqueName;
+                    if (expr.has_valid_position()) {
+                        resolved_expr.source_file = this.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
                     return resolved_expr;
                 }
                 j = j + 1;
+            }
+            if (expr.has_valid_position()) {
+                let resolved_expr = Object.assign({}, expr);
+                resolved_expr.source_file = this.current_file;
+                resolved_expr.source_line = expr.line;
+                resolved_expr.source_column = expr.column;
+                resolved_expr.source_offset = expr.offset;
+                resolved_expr.source_length = expr.length;
+                return resolved_expr;
             }
             return expr;
         }
@@ -3172,17 +3167,11 @@ class package_codegen_JsCodeGeneration {
             this.indent_text = "    ";
         }
         this.options = options;
-        if (options) {
-            if (options.source_map) {
-                this.source_map_builder =
-                    new package_generation_SourceMapBuilder();
-                this.js_mapping = new package_generation_JsSourceMapping(
-                    this.source_map_builder
-                );
-            } else {
-                this.source_map_builder = false;
-                this.js_mapping = false;
-            }
+        if (options && options.source_map) {
+            this.source_map_builder = new package_generation_SourceMapBuilder();
+            this.js_mapping = new package_generation_JsSourceMapping(
+                this.source_map_builder
+            );
         } else {
             this.source_map_builder = false;
             this.js_mapping = false;
@@ -3232,6 +3221,26 @@ class package_codegen_JsCodeGeneration {
         }
     }
 
+    write_identifier(identifier, source_span, source_index) {
+        if (this.js_mapping && source_span && source_span.is_valid()) {
+            this.js_mapping.update_position(
+                this.js_mapping.current_line,
+                this.js_mapping.current_column + this.buffer.length
+            );
+            this.js_mapping.source_map_builder.add_span_mapping(
+                this.js_mapping.current_line,
+                this.js_mapping.current_column,
+                source_span,
+                source_index
+            );
+            this.buffer = this.buffer + identifier;
+            this.js_mapping.current_column =
+                this.js_mapping.current_column + identifier.length;
+        } else {
+            this.buffer = this.buffer + identifier;
+        }
+    }
+
     to_string() {
         return this.buffer;
     }
@@ -3260,672 +3269,803 @@ class package_codegen_JsCodeGeneration {
 
     generate_expression(node) {
         if (node.type == "Number") {
-            return node.value;
+            return this.generate_number_expression(node);
         }
         if (node.type == "String") {
-            let escaped = node.value;
-            escaped = this.replace_all(escaped, "\\", "\\\\");
-            escaped = this.replace_all(escaped, '"', '\\"');
-            escaped = this.replace_all(escaped, "\n", "\\n");
-            escaped = this.replace_all(escaped, "\r", "\\r");
-            escaped = this.replace_all(escaped, "\t", "\\t");
-            return '"' + escaped + '"';
+            return this.generate_string_expression(node);
         }
         if (node.type == "Boolean") {
-            return node.value;
+            return this.generate_boolean_expression(node);
         }
         if (node.type == "Identifier") {
-            return node.name;
+            return this.generate_identifier_expression(node);
         }
         if (node.type == "BinaryOp") {
-            let left = this.generate_expression(node.left);
-            let right = this.generate_expression(node.right);
-            let result = "(";
-            result = result + left;
-            result = result + " ";
-            result = result + node.operator;
-            result = result + " ";
-            result = result + right;
-            result = result + ")";
-            return result;
+            return this.generate_binary_op_expression(node);
         }
         if (node.type == "Assignment") {
-            let left = this.generate_expression(node.left);
-            let right = this.generate_expression(node.right);
-            return left + " = " + right;
+            return this.generate_assignment_expression(node);
         }
         if (node.type == "TypeCheck") {
-            let expr = this.generate_expression(node.expression);
-            let pattern = this.generate_pattern_expression(node.pattern);
-            return "(" + expr + " instanceof " + pattern + ")";
+            return this.generate_type_check_expression(node);
         }
         if (node.type == "OptionalTypeCheck") {
-            let expr = this.generate_expression(node.expression);
-            let pattern = this.generate_pattern_expression(node.pattern);
-            return (
-                "(function() { try { return " +
-                expr +
-                " instanceof " +
-                pattern +
-                "; } catch(e) { return false; } })()"
-            );
+            return this.generate_optional_type_check_expression(node);
         }
         if (node.type == "TypeCast") {
-            let expr = this.generate_expression(node.expression);
-            let targetType = this.generate_type_expression(node.targetType);
-            return "(" + expr + ")";
+            return this.generate_type_cast_expression(node);
         }
         if (node.type == "OptionalTypeCast") {
-            let expr = this.generate_expression(node.expression);
-            let targetType = this.generate_type_expression(node.targetType);
-            return (
-                "(function() { try { return (" +
-                expr +
-                "); } catch(e) { return null; } })()"
-            );
+            return this.generate_optional_type_cast_expression(node);
         }
         if (node.type == "MicroCall") {
-            let callee = this.generate_expression(node.callee);
-            let args = "";
-            let i = 0;
-            while (i < node.arguments.length) {
-                if (i > 0) {
-                    args = args + ", ";
-                }
-                args = args + this.generate_expression(node.arguments[i]);
-                i = i + 1;
-            }
-            if (node.closure) {
-                let closureParams = "";
-                let closureBody = "";
-                if (node.closure) {
-                    closureBody = this.generate_statement(node.closure);
-                }
-                if (args.length > 0) {
-                    args = args + ", ";
-                }
-                args = args + "function(" + closureParams + ") " + closureBody;
-            }
-            return callee + "(" + args + ")";
+            return this.generate_micro_call_expression(node);
         }
         if (node.type == "AnonymousFunction") {
-            let params = "";
-            let i = 0;
-            while (i < node.parameters.length) {
-                if (i > 0) {
-                    params = params + ", ";
-                }
-                let param = node.parameters[i];
-                if (param) {
-                    if (param.name) {
-                        params = params + param.name;
-                    } else {
-                        params = params + "param" + i;
-                    }
-                } else {
-                    params = params + "param" + i;
-                }
-                i = i + 1;
-            }
-            let body = "";
-            if (node.body) {
-                body = this.generate_statement(node.body);
-            }
-            return "function(" + params + ") " + body;
+            return this.generate_anonymous_function_expression(node);
         }
         if (node.type == "NewExpression") {
-            let args = "";
-            let i = 0;
-            while (i < node.arguments.length) {
-                if (i > 0) {
-                    args = args + ", ";
-                }
-                args = args + this.generate_expression(node.arguments[i]);
-                i = i + 1;
-            }
-            let className = node.className;
-            if (node.resolvedClassName) {
-                className = node.resolvedClassName;
-            }
-            return "new " + className + "(" + args + ")";
+            return this.generate_new_expression(node);
         }
         if (node.type == "AwaitExpression") {
-            let argument = this.generate_expression(node.argument);
-            return "await " + argument;
+            return this.generate_await_expression(node);
         }
         if (node.type == "PropertyAccess") {
-            if (node.object.type) {
-                let obj = this.generate_expression(node.object);
-                return obj + "." + node.property;
-            } else {
-                return node.object + "." + node.property;
-            }
+            return this.generate_property_access_expression(node);
         }
         if (node.type == "StaticMethodCall") {
-            let className = "";
-            if (node.namespacePath) {
-                if (node.namespacePath.length >= 2) {
-                    className =
-                        node.namespacePath[node.namespacePath.length - 2];
-                } else {
-                    className = node.namespacePath[0];
-                }
-            } else if (node.className.type) {
-                className = this.generate_expression(node.className);
-            } else {
-                className = node.className;
-            }
-            let args = "";
-            let i = 0;
-            while (i < node.arguments.length) {
-                if (i > 0) {
-                    args = args + ", ";
-                }
-                args = args + this.generate_expression(node.arguments[i]);
-                i = i + 1;
-            }
-            return className + "." + node.methodName + "(" + args + ")";
+            return this.generate_static_method_call_expression(node);
         }
         if (node.type == "StaticPropertyAccess") {
-            let className = "";
-            if (node.namespacePath) {
-                if (node.namespacePath.length >= 2) {
-                    className =
-                        node.namespacePath[node.namespacePath.length - 2];
-                } else {
-                    className = node.namespacePath[0];
-                }
-            } else if (node.className.type) {
-                className = this.generate_expression(node.className);
-            } else {
-                className = node.className;
-            }
-            return className + "." + node.property;
+            return this.generate_static_property_access_expression(node);
         }
         if (node.type == "ArrayAccess") {
-            let obj = "";
-            if (node.object.type) {
-                obj = this.generate_expression(node.object);
-            } else {
-                obj = node.object;
-            }
-            let index = this.generate_expression(node.index);
-            return obj + "[" + index + "]";
+            return this.generate_array_access_expression(node);
         }
         if (node.type == "ObjectLiteral") {
-            if (node.properties.length == 0) {
-                return "{}";
-            }
-            let result = "{";
-            let i = 0;
-            while (i < node.properties.length) {
-                let prop = node.properties[i];
-                if (i > 0) {
-                    result = result + ", ";
-                }
-                result =
-                    result +
-                    '"' +
-                    prop.key +
-                    '": ' +
-                    this.generate_expression(prop.value);
-                i = i + 1;
-            }
-            result = result + "}";
-            return result;
+            return this.generate_object_literal_expression(node);
         }
         if (node.type == "ArrayLiteral") {
-            return "[]";
+            return this.generate_array_literal_expression(node);
         }
         if (node.type == "UnaryOp") {
-            let operand = this.generate_expression(node.operand);
-            return node.operator + operand;
+            return this.generate_unary_op_expression(node);
         }
         if (node.type == "ThisExpression") {
-            return "this";
+            return this.generate_this_expression(node);
         }
         if (node.type == "DefaultValue") {
-            return "undefined";
+            return this.generate_default_value_expression(node);
         }
         return "/* Unknown expression: " + node.type + " */";
     }
 
+    generate_number_expression(node) {
+        return node.value;
+    }
+
+    generate_string_expression(node) {
+        let escaped = node.value;
+        escaped = this.replace_all(escaped, "\\", "\\\\");
+        escaped = this.replace_all(escaped, '"', '\\"');
+        escaped = this.replace_all(escaped, "\n", "\\n");
+        escaped = this.replace_all(escaped, "\r", "\\r");
+        escaped = this.replace_all(escaped, "\t", "\\t");
+        return '"' + escaped + '"';
+    }
+
+    generate_boolean_expression(node) {
+        return node.value;
+    }
+
+    generate_identifier_expression(node) {
+        return node.name;
+    }
+
+    generate_binary_op_expression(node) {
+        let left = this.generate_expression(node.left);
+        let right = this.generate_expression(node.right);
+        let result = "(";
+        result = result + left;
+        result = result + " ";
+        result = result + node.operator;
+        result = result + " ";
+        result = result + right;
+        result = result + ")";
+        return result;
+    }
+
+    generate_assignment_expression(node) {
+        let left = this.generate_expression(node.left);
+        let right = this.generate_expression(node.right);
+        return left + " = " + right;
+    }
+
+    generate_type_check_expression(node) {
+        let expr = this.generate_expression(node.expression);
+        let pattern = this.generate_pattern_expression(node.pattern);
+        return "(" + expr + " instanceof " + pattern + ")";
+    }
+
+    generate_optional_type_check_expression(node) {
+        let expr = this.generate_expression(node.expression);
+        let pattern = this.generate_pattern_expression(node.pattern);
+        return (
+            "(function() { try { return " +
+            expr +
+            " instanceof " +
+            pattern +
+            "; } catch(e) { return false; } })()"
+        );
+    }
+
+    generate_type_cast_expression(node) {
+        let expr = this.generate_expression(node.expression);
+        let targetType = this.generate_type_expression(node.targetType);
+        return "(" + expr + ")";
+    }
+
+    generate_optional_type_cast_expression(node) {
+        let expr = this.generate_expression(node.expression);
+        let targetType = this.generate_type_expression(node.targetType);
+        return (
+            "(function() { try { return (" +
+            expr +
+            "); } catch(e) { return null; } })()"
+        );
+    }
+
+    generate_micro_call_expression(node) {
+        let callee = this.generate_expression(node.callee);
+        let args = "";
+        let i = 0;
+        while (i < node.arguments.length) {
+            if (i > 0) {
+                args = args + ", ";
+            }
+            args = args + this.generate_expression(node.arguments[i]);
+            i = i + 1;
+        }
+        if (node.closure) {
+            let closureParams = "";
+            let closureBody = "";
+            if (node.closure) {
+                closureBody = this.generate_statement(node.closure);
+            }
+            if (args.length > 0) {
+                args = args + ", ";
+            }
+            args = args + "function(" + closureParams + ") " + closureBody;
+        }
+        return callee + "(" + args + ")";
+    }
+
+    generate_anonymous_function_expression(node) {
+        let params = "";
+        let i = 0;
+        while (i < node.parameters.length) {
+            if (i > 0) {
+                params = params + ", ";
+            }
+            let param = node.parameters[i];
+            if (param) {
+                if (param.name) {
+                    params = params + param.name;
+                } else {
+                    params = params + "param" + i;
+                }
+            } else {
+                params = params + "param" + i;
+            }
+            i = i + 1;
+        }
+        let body = "";
+        if (node.body) {
+            body = this.generate_statement(node.body);
+        }
+        return "function(" + params + ") " + body;
+    }
+
+    generate_new_expression(node) {
+        let args = "";
+        let i = 0;
+        while (i < node.arguments.length) {
+            if (i > 0) {
+                args = args + ", ";
+            }
+            args = args + this.generate_expression(node.arguments[i]);
+            i = i + 1;
+        }
+        let className = node.className;
+        if (node.resolvedClassName) {
+            className = node.resolvedClassName;
+        }
+        return "new " + className + "(" + args + ")";
+    }
+
+    generate_await_expression(node) {
+        let argument = this.generate_expression(node.argument);
+        return "await " + argument;
+    }
+
+    generate_property_access_expression(node) {
+        if (node.object.type) {
+            let obj = this.generate_expression(node.object);
+            return obj + "." + node.property;
+        } else {
+            return node.object + "." + node.property;
+        }
+    }
+
+    generate_static_method_call_expression(node) {
+        let className = "";
+        if (node.namespacePath) {
+            if (node.namespacePath.length >= 2) {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if (node.className.type) {
+            className = this.generate_expression(node.className);
+        } else {
+            className = node.className;
+        }
+        let args = "";
+        let i = 0;
+        while (i < node.arguments.length) {
+            if (i > 0) {
+                args = args + ", ";
+            }
+            args = args + this.generate_expression(node.arguments[i]);
+            i = i + 1;
+        }
+        return className + "." + node.methodName + "(" + args + ")";
+    }
+
+    generate_static_property_access_expression(node) {
+        let className = "";
+        if (node.namespacePath) {
+            if (node.namespacePath.length >= 2) {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if (node.className.type) {
+            className = this.generate_expression(node.className);
+        } else {
+            className = node.className;
+        }
+        return className + "." + node.property;
+    }
+
+    generate_array_access_expression(node) {
+        let obj = "";
+        if (node.object.type) {
+            obj = this.generate_expression(node.object);
+        } else {
+            obj = node.object;
+        }
+        let index = this.generate_expression(node.index);
+        return obj + "[" + index + "]";
+    }
+
+    generate_object_literal_expression(node) {
+        if (node.properties.length == 0) {
+            return "{}";
+        }
+        let result = "{";
+        let i = 0;
+        while (i < node.properties.length) {
+            let prop = node.properties[i];
+            if (i > 0) {
+                result = result + ", ";
+            }
+            result =
+                result +
+                '"' +
+                prop.key +
+                '": ' +
+                this.generate_expression(prop.value);
+            i = i + 1;
+        }
+        result = result + "}";
+        return result;
+    }
+
+    generate_array_literal_expression(node) {
+        return "[]";
+    }
+
+    generate_unary_op_expression(node) {
+        let operand = this.generate_expression(node.operand);
+        return node.operator + operand;
+    }
+
+    generate_this_expression(node) {
+        return "this";
+    }
+
+    generate_default_value_expression(node) {
+        return "undefined";
+    }
+
     generate_statement(node) {
         if (node.type == "LetStatement") {
-            let value = this.generate_expression(node.value);
-            return "let " + node.name + " = " + value + ";";
+            return this.generate_let_statement(node);
         }
         if (node.type == "NamespaceStatement") {
-            let namespacePath = this.join_name_path(node.path, "::");
-            if (node.isMainNamespace) {
-                return "// namespace! " + namespacePath + ";";
-            } else {
-                return "// namespace " + namespacePath + ";";
-            }
+            return this.generate_namespace_statement(node);
         }
         if (node.type == "UsingStatement") {
-            return "// using " + this.join_name_path(node.path, "::") + ";";
+            return this.generate_using_statement(node);
         }
         if (node.type == "JSAttributeStatement") {
-            return (
-                "import { " +
-                node.importName +
-                " as " +
-                node.functionName +
-                ' } from "' +
-                node.modulePath +
-                '";'
-            );
+            return this.generate_js_attribute_statement(node);
         }
         if (node.type == "ImportJsStatement") {
-            return (
-                "import { " +
-                node.importName +
-                " as " +
-                node.localName +
-                ' } from "' +
-                node.module +
-                '";'
-            );
+            return this.generate_import_js_statement(node);
         }
         if (node.type == "MicroDeclaration") {
-            let params = "";
-            let i = 0;
-            while (i < node.parameters.length) {
-                if (i > 0) {
-                    params = params + ", ";
-                }
-                let param = node.parameters[i];
-                if (param && param.name) {
-                    params = params + param.name;
-                } else {
-                    params = params + param;
-                }
-                i = i + 1;
-            }
-            let body = this.generate_statement(node.body);
-            let functionName = node.name;
-            return (
-                "export function " + functionName + "(" + params + ") " + body
-            );
+            return this.generate_micro_declaration(node);
         }
         if (node.type == "MemberStatement") {
+            return this.generate_member_statement(node);
+        }
+        if (node.type == "IfStatement") {
+            return this.generate_if_statement(node);
+        }
+        if (node.type == "WhileStatement") {
+            return this.generate_while_statement(node);
+        }
+        if (node.type == "UntilStatement") {
+            return this.generate_until_statement(node);
+        }
+        if (node.type == "ReturnStatement") {
+            return this.generate_return_statement(node);
+        }
+        if (node.type == "Block") {
+            return this.generate_block_statement(node);
+        }
+        if (node.type == "ExpressionStatement") {
+            return this.generate_expression_statement(node);
+        }
+        if (node.type == "ClassDeclaration") {
+            return this.generate_class_declaration(node);
+        }
+        if (node.type == "TraitDeclaration") {
+            return this.generate_trait_declaration(node);
+        }
+        if (node.type == "SingletonDeclaration") {
+            return this.generate_singleton_declaration(node);
+        }
+        return "/* Unknown statement: " + node.type + " */";
+    }
+
+    generate_let_statement(node) {
+        let value = this.generate_expression(node.value);
+        return "let " + node.name + " = " + value + ";";
+    }
+
+    generate_namespace_statement(node) {
+        let namespacePath = this.join_name_path(node.path, "::");
+        if (node.isMainNamespace) {
+            return "// namespace! " + namespacePath + ";";
+        } else {
+            return "// namespace " + namespacePath + ";";
+        }
+    }
+
+    generate_using_statement(node) {
+        return "// using " + this.join_name_path(node.path, "::") + ";";
+    }
+
+    generate_js_attribute_statement(node) {
+        let cleanImportName = this.replace_all(node.importName, "-", "_");
+        cleanImportName = this.replace_all(cleanImportName, ".", "_");
+        cleanImportName = this.replace_all(cleanImportName, "/", "_");
+        let uniqueName = node.functionName + "_" + cleanImportName;
+        let importStatement =
+            "import { " +
+            node.importName +
+            " as " +
+            uniqueName +
+            ' } from "' +
+            node.modulePath +
+            '";';
+        let params = "";
+        let i = 0;
+        while (i < node.parameters.length) {
+            if (i > 0) {
+                params = params + ", ";
+            }
+            params = params + node.parameters[i];
+            i = i + 1;
+        }
+        let functionDef =
+            "export function " + node.functionName + "(" + params + ") {\n";
+        functionDef =
+            functionDef + "  return " + uniqueName + "(" + params + ");\n";
+        functionDef = functionDef + "}";
+        return importStatement + "\n" + functionDef;
+    }
+
+    generate_import_js_statement(node) {
+        return (
+            "import { " +
+            node.importName +
+            " as " +
+            node.localName +
+            ' } from "' +
+            node.module +
+            '";'
+        );
+    }
+
+    generate_micro_declaration(node) {
+        let params = "";
+        let i = 0;
+        while (i < node.parameters.length) {
+            if (i > 0) {
+                params = params + ", ";
+            }
+            let param = node.parameters[i];
+            if (param && param.name) {
+                params = params + param.name;
+            } else {
+                params = params + param;
+            }
+            i = i + 1;
+        }
+        let body = this.generate_statement(node.body);
+        let functionName = node.name;
+        return "export function " + functionName + "(" + params + ") " + body;
+    }
+
+    generate_member_statement(node) {
+        let params = "";
+        let i = 0;
+        while (i < node.parameters.length) {
+            if (i > 0) {
+                params = params + ", ";
+            }
+            let param = node.parameters[i];
+            if (param && param.name) {
+                params = params + param.name;
+            } else {
+                params = params + param;
+            }
+            i = i + 1;
+        }
+        let body = this.generate_statement(node.body);
+        return "function " + node.name + "(" + params + ") " + body;
+    }
+
+    generate_if_statement(node) {
+        let condition = this.generate_expression(node.condition);
+        let thenBranch = this.generate_statement(node.thenBranch);
+        let result = "if (" + condition + ") " + thenBranch;
+        if (node.elseBranch && node.elseBranch.type) {
+            let elseBranch = this.generate_statement(node.elseBranch);
+            result = result + " else " + elseBranch;
+        }
+        return result;
+    }
+
+    generate_while_statement(node) {
+        let condition = this.generate_expression(node.condition);
+        let body = this.generate_statement(node.body);
+        return "while (" + condition + ") " + body;
+    }
+
+    generate_until_statement(node) {
+        let condition = this.generate_expression(node.condition);
+        let body = this.generate_statement(node.body);
+        return "while (!(" + condition + ")) " + body;
+    }
+
+    generate_return_statement(node) {
+        if (node.value && node.value.type) {
+            let value = this.generate_expression(node.value);
+            return "return " + value + ";";
+        } else {
+            return "return;";
+        }
+    }
+
+    generate_block_statement(node) {
+        let statements = "";
+        let i = 0;
+        while (i < node.statements.length) {
+            let stmt = this.generate_statement(node.statements[i]);
+            if (i > 0) {
+                statements = statements + "\n";
+            }
+            statements = statements + stmt;
+            i = i + 1;
+        }
+        return "{\n" + statements + "\n}";
+    }
+
+    generate_expression_statement(node) {
+        return this.generate_expression(node.expression) + ";";
+    }
+
+    generate_class_declaration(node) {
+        let className = node.name;
+        let superClass = node.superClass;
+        let members = node.members;
+        let result = "class " + className;
+        if (superClass) {
+            result = result + " extends " + superClass;
+        }
+        result = result + " {\n";
+        let hasExplicitConstructor = false;
+        let explicitConstructor = null;
+        let fieldInits = "";
+        let i = 0;
+        while (i < members.length) {
+            let member = members[i];
+            if (member.type == "ConstructorStatement") {
+                hasExplicitConstructor = true;
+                explicitConstructor = member;
+            } else if (member.type == "Property") {
+                if (member.initializer && member.initializer.type) {
+                    let initValue = this.generate_expression(
+                        member.initializer
+                    );
+                    fieldInits =
+                        fieldInits +
+                        "    self." +
+                        member.name +
+                        " = " +
+                        initValue +
+                        ";\n";
+                } else {
+                    fieldInits =
+                        fieldInits +
+                        "    self." +
+                        member.name +
+                        " = undefined;\n";
+                }
+            }
+            i = i + 1;
+        }
+        if (hasExplicitConstructor) {
             let params = "";
-            let i = 0;
-            while (i < node.parameters.length) {
-                if (i > 0) {
+            let j = 0;
+            while (j < explicitConstructor.parameters.length) {
+                if (j > 0) {
                     params = params + ", ";
                 }
-                let param = node.parameters[i];
+                let param = explicitConstructor.parameters[j];
                 if (param && param.name) {
                     params = params + param.name;
                 } else {
                     params = params + param;
                 }
-                i = i + 1;
+                j = j + 1;
             }
-            let body = this.generate_statement(node.body);
-            return "function " + node.name + "(" + params + ") " + body;
-        }
-        if (node.type == "IfStatement") {
-            let condition = this.generate_expression(node.condition);
-            let thenBranch = this.generate_statement(node.thenBranch);
-            let result = "if (" + condition + ") " + thenBranch;
-            if (node.elseBranch && node.elseBranch.type) {
-                let elseBranch = this.generate_statement(node.elseBranch);
-                result = result + " else " + elseBranch;
+            result = result + "  constructor(" + params + ") {\n";
+            if (superClass) {
+                result = result + "    super();\n";
             }
-            return result;
-        }
-        if (node.type == "WhileStatement") {
-            let condition = this.generate_expression(node.condition);
-            let body = this.generate_statement(node.body);
-            return "while (" + condition + ") " + body;
-        }
-        if (node.type == "UntilStatement") {
-            let condition = this.generate_expression(node.condition);
-            let body = this.generate_statement(node.body);
-            return "while (!(" + condition + ")) " + body;
-        }
-        if (node.type == "ReturnStatement") {
-            if (node.value && node.value.type) {
-                let value = this.generate_expression(node.value);
-                return "return " + value + ";";
-            } else {
-                return "return;";
+            result = result + fieldInits;
+            let ctorBody = this.generate_statement(explicitConstructor.body);
+            if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
+                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
             }
+            result = result + ctorBody;
+            result = result + "  }\n\n";
+        } else if (fieldInits != "") {
+            result = result + "  constructor() {\n";
+            if (superClass) {
+                result = result + "    super();\n";
+            }
+            result = result + fieldInits;
+            result = result + "  }\n\n";
         }
-        if (node.type == "Block") {
-            let statements = "";
-            let i = 0;
-            while (i < node.statements.length) {
-                let stmt = this.generate_statement(node.statements[i]);
-                if (i > 0) {
-                    statements = statements + "\n";
+        i = 0;
+        while (i < members.length) {
+            let member = members[i];
+            if (member.type == "MemberStatement") {
+                let methodName = member.name;
+                let params = "";
+                let j = 0;
+                let paramCount = 0;
+                while (j < member.parameters.length) {
+                    let param = member.parameters[j];
+                    let paramName = "";
+                    if (param && param.name) {
+                        paramName = param.name;
+                    } else {
+                        paramName = param;
+                    }
+                    if (paramName != "self") {
+                        if (paramCount > 0) {
+                            params = params + ", ";
+                        }
+                        params = params + paramName;
+                        paramCount = paramCount + 1;
+                    }
+                    j = j + 1;
                 }
-                statements = statements + stmt;
-                i = i + 1;
+                let body = this.generate_statement(member.body);
+                if (member.isStatic) {
+                    result =
+                        result +
+                        "  static " +
+                        methodName +
+                        "(" +
+                        params +
+                        ") " +
+                        body +
+                        "\n\n";
+                } else {
+                    result =
+                        result +
+                        "  " +
+                        methodName +
+                        "(" +
+                        params +
+                        ") " +
+                        body +
+                        "\n\n";
+                }
             }
-            return "{\n" + statements + "\n}";
+            i = i + 1;
         }
-        if (node.type == "ExpressionStatement") {
-            return this.generate_expression(node.expression) + ";";
+        result = result + "}";
+        return result;
+    }
+
+    generate_trait_declaration(node) {
+        let traitName = node.name;
+        return (
+            "/* Trait " +
+            traitName +
+            " - placeholder for future implementation */"
+        );
+    }
+
+    generate_singleton_declaration(node) {
+        let singletonName = node.name;
+        let superClass = node.superClass;
+        let members = node.members;
+        let result = "const " + singletonName + " = (function() {\n";
+        result = result + "  let instance = null;\n";
+        result = result + "  \n";
+        result = result + "  class " + singletonName + "Class";
+        if (superClass) {
+            result = result + " extends " + superClass;
         }
-        if (node.type == "NamespaceStatement") {
-            return "// namespace " + this.join_name_path(node.path, "::") + ";";
+        result = result + " {\n";
+        let hasExplicitConstructor = false;
+        let explicitConstructor = null;
+        let fieldInits = "";
+        let i = 0;
+        while (i < members.length) {
+            let member = members[i];
+            if (member.type == "ConstructorStatement") {
+                hasExplicitConstructor = true;
+                explicitConstructor = member;
+            } else if (member.type == "Property") {
+                if (member.initializer && member.initializer.type) {
+                    let initValue = this.generate_expression(
+                        member.initializer
+                    );
+                    fieldInits =
+                        fieldInits +
+                        "      this." +
+                        member.name +
+                        " = " +
+                        initValue +
+                        ";\n";
+                } else {
+                    fieldInits =
+                        fieldInits +
+                        "      this." +
+                        member.name +
+                        " = undefined;\n";
+                }
+            }
+            i = i + 1;
         }
-        if (node.type == "UsingStatement") {
-            return "// using " + this.join_name_path(node.path, "::") + ";";
-        }
-        if (node.type == "JSAttributeStatement") {
-            let cleanImportName = this.replace_all(node.importName, "-", "_");
-            cleanImportName = this.replace_all(cleanImportName, ".", "_");
-            cleanImportName = this.replace_all(cleanImportName, "/", "_");
-            let uniqueName = node.functionName + "_" + cleanImportName;
-            let importStatement =
-                "import { " +
-                node.importName +
-                " as " +
-                uniqueName +
-                ' } from "' +
-                node.modulePath +
-                '";';
+        if (hasExplicitConstructor) {
             let params = "";
-            let i = 0;
-            while (i < node.parameters.length) {
-                if (i > 0) {
+            let j = 0;
+            while (j < explicitConstructor.parameters.length) {
+                if (j > 0) {
                     params = params + ", ";
                 }
-                params = params + node.parameters[i];
-                i = i + 1;
-            }
-            let functionDef =
-                "export function " + node.functionName + "(" + params + ") {\n";
-            functionDef =
-                functionDef + "  return " + uniqueName + "(" + params + ");\n";
-            functionDef = functionDef + "}";
-            return importStatement + "\n" + functionDef;
-        }
-        if (node.type == "ClassDeclaration") {
-            let className = node.name;
-            let superClass = node.superClass;
-            let members = node.members;
-            let result = "class " + className;
-            if (superClass) {
-                result = result + " extends " + superClass;
-            }
-            result = result + " {\n";
-            let hasExplicitConstructor = false;
-            let explicitConstructor = null;
-            let fieldInits = "";
-            let i = 0;
-            while (i < members.length) {
-                let member = members[i];
-                if (member.type == "ConstructorStatement") {
-                    hasExplicitConstructor = true;
-                    explicitConstructor = member;
-                } else if (member.type == "Property") {
-                    if (member.initializer && member.initializer.type) {
-                        let initValue = this.generate_expression(
-                            member.initializer
-                        );
-                        fieldInits =
-                            fieldInits +
-                            "    self." +
-                            member.name +
-                            " = " +
-                            initValue +
-                            ";\n";
-                    } else {
-                        fieldInits =
-                            fieldInits +
-                            "    self." +
-                            member.name +
-                            " = undefined;\n";
-                    }
+                let param = explicitConstructor.parameters[j];
+                if (param && param.name) {
+                    params = params + param.name;
+                } else {
+                    params = params + param;
                 }
-                i = i + 1;
+                j = j + 1;
             }
-            if (hasExplicitConstructor) {
+            result = result + "    constructor(" + params + ") {\n";
+            if (superClass) {
+                result = result + "      super();\n";
+            }
+            result = result + fieldInits;
+            let ctorBody = this.generate_statement(explicitConstructor.body);
+            if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
+                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+                ctorBody = ctorBody.replace("\n", "\n      ");
+            }
+            result = result + "      " + ctorBody;
+            result = result + "    }\n\n";
+        } else if (fieldInits != "") {
+            result = result + "    constructor() {\n";
+            if (superClass) {
+                result = result + "      super();\n";
+            }
+            result = result + fieldInits;
+            result = result + "    }\n\n";
+        }
+        i = 0;
+        while (i < members.length) {
+            let member = members[i];
+            if (member.type == "MemberStatement") {
+                let methodName = member.name;
                 let params = "";
                 let j = 0;
-                while (j < explicitConstructor.parameters.length) {
-                    if (j > 0) {
-                        params = params + ", ";
-                    }
-                    let param = explicitConstructor.parameters[j];
+                let paramCount = 0;
+                while (j < member.parameters.length) {
+                    let param = member.parameters[j];
+                    let paramName = "";
                     if (param && param.name) {
-                        params = params + param.name;
+                        paramName = param.name;
                     } else {
-                        params = params + param;
+                        paramName = param;
+                    }
+                    if (paramName != "self") {
+                        if (paramCount > 0) {
+                            params = params + ", ";
+                        }
+                        params = params + paramName;
+                        paramCount = paramCount + 1;
                     }
                     j = j + 1;
                 }
-                result = result + "  constructor(" + params + ") {\n";
-                if (superClass) {
-                    result = result + "    super();\n";
+                let body = this.generate_statement(member.body);
+                if (member.isStatic) {
+                    result =
+                        result +
+                        "    static " +
+                        methodName +
+                        "(" +
+                        params +
+                        ") " +
+                        body +
+                        "\n\n";
+                } else {
+                    result =
+                        result +
+                        "    " +
+                        methodName +
+                        "(" +
+                        params +
+                        ") " +
+                        body +
+                        "\n\n";
                 }
-                result = result + fieldInits;
-                let ctorBody = this.generate_statement(
-                    explicitConstructor.body
-                );
-                if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
-                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
-                }
-                result = result + ctorBody;
-                result = result + "  }\n\n";
-            } else if (fieldInits != "") {
-                result = result + "  constructor() {\n";
-                if (superClass) {
-                    result = result + "    super();\n";
-                }
-                result = result + fieldInits;
-                result = result + "  }\n\n";
             }
-            i = 0;
-            while (i < members.length) {
-                let member = members[i];
-                if (member.type == "MemberStatement") {
-                    let methodName = member.name;
-                    let params = "";
-                    let j = 0;
-                    let paramCount = 0;
-                    while (j < member.parameters.length) {
-                        let param = member.parameters[j];
-                        let paramName = "";
-                        if (param && param.name) {
-                            paramName = param.name;
-                        } else {
-                            paramName = param;
-                        }
-                        if (paramName != "self") {
-                            if (paramCount > 0) {
-                                params = params + ", ";
-                            }
-                            params = params + paramName;
-                            paramCount = paramCount + 1;
-                        }
-                        j = j + 1;
-                    }
-                    let body = this.generate_statement(member.body);
-                    if (member.isStatic) {
-                        result =
-                            result +
-                            "  static " +
-                            methodName +
-                            "(" +
-                            params +
-                            ") " +
-                            body +
-                            "\n\n";
-                    } else {
-                        result =
-                            result +
-                            "  " +
-                            methodName +
-                            "(" +
-                            params +
-                            ") " +
-                            body +
-                            "\n\n";
-                    }
-                }
-                i = i + 1;
-            }
-            result = result + "}";
-            return result;
+            i = i + 1;
         }
-        if (node.type == "TraitDeclaration") {
-            let traitName = node.name;
-            return (
-                "/* Trait " +
-                traitName +
-                " - placeholder for future implementation */"
-            );
-        }
-        if (node.type == "SingletonDeclaration") {
-            let singletonName = node.name;
-            let superClass = node.superClass;
-            let members = node.members;
-            let result = "const " + singletonName + " = (function() {\n";
-            result = result + "  let instance = null;\n";
-            result = result + "  \n";
-            result = result + "  class " + singletonName + "Class";
-            if (superClass) {
-                result = result + " extends " + superClass;
-            }
-            result = result + " {\n";
-            let hasExplicitConstructor = false;
-            let explicitConstructor = null;
-            let fieldInits = "";
-            let i = 0;
-            while (i < members.length) {
-                let member = members[i];
-                if (member.type == "ConstructorStatement") {
-                    hasExplicitConstructor = true;
-                    explicitConstructor = member;
-                } else if (member.type == "Property") {
-                    if (member.initializer && member.initializer.type) {
-                        let initValue = this.generate_expression(
-                            member.initializer
-                        );
-                        fieldInits =
-                            fieldInits +
-                            "      this." +
-                            member.name +
-                            " = " +
-                            initValue +
-                            ";\n";
-                    } else {
-                        fieldInits =
-                            fieldInits +
-                            "      this." +
-                            member.name +
-                            " = undefined;\n";
-                    }
-                }
-                i = i + 1;
-            }
-            if (hasExplicitConstructor) {
-                let params = "";
-                let j = 0;
-                while (j < explicitConstructor.parameters.length) {
-                    if (j > 0) {
-                        params = params + ", ";
-                    }
-                    let param = explicitConstructor.parameters[j];
-                    if (param && param.name) {
-                        params = params + param.name;
-                    } else {
-                        params = params + param;
-                    }
-                    j = j + 1;
-                }
-                result = result + "    constructor(" + params + ") {\n";
-                if (superClass) {
-                    result = result + "      super();\n";
-                }
-                result = result + fieldInits;
-                let ctorBody = this.generate_statement(
-                    explicitConstructor.body
-                );
-                if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
-                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
-                    ctorBody = ctorBody.replace("\n", "\n      ");
-                }
-                result = result + "      " + ctorBody;
-                result = result + "    }\n\n";
-            } else if (fieldInits != "") {
-                result = result + "    constructor() {\n";
-                if (superClass) {
-                    result = result + "      super();\n";
-                }
-                result = result + fieldInits;
-                result = result + "    }\n\n";
-            }
-            i = 0;
-            while (i < members.length) {
-                let member = members[i];
-                if (member.type == "MemberStatement") {
-                    let methodName = member.name;
-                    let params = "";
-                    let j = 0;
-                    let paramCount = 0;
-                    while (j < member.parameters.length) {
-                        let param = member.parameters[j];
-                        let paramName = "";
-                        if (param && param.name) {
-                            paramName = param.name;
-                        } else {
-                            paramName = param;
-                        }
-                        if (paramName != "self") {
-                            if (paramCount > 0) {
-                                params = params + ", ";
-                            }
-                            params = params + paramName;
-                            paramCount = paramCount + 1;
-                        }
-                        j = j + 1;
-                    }
-                    let body = this.generate_statement(member.body);
-                    if (member.isStatic) {
-                        result =
-                            result +
-                            "    static " +
-                            methodName +
-                            "(" +
-                            params +
-                            ") " +
-                            body +
-                            "\n\n";
-                    } else {
-                        result =
-                            result +
-                            "    " +
-                            methodName +
-                            "(" +
-                            params +
-                            ") " +
-                            body +
-                            "\n\n";
-                    }
-                }
-                i = i + 1;
-            }
-            result = result + "  }\n";
-            result = result + "  \n";
-            result = result + "  return function() {\n";
-            result = result + "    if (instance === null) {\n";
-            result =
-                result + "      instance = new " + singletonName + "Class();\n";
-            result = result + "    }\n";
-            result = result + "    return instance;\n";
-            result = result + "  };\n";
-            result = result + "})();";
-            return result;
-        }
-        return "/* Unknown statement: " + node.type + " */";
+        result = result + "  }\n";
+        result = result + "  \n";
+        result = result + "  return function() {\n";
+        result = result + "    if (instance === null) {\n";
+        result =
+            result + "      instance = new " + singletonName + "Class();\n";
+        result = result + "    }\n";
+        result = result + "    return instance;\n";
+        result = result + "  };\n";
+        result = result + "})();";
+        return result;
     }
 
     generate(ast) {
@@ -3934,7 +4074,26 @@ class package_codegen_JsCodeGeneration {
             while (i < ast.statements.length) {
                 let stmt = ast.statements[i];
                 let stmt_code = this.generate_statement(stmt);
-                this.write_line(stmt_code);
+                let has_position = false;
+                if (stmt.has_valid_position) {
+                    has_position = stmt.has_valid_position();
+                } else {
+                    has_position = stmt.line && stmt.column;
+                }
+                if (has_position && stmt.source_file) {
+                    let source_span = {};
+                    source_span.file_name = stmt.source_file;
+                    source_span.start_line = stmt.source_line || stmt.line;
+                    source_span.start_column =
+                        stmt.source_column || stmt.column;
+                    source_span.end_line = stmt.source_line || stmt.line;
+                    source_span.end_column =
+                        (stmt.source_column || stmt.column) +
+                        (stmt.source_length || stmt.length || 1);
+                    this.write_line_with_mapping(stmt_code, source_span, 0);
+                } else {
+                    this.write_line(stmt_code);
+                }
                 i = i + 1;
             }
             return this.to_string();
@@ -4001,7 +4160,7 @@ class package_codegen_JsCodeGeneration {
 }
 class package_generation_JsSourceMapping {
     constructor(source_map_builder) {
-        this.builder = source_map_builder;
+        this.source_map_builder = source_map_builder;
         this.current_line = 1;
         this.current_column = 0;
     }
@@ -4011,21 +4170,28 @@ class package_generation_JsSourceMapping {
         this.current_column = column;
     }
 
-    map_segment(source_span, source_index) {
-        if (source_span) {
-            if (source_span.is_valid()) {
-                this.builder.add_span_mapping(
-                    this.current_line,
-                    this.current_column,
-                    source_span,
-                    source_index
-                );
-            }
+    map_segment(source_index) {
+        if (this.source_map_builder) {
+            this.source_map_builder.add_mapping(
+                this.current_line,
+                this.current_column,
+                source_index,
+                this.current_line,
+                this.current_column,
+                false
+            );
         }
     }
 
     generate_with_mapping(code, source_span, source_index) {
-        this.map_segment(source_span, source_index);
+        if (source_span && source_span.is_valid()) {
+            this.source_map_builder.add_span_mapping(
+                this.current_line,
+                this.current_column,
+                source_span,
+                source_index
+            );
+        }
         let i = 0;
         let newline_count = 0;
         while (i < code.length) {
@@ -4125,7 +4291,17 @@ class package_generation_SourceMapBuilder {
         original_line,
         original_column,
         name_index
-    ) {}
+    ) {
+        let mapping = {
+            generated_line: generated_line,
+            generated_column: generated_column,
+            source_index: source_index,
+            original_line: original_line,
+            original_column: original_column,
+            name_index: name_index,
+        };
+        this.mappings.push(mapping);
+    }
 
     add_span_mapping(
         generated_line,
@@ -4133,14 +4309,16 @@ class package_generation_SourceMapBuilder {
         source_span,
         source_index
     ) {
-        this.add_mapping(
-            generated_line,
-            generated_column,
-            source_index,
-            source_span.start_line,
-            source_span.start_column,
-            false
-        );
+        if (source_span && source_span.is_valid()) {
+            this.add_mapping(
+                generated_line,
+                generated_column,
+                source_index,
+                source_span.start_line,
+                source_span.start_column,
+                false
+            );
+        }
     }
 
     build() {
@@ -4150,7 +4328,28 @@ class package_generation_SourceMapBuilder {
     }
 
     encode_mappings() {
-        return "";
+        if (this.mappings.length == 0) {
+            return "";
+        }
+        let result = "";
+        let i = 0;
+        while (i < this.mappings.length) {
+            let mapping = this.mappings[i];
+            if (i > 0) {
+                result = result + ",";
+            }
+            result =
+                result +
+                mapping.generated_column +
+                "," +
+                mapping.source_index +
+                "," +
+                mapping.original_line +
+                "," +
+                mapping.original_column;
+            i = i + 1;
+        }
+        return result;
     }
 }
 class package_generation_SourceSpan {
@@ -4207,11 +4406,23 @@ class package_generation_SourceSpan {
     }
 }
 class package_lexer_Token {
-    constructor(type, value, line, column) {
+    constructor(type, value, line, column, offset, length) {
         this.type = type;
         this.value = value;
         this.line = line;
         this.column = column;
+        this.offset = offset;
+        this.length = length;
+        if (offset == false) {
+            this.offset = 0;
+        }
+        if (length == false) {
+            this.length = 0;
+        }
+    }
+
+    get_end_offset() {
+        return this.offset + this.length;
     }
 }
 class package_lexer_ValkyrieLexer {
@@ -4498,8 +4709,42 @@ class package_lexer_ValkyrieLexer {
     }
 }
 class package_parser_Node {
-    constructor(type) {
+    constructor(type, offset, length, line, column) {
         this.type = type;
+        this.offset = offset;
+        this.length = length;
+        this.line = line;
+        this.column = column;
+        if (offset == false) {
+            this.offset = 0;
+        }
+        if (length == false) {
+            this.length = 0;
+        }
+        if (line == false) {
+            this.line = 1;
+        }
+        if (column == false) {
+            this.column = 1;
+        }
+    }
+
+    get_source_position() {
+        let position = {};
+        position.offset = this.offset;
+        position.length = this.length;
+        position.line = this.line;
+        position.column = this.column;
+        return position;
+    }
+
+    has_valid_position() {
+        return (
+            this.offset >= 0 &&
+            this.length > 0 &&
+            this.line > 0 &&
+            this.column > 0
+        );
     }
 }
 class package_parser_ValkyrieParser {
@@ -4532,5 +4777,15 @@ class package_parser_ValkyrieParser {
         let token = this.current_token;
         this.advance();
         return token;
+    }
+
+    mark_node(node_type) {
+        return new package_parser_Node(
+            node_type,
+            this.current_token.offset,
+            this.current_token.length,
+            this.current_token.line,
+            this.current_token.column
+        );
     }
 }

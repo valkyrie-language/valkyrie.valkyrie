@@ -106,12 +106,12 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             right = parsePatternExpression(parser);
             
             if isOptional {
-                let node = new Node("OptionalTypeCheck");
+                let node = parser.mark_node("OptionalTypeCheck");
                 node.expression = left;
                 node.pattern = right;
                 left = node;
             } else {
-                let node = new Node("TypeCheck");
+                let node = parser.mark_node("TypeCheck");
                 node.expression = left;
                 node.pattern = right;
                 left = node;
@@ -126,12 +126,12 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             right = parseTypeExpression(parser);
             
             if isOptional {
-                let node = new Node("OptionalTypeCast");
+                let node = parser.mark_node("OptionalTypeCast");
                 node.expression = left;
                 node.targetType = right;
                 left = node;
             } else {
-                let node = new Node("TypeCast");
+                let node = parser.mark_node("TypeCast");
                 node.expression = left;
                 node.targetType = right;
                 left = node;
@@ -144,12 +144,12 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             }
 
             if tokenType == "ASSIGN" {
-                let node = new Node("Assignment");
+                let node = parser.mark_node("Assignment");
                 node.left = left;
                 node.right = right;
                 left = node;
             } else {
-                let node = new Node("BinaryOp");
+                let node = parser.mark_node("BinaryOp");
                 node.left = left;
                 node.operator = op;
                 node.right = right;
@@ -178,7 +178,7 @@ micro parseUnaryExpression(parser: ValkyrieParser, inline: bool) -> Node {
         if operand && operand.type == "ParseError" {
             return operand;
         }
-        let node = new Node("UnaryOp");
+        let node = parser.mark_node("UnaryOp");
         node.operator = op;
         node.operand = operand;
         return node;
@@ -219,7 +219,7 @@ micro parseNewExpression(parser: ValkyrieParser, inline: bool) -> Node {
     let rparen = parser.expect("RPAREN");
     if rparen.type == "ParseError" { return rparen; }
 
-    let node = new Node("NewExpression");
+    let node = parser.mark_node("NewExpression");
     node.className = className.value;
     node.arguments = args;
     return node;
@@ -274,7 +274,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
                 hasTrailingClosure = true;
             }
 
-            let callNode = new Node("MicroCall");
+            let callNode = parser.mark_node("MicroCall");
             callNode.callee = expr;
             callNode.arguments = args;
             if hasTrailingClosure {
@@ -285,7 +285,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
             parser.advance();
             if parser.current_token.type == "AWAIT" {
                 parser.advance();
-                let awaitNode = new Node("AwaitExpression");
+                let awaitNode = parser.mark_node("AwaitExpression");
                 awaitNode.argument = expr;
                 expr = awaitNode;
             } else {
@@ -293,7 +293,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
                 if property && property.type == "ParseError" {
                     return property;
                 }
-                let accessNode = new Node("PropertyAccess");
+                let accessNode = parser.mark_node("PropertyAccess");
                 accessNode.object = expr;
                 accessNode.property = property.value;
                 expr = accessNode;
@@ -345,7 +345,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
                     return rparen;
                 }
                 
-                let staticCallNode = new Node("StaticMethodCall");
+                let staticCallNode = parser.mark_node("StaticMethodCall");
                 staticCallNode.namespacePath = namespacePath;
                 staticCallNode.methodName = namespacePath[namespacePath.length - 1];
                 staticCallNode.className = namespacePath[namespacePath.length - 2];
@@ -353,7 +353,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
                 expr = staticCallNode;
             } else {
                 # 静态属性访问
-                let staticAccessNode = new Node("StaticPropertyAccess");
+                let staticAccessNode = parser.mark_node("StaticPropertyAccess");
                 staticAccessNode.namespacePath = namespacePath;
                 staticAccessNode.property = namespacePath[namespacePath.length - 1];
                 staticAccessNode.className = namespacePath[namespacePath.length - 2];
@@ -369,7 +369,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
             if rbracket && rbracket.type == "ParseError" {
                 return rbracket;
             }
-            let accessNode = new Node("ArrayAccess");
+            let accessNode = parser.mark_node("ArrayAccess");
             accessNode.object = expr;
             accessNode.index = index;
             expr = accessNode;
@@ -385,7 +385,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     if parser.current_token.type == "NUMBER" {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new Node("Number");
+        let node = parser.mark_node("Number");
         node.value = value;
         return node;
     }
@@ -393,7 +393,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     if parser.current_token.type == "STRING" {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new Node("String");
+        let node = parser.mark_node("String");
         node.value = value;
         return node;
     }
@@ -401,7 +401,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     if parser.current_token.type == "BOOLEAN" {
         let value = parser.current_token.value;
         parser.advance();
-        let node = new Node("Boolean");
+        let node = parser.mark_node("Boolean");
         node.value = value;
         return node;
     }
@@ -417,8 +417,8 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
                 return closure;
             }
             
-            let callNode = new Node("MicroCall");
-            let identifierNode = new Node("Identifier");
+            let callNode = parser.mark_node("MicroCall");
+            let identifierNode = parser.mark_node("Identifier");
             identifierNode.name = name;
             callNode.callee = identifierNode;
             callNode.arguments = [];
@@ -426,7 +426,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
             return callNode;
         }
         
-        let node = new Node("Identifier");
+        let node = parser.mark_node("Identifier");
         node.name = name;
         return node;
     }
@@ -451,7 +451,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
             return body;
         }
         
-        let node = new Node("AnonymousFunction");
+        let node = parser.mark_node("AnonymousFunction");
         node.parameters = params;
         node.body = body;
         return node;
@@ -463,13 +463,13 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
         if nextIndex < parser.tokens.length && parser.tokens[nextIndex].type == "DOUBLE_COLON" {
             let name = "Self";  # 使用标准化的Self名称
             parser.advance();
-            let node = new Node("Identifier");
+            let node = parser.mark_node("Identifier");
             node.name = name;
             return node;
         } else {
             # 否则作为this表达式处理
             parser.advance();
-            let node = new Node("ThisExpression");
+            let node = parser.mark_node("ThisExpression");
             return node;
         }
     }
@@ -509,7 +509,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
             return rparen;
         }
 
-        let node = new Node("NewExpression");
+        let node = parser.mark_node("NewExpression");
         node.className = className.value;
         node.arguments = args;
         return node;
@@ -531,7 +531,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     # 支持数组字面量 []
     if parser.current_token.type == "LBRACKET" {
         parser.advance();
-        let node = new Node("ArrayLiteral");
+        let node = parser.mark_node("ArrayLiteral");
         node.elements = [];
 
         if parser.current_token.type != "RBRACKET" {
@@ -562,7 +562,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     # 支持对象字面量 {} - 只有在非 inline 模式下才解析
     if parser.current_token.type == "LBRACE" && !inline {
         parser.advance();
-        let node = new Node("ObjectLiteral");
+        let node = parser.mark_node("ObjectLiteral");
         node.properties = [];
 
         if parser.current_token.type != "RBRACE" {
@@ -578,7 +578,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
                     return value;
                 }
 
-                let propertyNode = new Node("Property");
+                let propertyNode = parser.mark_node("Property");
                 propertyNode.key = key;
                 propertyNode.value = value;
                 node.properties.push(propertyNode);
@@ -648,7 +648,7 @@ micro parseTypedParameter(parser: ValkyrieParser) -> Node {
         return paramName;
     }
 
-    let node = new Node("Parameter");
+    let node = parser.mark_node("Parameter");
     node.name = paramName.value;
     node.typeAnnotation = null;
     node.defaultValue = null;

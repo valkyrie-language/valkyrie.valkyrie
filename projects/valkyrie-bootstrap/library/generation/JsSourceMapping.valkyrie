@@ -1,39 +1,50 @@
 namespace package::generation;
 
-# JsSourceMapping provides utilities for mapping JavaScript code to source
+# JsSourceMapping 负责跟踪生成的 JavaScript 代码位置，并与 SourceMapBuilder 协作
+# 职责：
+# 1. 跟踪当前生成代码的行列位置
+# 2. 为生成的代码段添加源映射信息
+# 3. 提供便捷的代码生成方法（带位置更新）
 class JsSourceMapping {
     constructor(source_map_builder) {
-        self.builder = source_map_builder;
+        self.source_map_builder = source_map_builder;
         self.current_line = 1;
         self.current_column = 0;
     }
     
-    # Track the current position in generated code
-    micro update_position(self, line, column) {
+    # 更新当前位置
+    micro update_position(self, line: u32, column: u32) -> unit {
         self.current_line = line;
         self.current_column = column;
     }
     
-    # Add a mapping for a generated code segment
-    micro map_segment(self, source_span, source_index) {
-        if source_span {
-            if source_span.is_valid() {
-                self.builder.add_span_mapping(
-                    self.current_line,
-                    self.current_column,
-                    source_span,
-                    source_index
-                );
-            }
+    # 为当前位置添加源映射（委托给 SourceMapBuilder）
+    micro map_segment(self, source_index: u32) -> unit {
+        if self.source_map_builder {
+            self.source_map_builder.add_mapping(
+                self.current_line,
+                self.current_column,
+                source_index,
+                self.current_line,
+                self.current_column,
+                false
+            );
         }
     }
     
-    # Generate code with mapping
-    micro generate_with_mapping(self, code, source_span, source_index) {
-        self.map_segment(source_span, source_index);
+    # 生成代码并更新位置
+    micro generate_with_mapping(self, code: String, source_span, source_index: u32) -> String {
+        # 为这段代码添加映射
+        if source_span && source_span.is_valid() {
+            self.source_map_builder.add_span_mapping(
+                self.current_line,
+                self.current_column,
+                source_span,
+                source_index
+            );
+        }
         
-        # Update position based on generated code (simplified)
-        # For bootstrap, just count newlines manually
+        # 更新位置（基于生成的代码）
         let i = 0;
         let newline_count = 0;
         while i < code.length {
@@ -45,7 +56,7 @@ class JsSourceMapping {
         
         if newline_count > 0 {
             self.current_line = self.current_line + newline_count;
-            # Find last line length (simplified)
+            # 计算最后一行的列位置（简化实现）
             self.current_column = 0;
         } else {
             self.current_column = self.current_column + code.length;
@@ -54,15 +65,15 @@ class JsSourceMapping {
         return code;
     }
     
-    # Generate a newline and update position
-    micro generate_newline(self) {
+    # 生成换行并更新位置
+    micro generate_newline(self) -> String {
         self.current_line = self.current_line + 1;
         self.current_column = 0;
         return "\n";
     }
     
-    # Generate indentation
-    micro generate_indent(self, level) {
+    # 生成缩进并更新位置
+    micro generate_indent(self, level: u32) -> String {
         let indent = "";
         let i = 0;
         while i < level {

@@ -1,10 +1,25 @@
 namespace package::lexer;
 
 class Token {
-    constructor(type, value, line: u32, column: u32) {
+    constructor(type, value, line: u32, column: u32, offset: u32, length: u32) {
         self.type = type;
         self.value = value;
         self.line = line;
         self.column = column;
+        self.offset = offset;      # 在源文件中的起始偏移量（字节）
+        self.length = length;      # token 在源文件中的长度（字节）
+        
+        # 如果没有提供位置信息，使用默认值
+        if offset == false {
+            self.offset = 0;
+        }
+        if length == false {
+            self.length = 0;
+        }
+    }
+    
+    # 获取 token 的结束位置
+    micro get_end_offset(self) {
+        return self.offset + self.length;
     }
 }

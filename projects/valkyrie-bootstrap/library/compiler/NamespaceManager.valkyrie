@@ -28,6 +28,14 @@ class NamespaceManager {
                 if func_stmt.name == expr.name && func_stmt.uniqueName != null {
                     let resolved_expr = Object.assign({}, expr);
                     resolved_expr.name = func_stmt.uniqueName;
+                    # 保留原始位置信息
+                    if expr.has_valid_position() {
+                        resolved_expr.source_file = self.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
                     return resolved_expr;
                 }
                 i = i + 1;
@@ -40,9 +48,28 @@ class NamespaceManager {
                 if var_stmt.name == expr.name && var_stmt.uniqueName != null {
                     let resolved_expr = Object.assign({}, expr);
                     resolved_expr.name = var_stmt.uniqueName;
+                    # 保留原始位置信息
+                    if expr.has_valid_position() {
+                        resolved_expr.source_file = self.current_file;
+                        resolved_expr.source_line = expr.line;
+                        resolved_expr.source_column = expr.column;
+                        resolved_expr.source_offset = expr.offset;
+                        resolved_expr.source_length = expr.length;
+                    }
                     return resolved_expr;
                 }
                 j = j + 1;
+            }
+
+            # 为未解析的标识符也添加源信息
+            if expr.has_valid_position() {
+                let resolved_expr = Object.assign({}, expr);
+                resolved_expr.source_file = self.current_file;
+                resolved_expr.source_line = expr.line;
+                resolved_expr.source_column = expr.column;
+                resolved_expr.source_offset = expr.offset;
+                resolved_expr.source_length = expr.length;
+                return resolved_expr;
             }
 
             return expr;

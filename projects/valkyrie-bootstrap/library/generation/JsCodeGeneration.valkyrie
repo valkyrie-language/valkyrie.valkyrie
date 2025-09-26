@@ -16,15 +16,10 @@ class JsCodeGeneration {
         }
         self.options = options;
         
-        # Initialize source map support
-        if options {
-            if options.source_map {
-                self.source_map_builder = new SourceMapBuilder();
-                self.js_mapping = new JsSourceMapping(self.source_map_builder);
-            } else {
-                self.source_map_builder = false;
-                self.js_mapping = false;
-            }
+        # Initialize source map support and JsSourceMapping as field
+        if options && options.source_map {
+            self.source_map_builder = new SourceMapBuilder();
+            self.js_mapping = new JsSourceMapping(self.source_map_builder);
         } else {
             self.source_map_builder = false;
             self.js_mapping = false;
@@ -32,17 +27,17 @@ class JsCodeGeneration {
         self.source_files = {};
     }
     
-    micro indent(self) {
+    micro indent(self) -> unit {
         self.indent_level = self.indent_level + 1;
     }
     
-    micro dedent(self) {
+    micro dedent(self) -> unit {
         if self.indent_level > 0 {
             self.indent_level = self.indent_level - 1;
         }
     }
     
-    micro write(self, text: String) {
+    micro write(self, text: String) -> unit {
         self.buffer = self.buffer + text;
         # Update source map position if enabled
         if self.js_mapping {
@@ -50,7 +45,7 @@ class JsCodeGeneration {
         }
     }
     
-    micro write_line(self, text: String) {
+    micro write_line(self, text: String) -> unit {
         let current_indent = "";
         let i = 0;
         while i < self.indent_level {
@@ -66,7 +61,7 @@ class JsCodeGeneration {
     }
     
     # Write with source mapping information
-    micro write_with_mapping(self, text: String, source_span) {
+    micro write_with_mapping(self, text: String, source_span) -> unit {
         self.buffer = self.buffer + text;
         if self.js_mapping {
             if source_span {
@@ -76,8 +71,29 @@ class JsCodeGeneration {
             }
         }
     }
-    
-    micro to_string(self) {
+
+    # 写入标识符并更新源映射
+    micro write_identifier(self, identifier: String, source_span, source_index: u32) -> unit {
+        if self.js_mapping && source_span && source_span.is_valid() {
+            # 更新位置到当前缓冲区末尾
+            self.js_mapping.update_position(self.js_mapping.current_line, self.js_mapping.current_column + self.buffer.length);
+            # 为这个标识符添加源映射（委托给 SourceMapBuilder）
+            self.js_mapping.source_map_builder.add_span_mapping(
+                self.js_mapping.current_line,
+                self.js_mapping.current_column,
+                source_span,
+                source_index
+            );
+            # 写入标识符
+            self.buffer = self.buffer + identifier;
+            # 更新位置
+            self.js_mapping.current_column = self.js_mapping.current_column + identifier.length;
+        } else {
+            self.buffer = self.buffer + identifier;
+        }
+    }
+
+    micro to_string(self) -> String {
         return self.buffer;
     }
     
@@ -107,710 +123,852 @@ class JsCodeGeneration {
     
 
     
-    # 生成表达式代码
+    # 生成表达式代码 - 主入口方法
     micro generate_expression(self, node: Node) -> String {
         if node.type == "Number" {
-            return node.value;
+            return self.generate_number_expression(node);
         }
-
         if node.type == "String" {
-            # 处理字符串转义，确保与bootstrap/codegen.js一致，使用模块化函数
-            let escaped = node.value;
-            # 替换反斜杠
-            escaped = self.replace_all(escaped, "\\", "\\\\");
-            # 替换双引号
-            escaped = self.replace_all(escaped, "\"", "\\\"");
-            # 替换换行符
-            escaped = self.replace_all(escaped, "\n", "\\n");
-            # 替换回车符
-            escaped = self.replace_all(escaped, "\r", "\\r");
-            # 替换制表符
-            escaped = self.replace_all(escaped, "\t", "\\t");
-            return "\"" + escaped + "\"";
+            return self.generate_string_expression(node);
         }
-
         if node.type == "Boolean" {
-            return node.value;
+            return self.generate_boolean_expression(node);
         }
-
         if node.type == "Identifier" {
-            return node.name;
+            return self.generate_identifier_expression(node);
         }
-
         if node.type == "BinaryOp" {
-            let left = self.generate_expression(node.left);
-            let right = self.generate_expression(node.right);
-            let result = "(";
-            result = result + left;
-            result = result + " ";
-            result = result + node.operator;
-            result = result + " ";
-            result = result + right;
-            result = result + ")";
-            return result;
+            return self.generate_binary_op_expression(node);
         }
-
         if node.type == "Assignment" {
-            let left = self.generate_expression(node.left);
-            let right = self.generate_expression(node.right);
-            return left + " = " + right;
+            return self.generate_assignment_expression(node);
         }
-
         if node.type == "TypeCheck" {
-            let expr = self.generate_expression(node.expression);
-            let pattern = self.generate_pattern_expression(node.pattern);
-            # 生成 instanceof 检查或类型检查函数调用
-            return "(" + expr + " instanceof " + pattern + ")";
+            return self.generate_type_check_expression(node);
         }
-
         if node.type == "OptionalTypeCheck" {
-            let expr = self.generate_expression(node.expression);
-            let pattern = self.generate_pattern_expression(node.pattern);
-            # 生成可选的类型检查，如果检查失败返回 false 而不是抛出异常
-            return "(function() { try { return " + expr + " instanceof " + pattern + "; } catch(e) { return false; } })()";
+            return self.generate_optional_type_check_expression(node);
         }
-
         if node.type == "TypeCast" {
-            let expr = self.generate_expression(node.expression);
-            let targetType = self.generate_type_expression(node.targetType);
-            # 生成类型转换，这里简化处理，实际应该根据类型生成相应的转换代码
-            return "(" + expr + ")";
+            return self.generate_type_cast_expression(node);
         }
-
         if node.type == "OptionalTypeCast" {
-            let expr = self.generate_expression(node.expression);
-            let targetType = self.generate_type_expression(node.targetType);
-            # 生成可选的类型转换，如果转换失败返回 null 而不是抛出异常
-            return "(function() { try { return (" + expr + "); } catch(e) { return null; } })()";
+            return self.generate_optional_type_cast_expression(node);
         }
-
         if node.type == "MicroCall" {
-            let callee = self.generate_expression(node.callee);
-            let args = "";
-
-            let i = 0;
-            while i < node.arguments.length {
-                if i > 0 {
-                    args = args + ", ";
-                }
-                args = args + self.generate_expression(node.arguments[i]);
-                i = i + 1;
-            }
-
-            # 检查是否有尾随闭包
-            if node.closure {
-                # 生成尾随闭包的 JavaScript 代码
-                let closureParams = "";
-                # 尾随闭包通常没有参数，或者参数在调用时推断
-
-                let closureBody = "";
-                if node.closure {
-                    # closure 是一个 Block 节点
-                    closureBody = self.generate_statement(node.closure);
-                }
-
-                # 如果有普通参数，添加逗号分隔
-                if args.length > 0 {
-                    args = args + ", ";
-                }
-                args = args + "function(" + closureParams + ") " + closureBody;
-            }
-
-            return callee + "(" + args + ")";
+            return self.generate_micro_call_expression(node);
         }
-
         if node.type == "AnonymousFunction" {
-            let params = "";
-            let i = 0;
-            while i < node.parameters.length {
-                if i > 0 {
-                    params = params + ", ";
-                }
-                let param = node.parameters[i];
-                if param {
-                    if param.name {
-                        params = params + param.name;
-                    } else {
-                        params = params + "param" + i;
-                    }
-                } else {
-                    params = params + "param" + i;
-                }
-                i = i + 1;
-            }
-
-            let body = "";
-            if node.body {
-                body = self.generate_statement(node.body);
-            }
-
-            return "function(" + params + ") " + body;
+            return self.generate_anonymous_function_expression(node);
         }
-
         if node.type == "NewExpression" {
-            let args = "";
-
-            let i = 0;
-            while i < node.arguments.length {
-                if i > 0 {
-                    args = args + ", ";
-                }
-                args = args + self.generate_expression(node.arguments[i]);
-                i = i + 1;
-            }
-
-            # 检查是否有解析后的类名
-            let className = node.className;
-            if node.resolvedClassName {
-                className = node.resolvedClassName;
-            }
-
-            return "new " + className + "(" + args + ")";
+            return self.generate_new_expression(node);
         }
-
         if node.type == "AwaitExpression" {
-            let argument = self.generate_expression(node.argument);
-            return "await " + argument;
+            return self.generate_await_expression(node);
         }
-
         if node.type == "PropertyAccess" {
-            if node.object.type {
-                let obj = self.generate_expression(node.object);
-                return obj + "." + node.property;
-            } else {
-                return node.object + "." + node.property;
-            }
+            return self.generate_property_access_expression(node);
         }
-
         if node.type == "StaticMethodCall" {
-            let className = "";
-            if node.namespacePath {
-                # 使用新的namespacePath支持多级命名空间
-                if node.namespacePath.length >= 2 {
-                    className = node.namespacePath[node.namespacePath.length - 2];
-                } else {
-                    className = node.namespacePath[0];
-                }
-            } else if node.className.type {
-                className = self.generate_expression(node.className);
-            } else {
-                className = node.className;
-            }
-
-            let args = "";
-            let i = 0;
-            while i < node.arguments.length {
-                if i > 0 {
-                    args = args + ", ";
-                }
-                args = args + self.generate_expression(node.arguments[i]);
-                i = i + 1;
-            }
-
-            return className + "." + node.methodName + "(" + args + ")";
+            return self.generate_static_method_call_expression(node);
         }
-
         if node.type == "StaticPropertyAccess" {
-            let className = "";
-            if node.namespacePath {
-                # 使用新的namespacePath支持多级命名空间
-                if node.namespacePath.length >= 2 {
-                    className = node.namespacePath[node.namespacePath.length - 2];
-                } else {
-                    className = node.namespacePath[0];
-                }
-            } else if node.className.type {
-                className = self.generate_expression(node.className);
-            } else {
-                className = node.className;
-            }
-
-            return className + "." + node.property;
+            return self.generate_static_property_access_expression(node);
         }
-
         if node.type == "ArrayAccess" {
-            let obj = "";
-            if node.object.type {
-                obj = self.generate_expression(node.object);
-            } else {
-                obj = node.object;
-            }
-            let index = self.generate_expression(node.index);
-            return obj + "[" + index + "]";
+            return self.generate_array_access_expression(node);
         }
-
         if node.type == "ObjectLiteral" {
-            if node.properties.length == 0 {
-                return "{}";
-            }
-            let result = "{";
-            let i = 0;
-            while i < node.properties.length {
-                let prop = node.properties[i];
-                if i > 0 {
-                    result = result + ", ";
-                }
-                result = result + "\"" + prop.key + "\": " + self.generate_expression(prop.value);
-                i = i + 1;
-            }
-            result = result + "}";
-            return result;
+            return self.generate_object_literal_expression(node);
         }
-
         if node.type == "ArrayLiteral" {
-            return "[]";
+            return self.generate_array_literal_expression(node);
         }
-
         if node.type == "UnaryOp" {
-            let operand = self.generate_expression(node.operand);
-            return node.operator + operand;
+            return self.generate_unary_op_expression(node);
         }
-
         if node.type == "ThisExpression" {
-            return "this";
+            return self.generate_this_expression(node);
         }
-
         if node.type == "DefaultValue" {
-            return "undefined";
+            return self.generate_default_value_expression(node);
         }
-
+        
         return "/* Unknown expression: " + node.type + " */";
     }
     
-    # 生成语句代码
+    # 生成数字表达式
+    micro generate_number_expression(self, node: Node) -> String {
+        return node.value;
+    }
+    
+    # 生成字符串表达式
+    micro generate_string_expression(self, node: Node) -> String {
+        # 处理字符串转义，确保与bootstrap/codegen.js一致，使用模块化函数
+        let escaped = node.value;
+        # 替换反斜杠
+        escaped = self.replace_all(escaped, "\\", "\\\\");
+        # 替换双引号
+        escaped = self.replace_all(escaped, "\"", "\\\"");
+        # 替换换行符
+        escaped = self.replace_all(escaped, "\n", "\\n");
+        # 替换回车符
+        escaped = self.replace_all(escaped, "\r", "\\r");
+        # 替换制表符
+        escaped = self.replace_all(escaped, "\t", "\\t");
+        return "\"" + escaped + "\"";
+    }
+    
+    # 生成布尔表达式
+    micro generate_boolean_expression(self, node: Node) -> String {
+        return node.value;
+    }
+    
+    # 生成标识符表达式
+    micro generate_identifier_expression(self, node: Node) -> String {
+        return node.name;
+    }
+    
+    # 生成二元操作表达式
+    micro generate_binary_op_expression(self, node: Node) -> String {
+        let left = self.generate_expression(node.left);
+        let right = self.generate_expression(node.right);
+        let result = "(";
+        result = result + left;
+        result = result + " ";
+        result = result + node.operator;
+        result = result + " ";
+        result = result + right;
+        result = result + ")";
+        return result;
+    }
+    
+    # 生成赋值表达式
+    micro generate_assignment_expression(self, node: Node) -> String {
+        let left = self.generate_expression(node.left);
+        let right = self.generate_expression(node.right);
+        return left + " = " + right;
+    }
+    
+    # 生成类型检查表达式
+    micro generate_type_check_expression(self, node: Node) -> String {
+        let expr = self.generate_expression(node.expression);
+        let pattern = self.generate_pattern_expression(node.pattern);
+        # 生成 instanceof 检查或类型检查函数调用
+        return "(" + expr + " instanceof " + pattern + ")";
+    }
+    
+    # 生成可选类型检查表达式
+    micro generate_optional_type_check_expression(self, node: Node) -> String {
+        let expr = self.generate_expression(node.expression);
+        let pattern = self.generate_pattern_expression(node.pattern);
+        # 生成可选的类型检查，如果检查失败返回 false 而不是抛出异常
+        return "(function() { try { return " + expr + " instanceof " + pattern + "; } catch(e) { return false; } })()";
+    }
+    
+    # 生成类型转换表达式
+    micro generate_type_cast_expression(self, node: Node) -> String {
+        let expr = self.generate_expression(node.expression);
+        let targetType = self.generate_type_expression(node.targetType);
+        # 生成类型转换，这里简化处理，实际应该根据类型生成相应的转换代码
+        return "(" + expr + ")";
+    }
+    
+    # 生成可选类型转换表达式
+    micro generate_optional_type_cast_expression(self, node: Node) -> String {
+        let expr = self.generate_expression(node.expression);
+        let targetType = self.generate_type_expression(node.targetType);
+        # 生成可选的类型转换，如果转换失败返回 null 而不是抛出异常
+        return "(function() { try { return (" + expr + "); } catch(e) { return null; } })()";
+    }
+    
+    # 生成微函数调用表达式
+    micro generate_micro_call_expression(self, node: Node) -> String {
+        let callee = self.generate_expression(node.callee);
+        let args = "";
+
+        let i = 0;
+        while i < node.arguments.length {
+            if i > 0 {
+                args = args + ", ";
+            }
+            args = args + self.generate_expression(node.arguments[i]);
+            i = i + 1;
+        }
+
+        # 检查是否有尾随闭包
+        if node.closure {
+            # 生成尾随闭包的 JavaScript 代码
+            let closureParams = "";
+            # 尾随闭包通常没有参数，或者参数在调用时推断
+
+            let closureBody = "";
+            if node.closure {
+                # closure 是一个 Block 节点
+                closureBody = self.generate_statement(node.closure);
+            }
+
+            # 如果有普通参数，添加逗号分隔
+            if args.length > 0 {
+                args = args + ", ";
+            }
+            args = args + "function(" + closureParams + ") " + closureBody;
+        }
+
+        return callee + "(" + args + ")";
+    }
+    
+    # 生成匿名函数表达式
+    micro generate_anonymous_function_expression(self, node: Node) -> String {
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            let param = node.parameters[i];
+            if param {
+                if param.name {
+                    params = params + param.name;
+                } else {
+                    params = params + "param" + i;
+                }
+            } else {
+                params = params + "param" + i;
+            }
+            i = i + 1;
+        }
+
+        let body = "";
+        if node.body {
+            body = self.generate_statement(node.body);
+        }
+
+        return "function(" + params + ") " + body;
+    }
+    
+    # 生成 new 表达式
+    micro generate_new_expression(self, node: Node) -> String {
+        let args = "";
+
+        let i = 0;
+        while i < node.arguments.length {
+            if i > 0 {
+                args = args + ", ";
+            }
+            args = args + self.generate_expression(node.arguments[i]);
+            i = i + 1;
+        }
+
+        # 检查是否有解析后的类名
+        let className = node.className;
+        if node.resolvedClassName {
+            className = node.resolvedClassName;
+        }
+
+        return "new " + className + "(" + args + ")";
+    }
+    
+    # 生成 await 表达式
+    micro generate_await_expression(self, node: Node) -> String {
+        let argument = self.generate_expression(node.argument);
+        return "await " + argument;
+    }
+    
+    # 生成属性访问表达式
+    micro generate_property_access_expression(self, node: Node) -> String {
+        if node.object.type {
+            let obj = self.generate_expression(node.object);
+            return obj + "." + node.property;
+        } else {
+            return node.object + "." + node.property;
+        }
+    }
+    
+    # 生成静态方法调用表达式
+    micro generate_static_method_call_expression(self, node: Node) -> String {
+        let className = "";
+        if node.namespacePath {
+            # 使用新的namespacePath支持多级命名空间
+            if node.namespacePath.length >= 2 {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if node.className.type {
+            className = self.generate_expression(node.className);
+        } else {
+            className = node.className;
+        }
+
+        let args = "";
+        let i = 0;
+        while i < node.arguments.length {
+            if i > 0 {
+                args = args + ", ";
+            }
+            args = args + self.generate_expression(node.arguments[i]);
+            i = i + 1;
+        }
+
+        return className + "." + node.methodName + "(" + args + ")";
+    }
+    
+    # 生成静态属性访问表达式
+    micro generate_static_property_access_expression(self, node: Node) -> String {
+        let className = "";
+        if node.namespacePath {
+            # 使用新的namespacePath支持多级命名空间
+            if node.namespacePath.length >= 2 {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if node.className.type {
+            className = self.generate_expression(node.className);
+        } else {
+            className = node.className;
+        }
+
+        return className + "." + node.property;
+    }
+    
+    # 生成数组访问表达式
+    micro generate_array_access_expression(self, node: Node) -> String {
+        let obj = "";
+        if node.object.type {
+            obj = self.generate_expression(node.object);
+        } else {
+            obj = node.object;
+        }
+        let index = self.generate_expression(node.index);
+        return obj + "[" + index + "]";
+    }
+    
+    # 生成对象字面量表达式
+    micro generate_object_literal_expression(self, node: Node) -> String {
+        if node.properties.length == 0 {
+            return "{}";
+        }
+        let result = "{";
+        let i = 0;
+        while i < node.properties.length {
+            let prop = node.properties[i];
+            if i > 0 {
+                result = result + ", ";
+            }
+            result = result + "\"" + prop.key + "\": " + self.generate_expression(prop.value);
+            i = i + 1;
+        }
+        result = result + "}";
+        return result;
+    }
+    
+    # 生成数组字面量表达式
+    micro generate_array_literal_expression(self, node: Node) -> String {
+        return "[]";
+    }
+    
+    # 生成一元操作表达式
+    micro generate_unary_op_expression(self, node: Node) -> String {
+        let operand = self.generate_expression(node.operand);
+        return node.operator + operand;
+    }
+    
+    # 生成 this 表达式
+    micro generate_this_expression(self, node: Node) -> String {
+        return "this";
+    }
+    
+    # 生成默认值表达式
+    micro generate_default_value_expression(self, node: Node) -> String {
+        return "undefined";
+    }
+    
+    # 生成语句代码 - 主入口方法
     micro generate_statement(self, node: Node) -> String {
         if node.type == "LetStatement" {
-            let value = self.generate_expression(node.value);
-            return "let " + node.name + " = " + value + ";";
+            return self.generate_let_statement(node);
         }
-
         if node.type == "NamespaceStatement" {
-            # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
-            let namespacePath = self.join_name_path(node.path, "::");
-            if node.isMainNamespace {
-                return "// namespace! " + namespacePath + ";";
-            } else {
-                return "// namespace " + namespacePath + ";";
-            }
+            return self.generate_namespace_statement(node);
         }
-
         if node.type == "UsingStatement" {
-            # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
-            return "// using " + self.join_name_path(node.path, "::") + ";";
+            return self.generate_using_statement(node);
         }
-
         if node.type == "JSAttributeStatement" {
-            # 生成 JS 导入语句：import {importName as functionName} from "modulePath"
-            return "import { " + node.importName + " as " + node.functionName + " } from \"" + node.modulePath + "\";";
+            return self.generate_js_attribute_statement(node);
         }
-
         if node.type == "ImportJsStatement" {
-            # 生成 JS 导入语句：import {importName as localName} from "module"
-            return "import { " + node.importName + " as " + node.localName + " } from \"" + node.module + "\";";
+            return self.generate_import_js_statement(node);
         }
-
         if node.type == "MicroDeclaration" {
-            let params = "";
-            let i = 0;
-            while i < node.parameters.length {
-                if i > 0 {
-                    params = params + ", ";
-                }
-                # 处理新的 Parameter 节点结构
-                let param = node.parameters[i];
-                if param && param.name {
-                    params = params + param.name;
-                } else {
-                    # 兼容旧的字符串格式
-                    params = params + param;
-                }
-                i = i + 1;
-            }
-
-            let body = self.generate_statement(node.body);
-            # 直接使用 name 字段（已经是解析后的名称）
-            let functionName = node.name;
-            return "export function " + functionName + "(" + params + ") " + body;
+            return self.generate_micro_declaration(node);
         }
-
         if node.type == "MemberStatement" {
+            return self.generate_member_statement(node);
+        }
+        if node.type == "IfStatement" {
+            return self.generate_if_statement(node);
+        }
+        if node.type == "WhileStatement" {
+            return self.generate_while_statement(node);
+        }
+        if node.type == "UntilStatement" {
+            return self.generate_until_statement(node);
+        }
+        if node.type == "ReturnStatement" {
+            return self.generate_return_statement(node);
+        }
+        if node.type == "Block" {
+            return self.generate_block_statement(node);
+        }
+        if node.type == "ExpressionStatement" {
+            return self.generate_expression_statement(node);
+        }
+        if node.type == "ClassDeclaration" {
+            return self.generate_class_declaration(node);
+        }
+        if node.type == "TraitDeclaration" {
+            return self.generate_trait_declaration(node);
+        }
+        if node.type == "SingletonDeclaration" {
+            return self.generate_singleton_declaration(node);
+        }
+        
+        return "/* Unknown statement: " + node.type + " */";
+    }
+    
+    # 生成 let 语句
+    micro generate_let_statement(self, node: Node) -> String {
+        let value = self.generate_expression(node.value);
+        return "let " + node.name + " = " + value + ";";
+    }
+    
+    # 生成命名空间语句
+    micro generate_namespace_statement(self, node: Node) -> String {
+        # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
+        let namespacePath = self.join_name_path(node.path, "::");
+        if node.isMainNamespace {
+            return "// namespace! " + namespacePath + ";";
+        } else {
+            return "// namespace " + namespacePath + ";";
+        }
+    }
+    
+    # 生成 using 语句
+    micro generate_using_statement(self, node: Node) -> String {
+        # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
+        return "// using " + self.join_name_path(node.path, "::") + ";";
+    }
+    
+    # 生成 JS 属性语句
+    micro generate_js_attribute_statement(self, node: Node) -> String {
+        # 生成 JS 导入语句和函数定义
+        let cleanImportName = self.replace_all(node.importName, "-", "_");
+        cleanImportName = self.replace_all(cleanImportName, ".", "_");
+        cleanImportName = self.replace_all(cleanImportName, "/", "_");
+        let uniqueName = node.functionName + "_" + cleanImportName;
+        let importStatement = "import { " + node.importName + " as " + uniqueName + " } from \"" + node.modulePath + "\";";
+
+        # 生成函数包装
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            params = params + node.parameters[i];
+            i = i + 1;
+        }
+
+        let functionDef = "export function " + node.functionName + "(" + params + ") {\n";
+        functionDef = functionDef + "  return " + uniqueName + "(" + params + ");\n";
+        functionDef = functionDef + "}";
+
+        return importStatement + "\n" + functionDef;
+    }
+    
+    # 生成 JS 导入语句
+    micro generate_import_js_statement(self, node: Node) -> String {
+        # 生成 JS 导入语句：import {importName as localName} from "module"
+        return "import { " + node.importName + " as " + node.localName + " } from \"" + node.module + "\";";
+    }
+    
+    # 生成微函数声明
+    micro generate_micro_declaration(self, node: Node) -> String {
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            # 处理新的 Parameter 节点结构
+            let param = node.parameters[i];
+            if param && param.name {
+                params = params + param.name;
+            } else {
+                # 兼容旧的字符串格式
+                params = params + param;
+            }
+            i = i + 1;
+        }
+
+        let body = self.generate_statement(node.body);
+        # 直接使用 name 字段（已经是解析后的名称）
+        let functionName = node.name;
+        return "export function " + functionName + "(" + params + ") " + body;
+    }
+    
+    # 生成成员语句
+    micro generate_member_statement(self, node: Node) -> String {
+        let params = "";
+        let i = 0;
+        while i < node.parameters.length {
+            if i > 0 {
+                params = params + ", ";
+            }
+            # 处理新的 Parameter 节点结构
+            let param = node.parameters[i];
+            if param && param.name {
+                params = params + param.name;
+            } else {
+                # 兼容旧的字符串格式
+                params = params + param;
+            }
+            i = i + 1;
+        }
+
+        let body = self.generate_statement(node.body);
+        return "function " + node.name + "(" + params + ") " + body;
+    }
+    
+    # 生成 if 语句
+    micro generate_if_statement(self, node: Node) -> String {
+        let condition = self.generate_expression(node.condition);
+        let thenBranch = self.generate_statement(node.thenBranch);
+        let result = "if (" + condition + ") " + thenBranch;
+
+        if node.elseBranch && node.elseBranch.type {
+            let elseBranch = self.generate_statement(node.elseBranch);
+            result = result + " else " + elseBranch;
+        }
+
+        return result;
+    }
+    
+    # 生成 while 语句
+    micro generate_while_statement(self, node: Node) -> String {
+        let condition = self.generate_expression(node.condition);
+        let body = self.generate_statement(node.body);
+        return "while (" + condition + ") " + body;
+    }
+    
+    # 生成 until 语句
+    micro generate_until_statement(self, node: Node) -> String {
+        let condition = self.generate_expression(node.condition);
+        let body = self.generate_statement(node.body);
+        return "while (!(" + condition + ")) " + body;
+    }
+    
+    # 生成 return 语句
+    micro generate_return_statement(self, node: Node) -> String {
+        if node.value && node.value.type {
+            let value = self.generate_expression(node.value);
+            return "return " + value + ";";
+        } else {
+            return "return;";
+        }
+    }
+    
+    # 生成块语句
+    micro generate_block_statement(self, node: Node) -> String {
+        let statements = "";
+        let i = 0;
+        while i < node.statements.length {
+            let stmt = self.generate_statement(node.statements[i]);
+            if i > 0 {
+                statements = statements + "\n";
+            }
+            statements = statements + stmt;
+            i = i + 1;
+        }
+        return "{\n" + statements + "\n}";
+    }
+    
+    # 生成表达式语句
+    micro generate_expression_statement(self, node: Node) -> String {
+        return self.generate_expression(node.expression) + ";";
+    }
+    
+    # 生成类声明
+    micro generate_class_declaration(self, node: Node) -> String {
+        # 直接使用 name 字段（已经是解析后的名称）
+        let className = node.name;
+        let superClass = node.superClass;
+        let members = node.members;
+
+        let result = "class " + className;
+
+        # 添加继承
+        if superClass {
+            result = result + " extends " + superClass;
+        }
+
+        result = result + " {\n";
+
+        # 检查是否有显式构造函数
+        let hasExplicitConstructor = false;
+        let explicitConstructor = null;
+        let fieldInits = "";
+        let i = 0;
+        while i < members.length {
+            let member = members[i];
+            if member.type == "ConstructorStatement" {
+                hasExplicitConstructor = true;
+                explicitConstructor = member;
+            } else if member.type == "Property" {
+                if member.initializer && member.initializer.type {
+                    let initValue = self.generate_expression(member.initializer);
+                    fieldInits = fieldInits + "    self." + member.name + " = " + initValue + ";\n";
+                } else {
+                    fieldInits = fieldInits + "    self." + member.name + " = undefined;\n";
+                }
+            }
+            i = i + 1;
+        }
+
+        # 生成构造函数
+        if hasExplicitConstructor {
+            # 使用显式构造函数
             let params = "";
-            let i = 0;
-            while i < node.parameters.length {
-                if i > 0 {
+            let j = 0;
+            while j < explicitConstructor.parameters.length {
+                if j > 0 {
                     params = params + ", ";
                 }
                 # 处理新的 Parameter 节点结构
-                let param = node.parameters[i];
+                let param = explicitConstructor.parameters[j];
                 if param && param.name {
                     params = params + param.name;
                 } else {
                     # 兼容旧的字符串格式
                     params = params + param;
                 }
-                i = i + 1;
+                j = j + 1;
             }
-
-            let body = self.generate_statement(node.body);
-            return "function " + node.name + "(" + params + ") " + body;
-        }
-
-        if node.type == "IfStatement" {
-            let condition = self.generate_expression(node.condition);
-            let thenBranch = self.generate_statement(node.thenBranch);
-            let result = "if (" + condition + ") " + thenBranch;
-
-            if node.elseBranch && node.elseBranch.type {
-                let elseBranch = self.generate_statement(node.elseBranch);
-                result = result + " else " + elseBranch;
+            result = result + "  constructor(" + params + ") {\n";
+            if superClass {
+                result = result + "    super();\n";
             }
-
-            return result;
-        }
-
-        if node.type == "WhileStatement" {
-            let condition = self.generate_expression(node.condition);
-            let body = self.generate_statement(node.body);
-            return "while (" + condition + ") " + body;
-        }
-
-        if node.type == "UntilStatement" {
-            let condition = self.generate_expression(node.condition);
-            let body = self.generate_statement(node.body);
-            return "while (!(" + condition + ")) " + body;
-        }
-
-        if node.type == "ReturnStatement" {
-            if node.value && node.value.type {
-                let value = self.generate_expression(node.value);
-                return "return " + value + ";";
-            } else {
-                return "return;";
+            result = result + fieldInits;
+            let ctorBody = self.generate_statement(explicitConstructor.body);
+            # 移格外层的大括号，只保留内容
+            if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
+                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
             }
+            result = result + ctorBody;
+            result = result + "  }\n\n";
+        } else if fieldInits != "" {
+            # 自动生成构造函数用于字段初始化
+            result = result + "  constructor() {\n";
+            if superClass {
+                result = result + "    super();\n";
+            }
+            result = result + fieldInits;
+            result = result + "  }\n\n";
         }
 
-        if node.type == "Block" {
-            let statements = "";
-            let i = 0;
-            while i < node.statements.length {
-                let stmt = self.generate_statement(node.statements[i]);
-                if i > 0 {
-                    statements = statements + "\n";
+        # 生成类方法
+        i = 0;
+        while i < members.length {
+            let member = members[i];
+            if member.type == "MemberStatement" {
+                let methodName = member.name;
+                let params = "";
+                let j = 0;
+                let paramCount = 0;
+                while j < member.parameters.length {
+                    # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
+                    let param = member.parameters[j];
+                    let paramName = "";
+
+                    # 处理新的 Parameter 节点结构
+                    if param && param.name {
+                        paramName = param.name;
+                    } else {
+                        # 兼容旧的字符串格式
+                        paramName = param;
+                    }
+
+                    if paramName != "self" {
+                        if paramCount > 0 {
+                            params = params + ", ";
+                        }
+                        params = params + paramName;
+                        paramCount = paramCount + 1;
+                    }
+                    j = j + 1;
                 }
-                statements = statements + stmt;
-                i = i + 1;
+                let body = self.generate_statement(member.body);
+                # 根据是否为静态方法生成不同的代码
+                if member.isStatic {
+                    result = result + "  static " + methodName + "(" + params + ") " + body + "\n\n";
+                } else {
+                    result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
+                }
             }
-            return "{\n" + statements + "\n}";
+            i = i + 1;
         }
 
-        if node.type == "ExpressionStatement" {
-            return self.generate_expression(node.expression) + ";";
+        result = result + "}";
+        return result;
+    }
+    
+    # 生成 trait 声明
+    micro generate_trait_declaration(self, node: Node) -> String {
+        # 为 trait 生成占位符，暂时不需要完整的代码生成
+        let traitName = node.name;
+        return "/* Trait " + traitName + " - placeholder for future implementation */";
+    }
+    
+    # 生成单例声明
+    micro generate_singleton_declaration(self, node: Node) -> String {
+        # 生成 singleton 的 JavaScript 代码
+        let singletonName = node.name;
+        let superClass = node.superClass;
+        let members = node.members;
+
+        let result = "const " + singletonName + " = (function() {\n";
+        result = result + "  let instance = null;\n";
+        result = result + "  \n";
+        result = result + "  class " + singletonName + "Class";
+
+        # 添加继承
+        if superClass {
+            result = result + " extends " + superClass;
         }
 
-        if node.type == "NamespaceStatement" {
-            # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
-            return "// namespace " + self.join_name_path(node.path, "::") + ";";
+        result = result + " {\n";
+
+        # 检查是否有显式构造函数
+        let hasExplicitConstructor = false;
+        let explicitConstructor = null;
+        let fieldInits = "";
+        let i = 0;
+        while i < members.length {
+            let member = members[i];
+            if member.type == "ConstructorStatement" {
+                hasExplicitConstructor = true;
+                explicitConstructor = member;
+            } else if member.type == "Property" {
+                if member.initializer && member.initializer.type {
+                    let initValue = self.generate_expression(member.initializer);
+                    fieldInits = fieldInits + "      this." + member.name + " = " + initValue + ";\n";
+                } else {
+                    fieldInits = fieldInits + "      this." + member.name + " = undefined;\n";
+                }
+            }
+            i = i + 1;
         }
 
-        if node.type == "UsingStatement" {
-            # using 语句在单文件编译中被忽略，在多文件编译中用于符号导入
-            return "// using " + self.join_name_path(node.path, "::") + ";";
-        }
-
-        if node.type == "JSAttributeStatement" {
-            # 生成 JS 导入语句和函数定义
-            let cleanImportName = self.replace_all(node.importName, "-", "_");
-            cleanImportName = self.replace_all(cleanImportName, ".", "_");
-            cleanImportName = self.replace_all(cleanImportName, "/", "_");
-            let uniqueName = node.functionName + "_" + cleanImportName;
-            let importStatement = "import { " + node.importName + " as " + uniqueName + " } from \"" + node.modulePath + "\";";
-
-            # 生成函数包装
+        # 生成构造函数
+        if hasExplicitConstructor {
+            # 使用显式构造函数作为初始化逻辑
             let params = "";
-            let i = 0;
-            while i < node.parameters.length {
-                if i > 0 {
+            let j = 0;
+            while j < explicitConstructor.parameters.length {
+                if j > 0 {
                     params = params + ", ";
                 }
-                params = params + node.parameters[i];
-                i = i + 1;
+                # 处理新的 Parameter 节点结构
+                let param = explicitConstructor.parameters[j];
+                if param && param.name {
+                    params = params + param.name;
+                } else {
+                    # 兼容旧的字符串格式
+                    params = params + param;
+                }
+                j = j + 1;
             }
-
-            let functionDef = "export function " + node.functionName + "(" + params + ") {\n";
-            functionDef = functionDef + "  return " + uniqueName + "(" + params + ");\n";
-            functionDef = functionDef + "}";
-
-            return importStatement + "\n" + functionDef;
+            result = result + "    constructor(" + params + ") {\n";
+            if superClass {
+                result = result + "      super();\n";
+            }
+            result = result + fieldInits;
+            let ctorBody = self.generate_statement(explicitConstructor.body);
+            # 移除外层的大括号，只保留内容
+            if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
+                ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+                # 调整缩进
+                ctorBody = ctorBody.replace("\n", "\n      ");
+            }
+            result = result + "      " + ctorBody;
+            result = result + "    }\n\n";
+        } else if fieldInits != "" {
+            # 自动生成构造函数用于字段初始化
+            result = result + "    constructor() {\n";
+            if superClass {
+                result = result + "      super();\n";
+            }
+            result = result + fieldInits;
+            result = result + "    }\n\n";
         }
 
-        if node.type == "ClassDeclaration" {
-            # 直接使用 name 字段（已经是解析后的名称）
-            let className = node.name;
-            let superClass = node.superClass;
-            let members = node.members;
-
-            let result = "class " + className;
-
-            # 添加继承
-            if superClass {
-                result = result + " extends " + superClass;
-            }
-
-            result = result + " {\n";
-
-            # 检查是否有显式构造函数
-            let hasExplicitConstructor = false;
-            let explicitConstructor = null;
-            let fieldInits = "";
-            let i = 0;
-            while i < members.length {
-                let member = members[i];
-                if member.type == "ConstructorStatement" {
-                    hasExplicitConstructor = true;
-                    explicitConstructor = member;
-                } else if member.type == "Property" {
-                    if member.initializer && member.initializer.type {
-                        let initValue = self.generate_expression(member.initializer);
-                        fieldInits = fieldInits + "    self." + member.name + " = " + initValue + ";\n";
-                    } else {
-                        fieldInits = fieldInits + "    self." + member.name + " = undefined;\n";
-                    }
-                }
-                i = i + 1;
-            }
-
-            # 生成构造函数
-            if hasExplicitConstructor {
-                # 使用显式构造函数
+        # 生成类方法
+        i = 0;
+        while i < members.length {
+            let member = members[i];
+            if member.type == "MemberStatement" {
+                let methodName = member.name;
                 let params = "";
                 let j = 0;
-                while j < explicitConstructor.parameters.length {
-                    if j > 0 {
-                        params = params + ", ";
-                    }
+                let paramCount = 0;
+                while j < member.parameters.length {
+                    # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
+                    let param = member.parameters[j];
+                    let paramName = "";
+
                     # 处理新的 Parameter 节点结构
-                    let param = explicitConstructor.parameters[j];
                     if param && param.name {
-                        params = params + param.name;
+                        paramName = param.name;
                     } else {
                         # 兼容旧的字符串格式
-                        params = params + param;
+                        paramName = param;
+                    }
+
+                    if paramName != "self" {
+                        if paramCount > 0 {
+                            params = params + ", ";
+                        }
+                        params = params + paramName;
+                        paramCount = paramCount + 1;
                     }
                     j = j + 1;
                 }
-                result = result + "  constructor(" + params + ") {\n";
-                if superClass {
-                    result = result + "    super();\n";
+                let body = self.generate_statement(member.body);
+                # 根据是否为静态方法生成不同的代码
+                if member.isStatic {
+                    result = result + "    static " + methodName + "(" + params + ") " + body + "\n\n";
+                } else {
+                    result = result + "    " + methodName + "(" + params + ") " + body + "\n\n";
                 }
-                result = result + fieldInits;
-                let ctorBody = self.generate_statement(explicitConstructor.body);
-                # 移格外层的大括号，只保留内容
-                if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
-                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
-                }
-                result = result + ctorBody;
-                result = result + "  }\n\n";
-            } else if fieldInits != "" {
-                # 自动生成构造函数用于字段初始化
-                result = result + "  constructor() {\n";
-                if superClass {
-                    result = result + "    super();\n";
-                }
-                result = result + fieldInits;
-                result = result + "  }\n\n";
             }
-
-            # 生成类方法
-            i = 0;
-            while i < members.length {
-                let member = members[i];
-                if member.type == "MemberStatement" {
-                    let methodName = member.name;
-                    let params = "";
-                    let j = 0;
-                    let paramCount = 0;
-                    while j < member.parameters.length {
-                        # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
-                        let param = member.parameters[j];
-                        let paramName = "";
-
-                        # 处理新的 Parameter 节点结构
-                        if param && param.name {
-                            paramName = param.name;
-                        } else {
-                            # 兼容旧的字符串格式
-                            paramName = param;
-                        }
-
-                        if paramName != "self" {
-                            if paramCount > 0 {
-                                params = params + ", ";
-                            }
-                            params = params + paramName;
-                            paramCount = paramCount + 1;
-                        }
-                        j = j + 1;
-                    }
-                    let body = self.generate_statement(member.body);
-                    # 根据是否为静态方法生成不同的代码
-                    if member.isStatic {
-                        result = result + "  static " + methodName + "(" + params + ") " + body + "\n\n";
-                    } else {
-                        result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
-                    }
-                }
-                i = i + 1;
-            }
-
-            result = result + "}";
-            return result;
+            i = i + 1;
         }
 
-        if node.type == "TraitDeclaration" {
-            # 为 trait 生成占位符，暂时不需要完整的代码生成
-            let traitName = node.name;
-            return "/* Trait " + traitName + " - placeholder for future implementation */";
-        }
-
-        if node.type == "SingletonDeclaration" {
-            # 生成 singleton 的 JavaScript 代码
-            let singletonName = node.name;
-            let superClass = node.superClass;
-            let members = node.members;
-
-            let result = "const " + singletonName + " = (function() {\n";
-            result = result + "  let instance = null;\n";
-            result = result + "  \n";
-            result = result + "  class " + singletonName + "Class";
-
-            # 添加继承
-            if superClass {
-                result = result + " extends " + superClass;
-            }
-
-            result = result + " {\n";
-
-            # 检查是否有显式构造函数
-            let hasExplicitConstructor = false;
-            let explicitConstructor = null;
-            let fieldInits = "";
-            let i = 0;
-            while i < members.length {
-                let member = members[i];
-                if member.type == "ConstructorStatement" {
-                    hasExplicitConstructor = true;
-                    explicitConstructor = member;
-                } else if member.type == "Property" {
-                    if member.initializer && member.initializer.type {
-                        let initValue = self.generate_expression(member.initializer);
-                        fieldInits = fieldInits + "      this." + member.name + " = " + initValue + ";\n";
-                    } else {
-                        fieldInits = fieldInits + "      this." + member.name + " = undefined;\n";
-                    }
-                }
-                i = i + 1;
-            }
-
-            # 生成构造函数
-            if hasExplicitConstructor {
-                # 使用显式构造函数作为初始化逻辑
-                let params = "";
-                let j = 0;
-                while j < explicitConstructor.parameters.length {
-                    if j > 0 {
-                        params = params + ", ";
-                    }
-                    # 处理新的 Parameter 节点结构
-                    let param = explicitConstructor.parameters[j];
-                    if param && param.name {
-                        params = params + param.name;
-                    } else {
-                        # 兼容旧的字符串格式
-                        params = params + param;
-                    }
-                    j = j + 1;
-                }
-                result = result + "    constructor(" + params + ") {\n";
-                if superClass {
-                    result = result + "      super();\n";
-                }
-                result = result + fieldInits;
-                let ctorBody = self.generate_statement(explicitConstructor.body);
-                # 移除外层的大括号，只保留内容
-                if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
-                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
-                    # 调整缩进
-                    ctorBody = ctorBody.replace("\n", "\n      ");
-                }
-                result = result + "      " + ctorBody;
-                result = result + "    }\n\n";
-            } else if fieldInits != "" {
-                # 自动生成构造函数用于字段初始化
-                result = result + "    constructor() {\n";
-                if superClass {
-                    result = result + "      super();\n";
-                }
-                result = result + fieldInits;
-                result = result + "    }\n\n";
-            }
-
-            # 生成类方法
-            i = 0;
-            while i < members.length {
-                let member = members[i];
-                if member.type == "MemberStatement" {
-                    let methodName = member.name;
-                    let params = "";
-                    let j = 0;
-                    let paramCount = 0;
-                    while j < member.parameters.length {
-                        # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
-                        let param = member.parameters[j];
-                        let paramName = "";
-
-                        # 处理新的 Parameter 节点结构
-                        if param && param.name {
-                            paramName = param.name;
-                        } else {
-                            # 兼容旧的字符串格式
-                            paramName = param;
-                        }
-
-                        if paramName != "self" {
-                            if paramCount > 0 {
-                                params = params + ", ";
-                            }
-                            params = params + paramName;
-                            paramCount = paramCount + 1;
-                        }
-                        j = j + 1;
-                    }
-                    let body = self.generate_statement(member.body);
-                    # 根据是否为静态方法生成不同的代码
-                    if member.isStatic {
-                        result = result + "    static " + methodName + "(" + params + ") " + body + "\n\n";
-                    } else {
-                        result = result + "    " + methodName + "(" + params + ") " + body + "\n\n";
-                    }
-                }
-                i = i + 1;
-            }
-
-            result = result + "  }\n";
-            result = result + "  \n";
-            result = result + "  return function() {\n";
-            result = result + "    if (instance === null) {\n";
-            result = result + "      instance = new " + singletonName + "Class();\n";
-            result = result + "    }\n";
-            result = result + "    return instance;\n";
-            result = result + "  };\n";
-            result = result + "})();";
-            
-            return result;
-        }
-
-        # 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
-        return "/* Unknown statement: " + node.type + " */";
+        result = result + "  }\n";
+        result = result + "  \n";
+        result = result + "  return function() {\n";
+        result = result + "    if (instance === null) {\n";
+        result = result + "      instance = new " + singletonName + "Class();\n";
+        result = result + "    }\n";
+        result = result + "    return instance;\n";
+        result = result + "  };\n";
+        result = result + "})();";
+        
+        return result;
     }
     
     # 生成完整代码
@@ -820,7 +978,28 @@ class JsCodeGeneration {
             while i < ast.statements.length {
                 let stmt = ast.statements[i];
                 let stmt_code = self.generate_statement(stmt);
-                self.write_line(stmt_code);
+                
+                # 使用带源映射的写入方法（向后兼容检查）
+                let has_position = false;
+                if stmt.has_valid_position {
+                    has_position = stmt.has_valid_position();
+                } else {
+                    # 向后兼容：检查是否有基本的位置信息
+                    has_position = stmt.line && stmt.column;
+                }
+                
+                if has_position && stmt.source_file {
+                    let source_span = {};
+                    source_span.file_name = stmt.source_file;
+                    source_span.start_line = stmt.source_line || stmt.line;
+                    source_span.start_column = stmt.source_column || stmt.column;
+                    source_span.end_line = stmt.source_line || stmt.line;
+                    source_span.end_column = (stmt.source_column || stmt.column) + (stmt.source_length || stmt.length || 1);
+                    self.write_line_with_mapping(stmt_code, source_span, 0);
+                } else {
+                    self.write_line(stmt_code);
+                }
+                
                 i = i + 1;
             }
 
@@ -929,17 +1108,8 @@ micro add_source_file(self, file_name: String, content: String) -> Number {
     return 0;
 }
 
-# Write with source mapping
-micro write_with_mapping(self, text: String, source_span, source_index) {
-    if (self.js_mapping && source_span) {
-        self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
-    } else {
-        self.buffer = self.buffer + text;
-    }
-}
-
 # Write line with source mapping
-micro write_line_with_mapping(self, text: String, source_span, source_index) {
+micro write_line_with_mapping(self, text: String, source_span, source_index: u32) -> unit {
     let current_indent = "";
     let i = 0;
     while i < self.indent_level {
@@ -954,12 +1124,4 @@ micro write_line_with_mapping(self, text: String, source_span, source_index) {
     } else {
         self.buffer = self.buffer + current_indent + text + "\n";
     }
-}
-
-# Get the generated source map
-micro get_source_map(self) {
-    if (self.source_map_builder) {
-        return self.source_map_builder.build();
-    }
-    return false;
 }

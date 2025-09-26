@@ -2,7 +2,12 @@ namespace package::generation;
 
 using package::generation::SourceMap;
 
-# SourceMapBuilder helps build source maps incrementally
+# SourceMapBuilder 负责收集和管理源映射信息
+# 职责：
+# 1. 收集所有的 ID 映射（标识符到源位置的映射）
+# 2. 管理源文件和名称的索引
+# 3. 构建最终的源映射数据结构
+# 4. 提供映射编码功能（自举阶段简化实现）
 class SourceMapBuilder {
     constructor() {
         self.source_map = new SourceMap();
@@ -11,53 +16,77 @@ class SourceMapBuilder {
         self.current_generated_column = 0;
     }
     
-    # Add a source file and return its index
+    # 添加源文件并返回其索引
     micro add_source(self, file_name, content) {
         return self.source_map.add_source(file_name, content);
     }
     
-    # Add a name and return its index
+    # 添加名称并返回其索引
     micro add_name(self, name) {
         return self.source_map.add_name(name);
     }
     
-    # Set the generated file name
+    # 设置生成文件名
     micro set_file(self, file_name) {
         self.source_map.set_file(file_name);
     }
     
-    # Add a mapping between generated and original positions (simplified for bootstrap)
-    micro add_mapping(self, generated_line, generated_column, source_index, original_line, original_column, name_index) {
-        # For bootstrap phase, skip complex mapping storage
-        # Just store basic info if needed
+    # 添加生成位置到原始位置的映射（核心功能）
+    micro add_mapping(self, generated_line: u64, generated_column: u32, source_index: u32, original_line: u32, original_column: u32, name_index) -> unit {
+        # 收集映射信息，用于后续编码
+        let mapping = {
+            "generated_line": generated_line,
+            "generated_column": generated_column,
+            "source_index": source_index,
+            "original_line": original_line,
+            "original_column": original_column,
+            "name_index": name_index
+        };
+        self.mappings.push(mapping);
     }
     
-    # Add a simple mapping from a SourceSpan
-    micro add_span_mapping(self, generated_line, generated_column, source_span, source_index) {
-        self.add_mapping(
-            generated_line, 
-            generated_column, 
-            source_index, 
-            source_span.start_line, 
-            source_span.start_column, 
-            false
-        );
+    # 从 SourceSpan 添加映射（便捷方法）
+    micro add_span_mapping(self, generated_line: u32, generated_column: u32, source_span, source_index: u32) -> unit {
+        if source_span && source_span.is_valid() {
+            self.add_mapping(
+                generated_line, 
+                generated_column, 
+                source_index, 
+                source_span.start_line, 
+                source_span.start_column, 
+                false
+            );
+        }
     }
     
-    # Build the final source map
+    # 构建最终的源映射
     micro build(self) {
-        # For bootstrap phase, we'll create a simplified source map
-        # This is a simplified implementation
+        # 编码所有收集的映射信息
         let mappings_str = self.encode_mappings();
         self.source_map.set_mappings(mappings_str);
         
         return self.source_map;
     }
     
-    # Simple encoding of mappings (basic implementation)
-    micro encode_mappings(self) {
-        # For now, return empty string - full VLQ encoding would be complex
-        # This is a placeholder for the actual VLQ encoding implementation
-        return "";
+    # 编码映射信息（自举阶段的简化实现）
+    micro encode_mappings(self) -> String {
+        # 自举阶段使用简化的编码格式
+        # 稳定后将由 SourceMap 类负责完整的 VLQ 编码
+        if self.mappings.length == 0 {
+            return "";
+        }
+        
+        let result = "";
+        let i = 0;
+        while i < self.mappings.length {
+            let mapping = self.mappings[i];
+            if i > 0 {
+                result = result + ",";
+            }
+            # 简化格式：generated_column,source_index,original_line,original_column
+            result = result + mapping.generated_column + "," + mapping.source_index + "," + mapping.original_line + "," + mapping.original_column;
+            i = i + 1;
+        }
+        return result;
     }
 }

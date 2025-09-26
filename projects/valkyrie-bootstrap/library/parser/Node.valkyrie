@@ -1,7 +1,41 @@
 namespace package::parser;
 
 class Node {
-    constructor(type) {
+    constructor(type, offset, length, line, column) {
         self.type = type;
+        # 位置信息 - 用于源映射生成
+        self.offset = offset;      # 在源文件中的起始偏移量（字节）
+        self.length = length;      # 节点在源文件中的长度（字节）
+        self.line = line;          # 行号（UTF-16，与 LSP 兼容）
+        self.column = column;      # 列号（UTF-16，与 LSP 兼容）
+        
+        # 如果没有提供位置信息，使用默认值
+        if offset == false {
+            self.offset = 0;
+        }
+        if length == false {
+            self.length = 0;
+        }
+        if line == false {
+            self.line = 1;
+        }
+        if column == false {
+            self.column = 1;
+        }
+    }
+    
+    # 获取节点的源位置信息
+    micro get_source_position(self) {
+        let position = {};
+        position.offset = self.offset;
+        position.length = self.length;
+        position.line = self.line;
+        position.column = self.column;
+        return position;
+    }
+    
+    # 检查节点是否有有效的位置信息
+    micro has_valid_position(self) {
+        return self.offset >= 0 && self.length > 0 && self.line > 0 && self.column > 0;
     }
 }
