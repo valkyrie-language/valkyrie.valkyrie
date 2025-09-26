@@ -64,7 +64,7 @@ micro package_compiler_compile_text_with_options(source_text: String, options: C
 # Generate single JS file with options and multiple diagnostics support
 micro compile_asts_with_options(file_contents: Map<String, String>, mode: String, options: CompilerOptions) -> Map<String, String> {
     if options == null {
-        options = new CompilerOptions("js", false, false, "warning", mode || "repl");
+        options = new CompilerOptions("js", false, false, mode || "repl");
     } else if options.mode == null {
         options.mode = mode || "repl";
     }

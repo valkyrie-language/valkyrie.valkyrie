@@ -636,7 +636,6 @@ export function package_compiler_compile_asts_with_options(
             "js",
             false,
             false,
-            "warning",
             mode || "repl"
         );
     } else if (options.mode == null) {
@@ -2374,12 +2373,13 @@ class package_compiler_CompilerDiagnostics {
     }
 }
 class package_compiler_CompilerOptions {
-    constructor(output_format, optimize, debug, implicit_member_call, mode) {
+    constructor(output_format, optimize, debug, mode) {
         this.output_format = output_format || "js";
         this.optimize = optimize || false;
         this.debug = debug || false;
-        this.implicit_member_call = implicit_member_call || "warning";
+        this.implicit_member_call = "warning";
         this.mode = mode || "repl";
+        this.source_map = true;
     }
 }
 class package_compiler_CompilerStatistics {

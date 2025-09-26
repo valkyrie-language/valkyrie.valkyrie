@@ -72,15 +72,46 @@ export async function compileSourceWithCompiler(source, compilerParts) {
             const result =
                 compiler.package_compiler_package_compiler_compile_text(source);
 
-            // Check if result is an error object
+            // Handle results with diagnostics
+            if (result && typeof result === "object" && result.diagnostics) {
+                const hasErrors = result.diagnostics.some(
+                    (d) => d.type === "error"
+                );
+
+                if (hasErrors) {
+                    // Compilation failed due to errors
+                    const errorMessages = result.diagnostics
+                        .filter((d) => d.type === "error")
+                        .map(
+                            (d) =>
+                                `${d.message} at ${d.file}:${d.line}:${d.column}`
+                        )
+                        .join("; ");
+                    return {
+                        success: false,
+                        error: `编译错误: ${errorMessages}`,
+                    };
+                } else if (result.code) {
+                    // Success with warnings only
+                    return {
+                        success: true,
+                        code: result.code,
+                        diags: result.diagnostics,
+                    };
+                }
+            }
+
+            // Check if result is an error object (legacy format)
             if (
                 result &&
                 typeof result === "object" &&
                 result.success === false
             ) {
+                const errorMsg =
+                    result.error || result.message || "Unknown error";
                 return {
                     success: false,
-                    error: `编译错误: ${result.error}`,
+                    error: `编译错误: ${errorMsg}`,
                 };
             }
 
@@ -92,7 +123,20 @@ export async function compileSourceWithCompiler(source, compilerParts) {
                 };
             }
 
-            // Handle success case - result could be string or object with code
+            // Handle new format with diagnostics - result is object with success, code, and diagnostics
+            if (
+                result &&
+                typeof result === "object" &&
+                result.success === true
+            ) {
+                return {
+                    success: true,
+                    code: result.code,
+                    diags: result.diagnostics || [],
+                };
+            }
+
+            // Handle legacy format - result could be string or object with code
             const code = typeof result === "string" ? result : result.code;
             return { success: true, code: code };
         } else {
@@ -200,7 +244,40 @@ export async function generateSingleFileWithCompiler(
                 throw new Error(`单文件生成失败: ${result.error}`);
             }
 
-            // Handle success case - result could be string or object with code
+            // Handle new format with diagnostics - result is object with success, code, and diagnostics
+            if (
+                result &&
+                typeof result === "object" &&
+                result.success === true
+            ) {
+                const code = result.code;
+                const diags = result.diagnostics || [];
+
+                // Log diagnostics if any
+                if (diags.length > 0) {
+                    log(`Generated with ${diags.length} diagnostics`);
+                    for (const diag of diags) {
+                        if (diag.type === "error") {
+                            error(
+                                `Diagnostic: ${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
+                            );
+                        } else if (diag.type === "warning") {
+                            log(
+                                `Warning: ${diag.message} at ${diag.file}:${diag.line}:${diag.column}`
+                            );
+                        }
+                    }
+                }
+
+                ensureDir(path.dirname(outputPath));
+                fs.writeFileSync(outputPath, code, "utf8");
+
+                const stats = fs.statSync(outputPath);
+                log(`Single file generated successfully (${stats.size} bytes)`);
+                return true;
+            }
+
+            // Handle legacy format - result could be string or object with code
             const code = typeof result === "string" ? result : result.code;
 
             ensureDir(path.dirname(outputPath));

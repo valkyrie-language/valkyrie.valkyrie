@@ -1,0 +1,6 @@
+namespace test_warning;
+
+micro test_function() {
+    let unused_variable = 42;
+    return 10;
+}
