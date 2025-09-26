@@ -123,9 +123,3 @@ micro join_path(path_array: Array<String>, separator: String) -> String {
     }
     return result;
 }
-
-# 设置编译模式
-micro set_compile_mode(manager: NamespaceManager, mode: String) {
-    manager.mode = mode;
-}
-

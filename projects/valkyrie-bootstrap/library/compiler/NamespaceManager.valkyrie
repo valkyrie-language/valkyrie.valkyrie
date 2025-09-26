@@ -2,6 +2,15 @@ namespace package::compiler;
 
 using package::parser::Node;
 
+using package::lexer::ValkyrieLexer;
+using package::parser::parse;
+using package::codegen::JsCodeGeneration;
+using package::parser::Node;
+using package::compiler::DependencyAnalyzer;
+using package::compiler::CompilerOptions;
+using package::codegen::join_name_path;
+
+
 class NamespaceManager {
     constructor(source) {
         self.namespaces = {};
@@ -10,6 +19,371 @@ class NamespaceManager {
         self.current_file = "";
         self.mode = "repl";
     }
+}
+
+# 设置编译模式
+micro set_compile_mode(manager: NamespaceManager, mode: String) {
+    manager.mode = mode;
+}
+
+
+# 带选项的生成单一JS文件的主函数
+micro compile_asts_with_options(file_contents: Map<String, String>, mode: String, options: CompilerOptions) -> String {
+    let manager = new NamespaceManager();
+    set_compile_mode(manager, mode || "repl");
+    
+    # 分析依赖关系
+    let analyzer = new DependencyAnalyzer();
+    
+    # 第一遍：收集每个文件的using依赖
+    let file_names = Object.keys(file_contents);
+    let i = 0;
+    while i < file_names.length {
+        let file_name = file_names[i];
+        let content = file_contents[file_name];
+        
+        analyzer.dependencies[file_name] = [];
+        
+        let lexer_instance = new ValkyrieLexer(content);
+        let tokens = lexer_instance.tokenize();
+        
+        if tokens.length > 0 {
+            let ast = parse(tokens);
+            
+            if ast.type == "Program" {
+                let j = 0;
+                while j < ast.statements.length {
+                    let stmt = ast.statements[j];
+                    
+                    if stmt.type == "UsingStatement" {
+                        let using_path = join_path(stmt.path, "::");
+                        let provider_file = find_namespace_provider(using_path, file_contents);
+                        if provider_file != null && provider_file != file_name {
+                            analyzer.dependencies[file_name].push(provider_file);
+                        }
+                    }
+                    
+                    j = j + 1;
+                }
+            }
+        }
+        
+        i = i + 1;
+    }
+    
+    # 拓扑排序
+    let sort_result = topological_sort(analyzer, file_contents);
+    if sort_result.error != null {
+        return {
+            "success": false,
+            "error": sort_result.error
+        };
+    }
+    
+    let sorted_files = sort_result.sorted;
+    
+    # 分类收集语句
+    let js_import_statements = [];
+    let variable_statements = [];
+    let function_statements = [];
+    let class_statements = [];
+    let execution_statements = [];
+    
+    # 按依赖顺序处理文件
+    let k = 0;
+    while k < sorted_files.length {
+        let file_name = sorted_files[k];
+        let content = file_contents[file_name];
+        
+        manager.current_file = file_name;
+        
+        let lexer_instance = new ValkyrieLexer(content);
+        let tokens = lexer_instance.tokenize();
+        
+        if tokens.length == 0 {
+            k = k + 1;
+            continue;
+        }
+        
+        let ast = parse(tokens);
+        if ast.type != "Program" {
+            return {
+                "success": false,
+                "error": "Failed to parse " + file_name + " at " + JSON.stringify(ast)
+            };
+        }
+        
+        let validation_result = validate_namespace_rules(ast, mode);
+        if !validation_result.success {
+            return validation_result;
+        }
+        
+        let current_namespace = "";
+        let l = 0;
+        while l < ast.statements.length {
+            let stmt = ast.statements[l];
+            
+            if stmt.type == "NamespaceStatement" {
+                current_namespace = join_path(stmt.path, "::");
+                if stmt.isMainNamespace {
+                    current_namespace = current_namespace + "!";
+                    
+                    # 在standard模式下，检查重复的主命名空间
+                    if mode == "standard" {
+                        console.log("🔍 检查主命名空间: " + current_namespace);
+                        console.log("📋 当前管理器中的命名空间: " + Object.keys(manager.namespaces).join(", "));
+                        if manager.namespaces[current_namespace] != null {
+                            let clean_name = current_namespace.substring(0, current_namespace.length - 1);
+                            console.log("❌ 发现重复的主命名空间: " + clean_name);
+                            return {
+                                "success": false,
+                                "error": "Duplicate main namespace '" + clean_name + "' found. Each main namespace must have a unique name."
+                            };
+                        } else {
+                            console.log("✅ 主命名空间检查通过: " + current_namespace);
+                        }
+                    }
+                }
+                manager.current_namespace = current_namespace;
+                
+            } else if stmt.type == "UsingStatement" {
+                let using_path = join_path(stmt.path, "::");
+                let is_global = is_main_namespace(using_path);
+                add_using_import(manager, using_path, is_global);
+                
+            } else if stmt.type == "JSImportStatement" {
+                js_import_statements.push(stmt);
+                
+            } else if stmt.type == "LetStatement" {
+                stmt.sourceNamespace = current_namespace;
+                variable_statements.push(stmt);
+                add_symbol_to_namespace(manager, current_namespace, stmt.name, "variable", stmt, file_name);
+                
+            } else if stmt.type == "MicroDeclaration" {
+                stmt.sourceNamespace = current_namespace;
+                function_statements.push(stmt);
+                add_symbol_to_namespace(manager, current_namespace, stmt.name, "function", stmt, file_name);
+                
+            } else if stmt.type == "ClassDeclaration" {
+                stmt.sourceNamespace = current_namespace;
+                class_statements.push(stmt);
+                add_symbol_to_namespace(manager, current_namespace, stmt.name, "class", stmt, file_name);
+                
+            } else {
+                execution_statements.push(stmt);
+            }
+            
+            l = l + 1;
+        }
+        
+        k = k + 1;
+    }
+    
+    # 检查重复主命名空间（仅在standard模式下）
+    if mode == "standard" {
+        let main_namespaces = [];
+        let main_namespace_names = [];
+        
+        # 遍历所有命名空间，收集主命名空间
+        let namespace_keys = Object.keys(manager.namespaces);
+        let ns_index = 0;
+        while ns_index < namespace_keys.length {
+            let ns_name = namespace_keys[ns_index];
+            if ns_name.endsWith("!") {
+                main_namespaces.push(ns_name);
+                # 提取干净的命名空间名称（去掉!）
+                let clean_name = ns_name.substring(0, ns_name.length - 1);
+                main_namespace_names.push(clean_name);
+            }
+            ns_index = ns_index + 1;
+        }
+        
+        # 检查是否有重复的主命名空间名称
+        let duplicate_index = 0;
+        while duplicate_index < main_namespace_names.length {
+            let current_name = main_namespace_names[duplicate_index];
+            let check_index = duplicate_index + 1;
+            while check_index < main_namespace_names.length {
+                if main_namespace_names[check_index] == current_name {
+                    return {
+                        "success": false,
+                        "error": "Duplicate main namespace '" + current_name + "' found. Each main namespace must have a unique name."
+                    };
+                }
+                check_index = check_index + 1;
+            }
+            duplicate_index = duplicate_index + 1;
+        }
+    }
+    
+    # 生成唯一名称
+    let m = 0;
+    while m < function_statements.length {
+        let func_stmt = function_statements[m];
+        func_stmt.uniqueName = get_fully_qualified_name(manager, func_stmt.name, func_stmt.sourceNamespace);
+        m = m + 1;
+    }
+    
+    let n = 0;
+    while n < class_statements.length {
+        let class_stmt = class_statements[n];
+        class_stmt.uniqueName = get_fully_qualified_name(manager, class_stmt.name, class_stmt.sourceNamespace);
+        n = n + 1;
+    }
+    
+    let o = 0;
+    while o < variable_statements.length {
+        let var_stmt = variable_statements[o];
+        var_stmt.uniqueName = get_fully_qualified_name(manager, var_stmt.name, var_stmt.sourceNamespace);
+        o = o + 1;
+    }
+    
+    # 合并所有语句
+    let integrated_ast = {
+        "type": "Program",
+        "statements": []
+    };
+    
+    let p = 0;
+    while p < js_import_statements.length {
+        integrated_ast.statements.push(js_import_statements[p]);
+        p = p + 1;
+    }
+    
+    let q = 0;
+    while q < variable_statements.length {
+        let var_stmt = variable_statements[q];
+        if var_stmt.uniqueName != null && var_stmt.uniqueName != var_stmt.name {
+            # 创建一个副本并使用唯一名称
+            let modified_stmt = Object.assign({}, var_stmt);
+            modified_stmt.name = var_stmt.uniqueName;
+            integrated_ast.statements.push(modified_stmt);
+        } else {
+            integrated_ast.statements.push(var_stmt);
+        }
+        q = q + 1;
+    }
+    
+    let r = 0;
+    while r < function_statements.length {
+        let func_stmt = function_statements[r];
+        if func_stmt.uniqueName != null && func_stmt.uniqueName != func_stmt.name {
+            # 创建一个副本并使用唯一名称
+            let modified_stmt = Object.assign({}, func_stmt);
+            modified_stmt.name = func_stmt.uniqueName;
+            # 解析函数体内的标识符
+            modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
+            integrated_ast.statements.push(modified_stmt);
+        } else {
+            # 即使没有重命名，也要解析函数体内的标识符
+            let modified_stmt = Object.assign({}, func_stmt);
+            modified_stmt.body = resolve_identifiers_in_statement(func_stmt.body, manager, function_statements, variable_statements, class_statements, options);
+            integrated_ast.statements.push(modified_stmt);
+        }
+        r = r + 1;
+    }
+    
+    let s = 0;
+    while s < class_statements.length {
+        let class_stmt = class_statements[s];
+        let modified_stmt = Object.assign({}, class_stmt);
+        
+        if class_stmt.uniqueName != null && class_stmt.uniqueName != class_stmt.name {
+            # 使用唯一名称
+            modified_stmt.name = class_stmt.uniqueName;
+        }
+        
+        # 解析类成员内部的标识符
+        if class_stmt.members != null {
+            let resolved_members = [];
+            let m = 0;
+            while m < class_stmt.members.length {
+                let member = class_stmt.members[m];
+                let resolved_member = Object.assign({}, member);
+                # 只对方法（MemberStatement）和构造函数（ConstructorStatement）进行符号解析
+                if (member.type == "MemberStatement" || member.type == "ConstructorStatement") && member.body != null {
+                    resolved_member.body = resolve_identifiers_in_statement(member.body, manager, function_statements, variable_statements, class_statements, options);
+                }
+                resolved_members.push(resolved_member);
+                m = m + 1;
+            }
+            modified_stmt.members = resolved_members;
+        }
+        
+        integrated_ast.statements.push(modified_stmt);
+        s = s + 1;
+    }
+    
+    let t = 0;
+    while t < execution_statements.length {
+        let resolved_stmt = resolve_identifiers_in_statement(execution_statements[t], manager, function_statements, variable_statements, class_statements, options);
+        integrated_ast.statements.push(resolved_stmt);
+        t = t + 1;
+    }
+
+    let generator = new JsCodeGeneration("    ");
+    let generated = generator.generate(integrated_ast);
+
+    return {
+        "success": true,
+        "code": generated,
+        "error": null
+    };
+}
+
+# 解析多个命名空间
+micro resolve_multiple_namespaces(ast: Node) -> Node {
+    let manager = new NamespaceManager();
+    
+    # 第一遍：收集所有命名空间和符号
+    let i = 0;
+    while i < ast.statements.length {
+        let stmt = ast.statements[i];
+        
+        if stmt.type == "NamespaceStatement" {
+            let namespace_path = join_path(stmt.path, "::");
+            if stmt.isMainNamespace {
+                namespace_path = namespace_path + "!";
+            }
+            manager.current_namespace = namespace_path;
+            
+        } else if stmt.type == "UsingStatement" {
+            let using_path = join_path(stmt.path, "::");
+            let is_global = is_main_namespace(using_path);
+            add_using_import(manager, using_path, is_global);
+            
+        } else if stmt.type == "MicroDeclaration" {
+            add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "function", stmt, manager.current_file);
+            
+        } else if stmt.type == "ClassDeclaration" {
+            add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "class", stmt, manager.current_file);
+            
+        } else if stmt.type == "LetStatement" {
+            add_symbol_to_namespace(manager, manager.current_namespace, stmt.name, "variable", stmt, manager.current_file);
+        }
+        
+        i = i + 1;
+    }
+    
+    # 第二遍：解析符号引用并生成唯一名称
+    let j = 0;
+    while j < ast.statements.length {
+        let stmt = ast.statements[j];
+        
+        if stmt.type == "MicroDeclaration" {
+            stmt.uniqueName = get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
+            
+        } else if stmt.type == "ClassDeclaration" {
+            stmt.uniqueName = get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
+            
+        } else if stmt.type == "LetStatement" {
+            stmt.uniqueName = get_fully_qualified_name(manager, stmt.name, manager.current_namespace);
+        }
+        
+        j = j + 1;
+    }
+    
+    return ast;
 }
 
 
