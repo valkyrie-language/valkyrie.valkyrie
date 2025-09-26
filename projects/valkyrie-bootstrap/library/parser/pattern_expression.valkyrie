@@ -6,7 +6,9 @@ micro parsePatternExpression(parser) {
     
     if token.type == "IDENTIFIER" {
         parser.advance();
-        return new Node("Identifier", token.value);
+        let node = new Node("TypeIdentifier");
+        node.name = token.value;
+        return node;
     } else {
         let error = {};
         error.type = "ParseError";

@@ -666,6 +666,149 @@ class JsCodeGeneration {
             return result;
         }
 
+        if node.type == "TraitDeclaration" {
+            # 为 trait 生成占位符，暂时不需要完整的代码生成
+            let traitName = node.name;
+            return "/* Trait " + traitName + " - placeholder for future implementation */";
+        }
+
+        if node.type == "SingletonDeclaration" {
+            # 生成 singleton 的 JavaScript 代码
+            let singletonName = node.name;
+            let superClass = node.superClass;
+            let members = node.members;
+
+            let result = "const " + singletonName + " = (function() {\n";
+            result = result + "  let instance = null;\n";
+            result = result + "  \n";
+            result = result + "  class " + singletonName + "Class";
+
+            # 添加继承
+            if superClass {
+                result = result + " extends " + superClass;
+            }
+
+            result = result + " {\n";
+
+            # 检查是否有显式构造函数
+            let hasExplicitConstructor = false;
+            let explicitConstructor = null;
+            let fieldInits = "";
+            let i = 0;
+            while i < members.length {
+                let member = members[i];
+                if member.type == "ConstructorStatement" {
+                    hasExplicitConstructor = true;
+                    explicitConstructor = member;
+                } else if member.type == "Property" {
+                    if member.initializer && member.initializer.type {
+                        let initValue = self.generate_expression(member.initializer);
+                        fieldInits = fieldInits + "      this." + member.name + " = " + initValue + ";\n";
+                    } else {
+                        fieldInits = fieldInits + "      this." + member.name + " = undefined;\n";
+                    }
+                }
+                i = i + 1;
+            }
+
+            # 生成构造函数
+            if hasExplicitConstructor {
+                # 使用显式构造函数作为初始化逻辑
+                let params = "";
+                let j = 0;
+                while j < explicitConstructor.parameters.length {
+                    if j > 0 {
+                        params = params + ", ";
+                    }
+                    # 处理新的 Parameter 节点结构
+                    let param = explicitConstructor.parameters[j];
+                    if param && param.name {
+                        params = params + param.name;
+                    } else {
+                        # 兼容旧的字符串格式
+                        params = params + param;
+                    }
+                    j = j + 1;
+                }
+                result = result + "    constructor(" + params + ") {\n";
+                if superClass {
+                    result = result + "      super();\n";
+                }
+                result = result + fieldInits;
+                let ctorBody = self.generate_statement(explicitConstructor.body);
+                # 移除外层的大括号，只保留内容
+                if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
+                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+                    # 调整缩进
+                    ctorBody = ctorBody.replace("\n", "\n      ");
+                }
+                result = result + "      " + ctorBody;
+                result = result + "    }\n\n";
+            } else if fieldInits != "" {
+                # 自动生成构造函数用于字段初始化
+                result = result + "    constructor() {\n";
+                if superClass {
+                    result = result + "      super();\n";
+                }
+                result = result + fieldInits;
+                result = result + "    }\n\n";
+            }
+
+            # 生成类方法
+            i = 0;
+            while i < members.length {
+                let member = members[i];
+                if member.type == "MemberStatement" {
+                    let methodName = member.name;
+                    let params = "";
+                    let j = 0;
+                    let paramCount = 0;
+                    while j < member.parameters.length {
+                        # 跳过 self 参数，因为在 ES6 class 中不需要显式的 self
+                        let param = member.parameters[j];
+                        let paramName = "";
+
+                        # 处理新的 Parameter 节点结构
+                        if param && param.name {
+                            paramName = param.name;
+                        } else {
+                            # 兼容旧的字符串格式
+                            paramName = param;
+                        }
+
+                        if paramName != "self" {
+                            if paramCount > 0 {
+                                params = params + ", ";
+                            }
+                            params = params + paramName;
+                            paramCount = paramCount + 1;
+                        }
+                        j = j + 1;
+                    }
+                    let body = self.generate_statement(member.body);
+                    # 根据是否为静态方法生成不同的代码
+                    if member.isStatic {
+                        result = result + "    static " + methodName + "(" + params + ") " + body + "\n\n";
+                    } else {
+                        result = result + "    " + methodName + "(" + params + ") " + body + "\n\n";
+                    }
+                }
+                i = i + 1;
+            }
+
+            result = result + "  }\n";
+            result = result + "  \n";
+            result = result + "  return function() {\n";
+            result = result + "    if (instance === null) {\n";
+            result = result + "      instance = new " + singletonName + "Class();\n";
+            result = result + "    }\n";
+            result = result + "    return instance;\n";
+            result = result + "  };\n";
+            result = result + "})();";
+            
+            return result;
+        }
+
         # 表达式语句 - 移除这个处理，让所有表达式都通过ExpressionStatement处理
         return "/* Unknown statement: " + node.type + " */";
     }
@@ -697,6 +840,10 @@ class JsCodeGeneration {
             return "Object";
         }
 
+        if pattern_node.type == "TypeIdentifier" {
+            return pattern_node.name;
+        }
+
         if pattern_node.type == "Identifier" {
             return pattern_node.name;
         }
@@ -709,6 +856,10 @@ class JsCodeGeneration {
     micro generate_type_expression(self, type_node) -> String {
         if !type_node {
             return "Object";
+        }
+
+        if type_node.type == "TypeIdentifier" {
+            return type_node.name;
         }
 
         if type_node.type == "Identifier" {

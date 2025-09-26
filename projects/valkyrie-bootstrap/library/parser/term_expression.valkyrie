@@ -138,23 +138,23 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             }
         } else {
             right = parseExpressionWithPrecedence(parser, nextMinPrecedence, inline);
-        }
-        
-        if right && right.type == "ParseError" {
-            return right;
-        }
+            
+            if right && right.type == "ParseError" {
+                return right;
+            }
 
-        if tokenType == "ASSIGN" {
-            let node = new Node("Assignment");
-            node.left = left;
-            node.right = right;
-            left = node;
-        } else {
-            let node = new Node("BinaryOp");
-            node.left = left;
-            node.operator = op;
-            node.right = right;
-            left = node;
+            if tokenType == "ASSIGN" {
+                let node = new Node("Assignment");
+                node.left = left;
+                node.right = right;
+                left = node;
+            } else {
+                let node = new Node("BinaryOp");
+                node.left = left;
+                node.operator = op;
+                node.right = right;
+                left = node;
+            }
         }
     }
 

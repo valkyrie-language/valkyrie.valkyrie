@@ -271,6 +271,8 @@ micro get_keyword_type(value: String) -> String {
     if value == "namespace" { return "NAMESPACE"; }
     if value == "using" { return "USING"; }
     if value == "class" { return "CLASS"; }
+    if value == "singleton" { return "SINGLETON"; }
+    if value == "trait" { return "TRAIT"; }
     if value == "constructor" { return "CONSTRUCTOR"; }
     if value == "self" { return "SELF"; }
     if value == "Self" { return "SELF"; }

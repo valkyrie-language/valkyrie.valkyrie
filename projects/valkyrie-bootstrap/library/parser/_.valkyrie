@@ -31,6 +31,14 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
         return parseClassDeclaration(parser);
     }
 
+    if parser.current_token.type == "SINGLETON" {
+        return parseSingletonDeclaration(parser);
+    }
+
+    if parser.current_token.type == "TRAIT" {
+        return parseTraitDeclaration(parser);
+    }
+
     if parser.current_token.type == "LET" {
         return parseLetStatement(parser);
     }
@@ -302,19 +310,23 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
     return node;
 }
 
-micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
-    parser.advance(); # skip 'class'
+# 解析关键词并返回节点类型
+micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type: String) -> Node {
+    parser.advance(); # skip keyword
     let name = parser.expect("IDENTIFIER");
     if name && name.type == "ParseError" {
         return name;
     }
 
-    let node = new Node("ClassDeclaration");
+    let node = new Node(node_type);
     node.name = name.value;
     node.superClass = null;
     node.members = [];
+    return node;
+}
 
-    # 检查继承
+# 解析继承关系 (extends)
+micro parse_inheritor(parser: ValkyrieParser, node: Node) -> Node {
     if parser.current_token.type == "EXTENDS" {
         parser.advance(); # skip 'extends'
         let superName = parser.expect("IDENTIFIER");
@@ -323,13 +335,23 @@ micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
         }
         node.superClass = superName.value;
     }
+    return node;
+}
 
+# 解析实现关系 (implements) - 为将来扩展预留
+micro parse_implements(parser: ValkyrieParser, node: Node) -> Node {
+    # 暂时不实现，为将来扩展预留
+    return node;
+}
+
+# 解析对象体（成员列表）
+micro parse_object_body(parser: ValkyrieParser, node: Node) -> Node {
     let lbrace = parser.expect("LBRACE");
     if lbrace && lbrace.type == "ParseError" {
         return lbrace;
     }
 
-    # 解析类成员
+    # 解析成员
     while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
         # 跳过空的分号
         if parser.current_token.type == "SEMICOLON" {
@@ -348,6 +370,90 @@ micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
     let rbrace = parser.expect("RBRACE");
     if rbrace && rbrace.type == "ParseError" {
         return rbrace;
+    }
+
+    return node;
+}
+
+micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
+    # 使用重构后的函数
+    let node = parse_keyword(parser, "class", "ClassDeclaration");
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析继承
+    node = parse_inheritor(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析实现（暂时不需要）
+    node = parse_implements(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析对象体
+    node = parse_object_body(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    return node;
+}
+
+micro parseSingletonDeclaration(parser: ValkyrieParser) -> Node {
+    # 使用重构后的函数，复用 class 的解析逻辑
+    let node = parse_keyword(parser, "singleton", "SingletonDeclaration");
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析继承
+    node = parse_inheritor(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析实现（暂时不需要）
+    node = parse_implements(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析对象体
+    node = parse_object_body(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    return node;
+}
+
+micro parseTraitDeclaration(parser: ValkyrieParser) -> Node {
+    # 使用重构后的函数，复用 class 的解析逻辑
+    let node = parse_keyword(parser, "trait", "TraitDeclaration");
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析继承（trait 可以继承其他 trait）
+    node = parse_inheritor(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析实现（暂时不需要）
+    node = parse_implements(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
+    }
+
+    # 解析对象体
+    node = parse_object_body(parser, node);
+    if node && node.type == "ParseError" {
+        return node;
     }
 
     return node;

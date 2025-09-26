@@ -844,6 +844,12 @@ export function package_lexer_get_keyword_type(value) {
     if (value == "class") {
         return "CLASS";
     }
+    if (value == "singleton") {
+        return "SINGLETON";
+    }
+    if (value == "trait") {
+        return "TRAIT";
+    }
     if (value == "constructor") {
         return "CONSTRUCTOR";
     }
@@ -880,7 +886,9 @@ export function package_parser_parsePatternExpression(parser) {
     let token = parser.current_token;
     if (token.type == "IDENTIFIER") {
         parser.advance();
-        return new package_parser_Node("Identifier", token.value);
+        let node = new package_parser_Node("TypeIdentifier");
+        node.name = token.value;
+        return node;
     } else {
         let error = {};
         error.type = "ParseError";
@@ -1018,21 +1026,21 @@ export function package_parser_parseExpressionWithPrecedence(
                 nextMinPrecedence,
                 inline
             );
-        }
-        if (right && right.type == "ParseError") {
-            return right;
-        }
-        if (tokenType == "ASSIGN") {
-            let node = new package_parser_Node("Assignment");
-            node.left = left;
-            node.right = right;
-            left = node;
-        } else {
-            let node = new package_parser_Node("BinaryOp");
-            node.left = left;
-            node.operator = op;
-            node.right = right;
-            left = node;
+            if (right && right.type == "ParseError") {
+                return right;
+            }
+            if (tokenType == "ASSIGN") {
+                let node = new package_parser_Node("Assignment");
+                node.left = left;
+                node.right = right;
+                left = node;
+            } else {
+                let node = new package_parser_Node("BinaryOp");
+                node.left = left;
+                node.operator = op;
+                node.right = right;
+                left = node;
+            }
         }
     }
     return left;
@@ -1876,6 +1884,12 @@ export function package_parser_parseStatement(parser) {
     if (parser.current_token.type == "CLASS") {
         return package_parser_parseClassDeclaration(parser);
     }
+    if (parser.current_token.type == "SINGLETON") {
+        return package_parser_parseSingletonDeclaration(parser);
+    }
+    if (parser.current_token.type == "TRAIT") {
+        return package_parser_parseTraitDeclaration(parser);
+    }
     if (parser.current_token.type == "LET") {
         return package_parser_parseLetStatement(parser);
     }
@@ -2123,16 +2137,23 @@ export function package_parser_parseMicroFunctionDeclaration(parser) {
     node.body = body;
     return node;
 }
-export function package_parser_parseClassDeclaration(parser) {
+export function package_parser_parse_keyword(
+    parser,
+    expected_keyword,
+    node_type
+) {
     parser.advance();
     let name = parser.expect("IDENTIFIER");
     if (name && name.type == "ParseError") {
         return name;
     }
-    let node = new package_parser_Node("ClassDeclaration");
+    let node = new package_parser_Node(node_type);
     node.name = name.value;
     node.superClass = null;
     node.members = [];
+    return node;
+}
+export function package_parser_parse_inheritor(parser, node) {
     if (parser.current_token.type == "EXTENDS") {
         parser.advance();
         let superName = parser.expect("IDENTIFIER");
@@ -2141,6 +2162,12 @@ export function package_parser_parseClassDeclaration(parser) {
         }
         node.superClass = superName.value;
     }
+    return node;
+}
+export function package_parser_parse_implements(parser, node) {
+    return node;
+}
+export function package_parser_parse_object_body(parser, node) {
     let lbrace = parser.expect("LBRACE");
     if (lbrace && lbrace.type == "ParseError") {
         return lbrace;
@@ -2163,6 +2190,75 @@ export function package_parser_parseClassDeclaration(parser) {
     let rbrace = parser.expect("RBRACE");
     if (rbrace && rbrace.type == "ParseError") {
         return rbrace;
+    }
+    return node;
+}
+export function package_parser_parseClassDeclaration(parser) {
+    let node = package_parser_parse_keyword(
+        parser,
+        "class",
+        "ClassDeclaration"
+    );
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_inheritor(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_implements(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_object_body(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    return node;
+}
+export function package_parser_parseSingletonDeclaration(parser) {
+    let node = package_parser_parse_keyword(
+        parser,
+        "singleton",
+        "SingletonDeclaration"
+    );
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_inheritor(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_implements(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_object_body(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    return node;
+}
+export function package_parser_parseTraitDeclaration(parser) {
+    let node = package_parser_parse_keyword(
+        parser,
+        "trait",
+        "TraitDeclaration"
+    );
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_inheritor(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_implements(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package_parser_parse_object_body(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
     }
     return node;
 }
@@ -3679,6 +3775,156 @@ class package_codegen_JsCodeGeneration {
             result = result + "}";
             return result;
         }
+        if (node.type == "TraitDeclaration") {
+            let traitName = node.name;
+            return (
+                "/* Trait " +
+                traitName +
+                " - placeholder for future implementation */"
+            );
+        }
+        if (node.type == "SingletonDeclaration") {
+            let singletonName = node.name;
+            let superClass = node.superClass;
+            let members = node.members;
+            let result = "const " + singletonName + " = (function() {\n";
+            result = result + "  let instance = null;\n";
+            result = result + "  \n";
+            result = result + "  class " + singletonName + "Class";
+            if (superClass) {
+                result = result + " extends " + superClass;
+            }
+            result = result + " {\n";
+            let hasExplicitConstructor = false;
+            let explicitConstructor = null;
+            let fieldInits = "";
+            let i = 0;
+            while (i < members.length) {
+                let member = members[i];
+                if (member.type == "ConstructorStatement") {
+                    hasExplicitConstructor = true;
+                    explicitConstructor = member;
+                } else if (member.type == "Property") {
+                    if (member.initializer && member.initializer.type) {
+                        let initValue = this.generate_expression(
+                            member.initializer
+                        );
+                        fieldInits =
+                            fieldInits +
+                            "      this." +
+                            member.name +
+                            " = " +
+                            initValue +
+                            ";\n";
+                    } else {
+                        fieldInits =
+                            fieldInits +
+                            "      this." +
+                            member.name +
+                            " = undefined;\n";
+                    }
+                }
+                i = i + 1;
+            }
+            if (hasExplicitConstructor) {
+                let params = "";
+                let j = 0;
+                while (j < explicitConstructor.parameters.length) {
+                    if (j > 0) {
+                        params = params + ", ";
+                    }
+                    let param = explicitConstructor.parameters[j];
+                    if (param && param.name) {
+                        params = params + param.name;
+                    } else {
+                        params = params + param;
+                    }
+                    j = j + 1;
+                }
+                result = result + "    constructor(" + params + ") {\n";
+                if (superClass) {
+                    result = result + "      super();\n";
+                }
+                result = result + fieldInits;
+                let ctorBody = this.generate_statement(
+                    explicitConstructor.body
+                );
+                if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
+                    ctorBody = ctorBody.substring(2, ctorBody.length - 2);
+                    ctorBody = ctorBody.replace("\n", "\n      ");
+                }
+                result = result + "      " + ctorBody;
+                result = result + "    }\n\n";
+            } else if (fieldInits != "") {
+                result = result + "    constructor() {\n";
+                if (superClass) {
+                    result = result + "      super();\n";
+                }
+                result = result + fieldInits;
+                result = result + "    }\n\n";
+            }
+            i = 0;
+            while (i < members.length) {
+                let member = members[i];
+                if (member.type == "MemberStatement") {
+                    let methodName = member.name;
+                    let params = "";
+                    let j = 0;
+                    let paramCount = 0;
+                    while (j < member.parameters.length) {
+                        let param = member.parameters[j];
+                        let paramName = "";
+                        if (param && param.name) {
+                            paramName = param.name;
+                        } else {
+                            paramName = param;
+                        }
+                        if (paramName != "self") {
+                            if (paramCount > 0) {
+                                params = params + ", ";
+                            }
+                            params = params + paramName;
+                            paramCount = paramCount + 1;
+                        }
+                        j = j + 1;
+                    }
+                    let body = this.generate_statement(member.body);
+                    if (member.isStatic) {
+                        result =
+                            result +
+                            "    static " +
+                            methodName +
+                            "(" +
+                            params +
+                            ") " +
+                            body +
+                            "\n\n";
+                    } else {
+                        result =
+                            result +
+                            "    " +
+                            methodName +
+                            "(" +
+                            params +
+                            ") " +
+                            body +
+                            "\n\n";
+                    }
+                }
+                i = i + 1;
+            }
+            result = result + "  }\n";
+            result = result + "  \n";
+            result = result + "  return function() {\n";
+            result = result + "    if (instance === null) {\n";
+            result =
+                result + "      instance = new " + singletonName + "Class();\n";
+            result = result + "    }\n";
+            result = result + "    return instance;\n";
+            result = result + "  };\n";
+            result = result + "})();";
+            return result;
+        }
         return "/* Unknown statement: " + node.type + " */";
     }
 
@@ -3710,6 +3956,9 @@ class package_codegen_JsCodeGeneration {
         if (!pattern_node) {
             return "Object";
         }
+        if (pattern_node.type == "TypeIdentifier") {
+            return pattern_node.name;
+        }
         if (pattern_node.type == "Identifier") {
             return pattern_node.name;
         }
@@ -3719,6 +3968,9 @@ class package_codegen_JsCodeGeneration {
     generate_type_expression(type_node) {
         if (!type_node) {
             return "Object";
+        }
+        if (type_node.type == "TypeIdentifier") {
+            return type_node.name;
         }
         if (type_node.type == "Identifier") {
             return type_node.name;
