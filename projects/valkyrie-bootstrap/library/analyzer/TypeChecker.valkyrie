@@ -1,0 +1,145 @@
+namespace package::analyzer;
+
+using package::analyzer::Type;
+using package::analyzer::TypeFactory;
+using package::analyzer::Symbol;
+using package::analyzer::SymbolTable;
+using package::parser::Node;
+
+# 类型检查器
+# 负责对符号表中的符号进行类型检查
+class TypeChecker {
+    constructor() {
+        self.type_factory = new TypeFactory();
+        self.errors = [];
+        self.warnings = [];
+    }
+    
+    # 对符号表执行类型检查
+    micro check_symbol_table(self, symbol_table: SymbolTable) {
+        # 清空之前的错误和警告
+        self.errors = [];
+        self.warnings = [];
+        
+        # 检查所有符号
+        let all_symbols = symbol_table.get_all_symbols();
+        self.check_symbols(all_symbols);
+    }
+    
+    # 检查符号集合
+    micro check_symbols(self, symbols: Object) {
+        # 简化实现：遍历所有符号进行类型检查
+        # TODO: 实现实际的符号遍历逻辑
+    }
+    
+    # 检查单个符号的类型
+    micro check_symbol_type(self, symbol: Symbol) {
+        if !symbol {
+            return;
+        }
+        
+        # 根据符号类型进行不同的检查
+        if symbol.symbol_type == "variable" {
+            self.check_variable_type(symbol);
+        } else if symbol.symbol_type == "function" {
+            self.check_function_type(symbol);
+        } else if symbol.symbol_type == "class" {
+            self.check_class_type(symbol);
+        } else if symbol.symbol_type == "micro_call" {
+            self.check_micro_call_type(symbol);
+        }
+    }
+    
+    # 检查变量类型
+    micro check_variable_type(self, symbol: Symbol) {
+        # 如果没有显式类型声明，尝试从值推断
+        if !symbol.data_type && symbol.value {
+            symbol.data_type = self.type_factory.infer_from_literal(symbol.value);
+        }
+        
+        # 如果仍然没有类型，设为 unknown
+        if !symbol.data_type {
+            symbol.data_type = self.type_factory.get_builtin_type("unknown");
+            self.add_warning("Variable '" + symbol.name + "' has unknown type");
+        }
+    }
+    
+    # 检查函数类型
+    micro check_function_type(self, symbol: Symbol) {
+        # 检查函数返回类型
+        if !symbol.data_type {
+            symbol.data_type = self.type_factory.get_builtin_type("void");
+        }
+        
+        # TODO: 检查函数参数类型
+        # TODO: 检查函数体中的类型一致性
+    }
+    
+    # 检查类类型
+    micro check_class_type(self, symbol: Symbol) {
+        # 类本身的类型就是类名
+        if !symbol.data_type {
+            let class_type = new Type(symbol.name);
+            symbol.data_type = class_type;
+        }
+        
+        # TODO: 检查类成员的类型
+    }
+    
+    # 检查微函数调用类型
+    micro check_micro_call_type(self, symbol: Symbol) {
+        # TODO: 检查微函数调用的参数类型匹配
+        # TODO: 推断调用结果的类型
+        
+        # 暂时设为 unknown
+        if !symbol.data_type {
+            symbol.data_type = self.type_factory.get_builtin_type("unknown");
+        }
+    }
+    
+    # 检查类型兼容性
+    micro check_type_compatibility(self, expected: Type, actual: Type, context: String) -> bool {
+        if !expected || !actual {
+            return false;
+        }
+        
+        if expected.is_compatible_with(actual) {
+            return true;
+        }
+        
+        # 记录类型不匹配错误
+        let error_msg = "Type mismatch in " + context + ": expected " + expected.to_string() + ", got " + actual.to_string();
+        self.add_error(error_msg);
+        return false;
+    }
+    
+    # 添加类型错误
+    micro add_error(self, message: String) {
+        self.errors.push(message);
+    }
+    
+    # 添加类型警告
+    micro add_warning(self, message: String) {
+        self.warnings.push(message);
+    }
+    
+    # 获取类型检查错误
+    micro get_errors(self) -> Array {
+        return self.errors;
+    }
+    
+    # 获取类型检查警告
+    micro get_warnings(self) -> Array {
+        return self.warnings;
+    }
+    
+    # 检查是否有错误
+    micro has_errors(self) -> bool {
+        return self.errors.length > 0;
+    }
+    
+    # 检查是否有警告
+    micro has_warnings(self) -> bool {
+        return self.warnings.length > 0;
+    }
+}

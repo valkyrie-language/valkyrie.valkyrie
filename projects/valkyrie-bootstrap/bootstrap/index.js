@@ -2516,12 +2516,26 @@ export function package_parser_parse(tokens) {
 class package_analyzer_Analyzer {
     constructor() {
         this.symbol_table = new package_analyzer_SymbolTable();
+        this.type_checker = new package_analyzer_TypeChecker();
     }
 
     analyze(ast) {
         this.symbol_table.enter_scope("global");
         this.visit_node(ast);
+        this.type_checker.check_symbol_table(this.symbol_table);
         return this.symbol_table;
+    }
+
+    get_type_errors() {
+        return this.type_checker.get_errors();
+    }
+
+    get_type_warnings() {
+        return this.type_checker.get_warnings();
+    }
+
+    has_type_errors() {
+        return this.type_checker.has_errors();
     }
 
     visit_node(node) {
@@ -2712,6 +2726,217 @@ class package_analyzer_SymbolTable {
 
     get_all_symbols() {
         return this.symbols;
+    }
+}
+class package_analyzer_Type {
+    constructor(name) {
+        this.name = name;
+        this.is_primitive = false;
+        this.is_nullable = false;
+        this.is_array = false;
+        this.element_type = false;
+        this.properties = {};
+    }
+
+    static create_primitive(type_name) {
+        let type = new package_analyzer_Type(type_name);
+        type.is_primitive = true;
+        return type;
+    }
+
+    static create_array(element_type) {
+        let type = new package_analyzer_Type(element_type.name + "[]");
+        type.is_array = true;
+        type.element_type = element_type;
+        return type;
+    }
+
+    static create_nullable(base_type) {
+        let type = new package_analyzer_Type(base_type.name + "?");
+        type.is_nullable = true;
+        type.element_type = base_type;
+        return type;
+    }
+
+    is_compatible_with(other) {
+        if (this.name == other.name) {
+            return true;
+        }
+        if (other.is_nullable && this.element_type) {
+            return this.is_compatible_with(other.element_type);
+        }
+        if (this.is_array && other.is_array) {
+            if (this.element_type && other.element_type) {
+                return this.element_type.is_compatible_with(other.element_type);
+            }
+        }
+        return false;
+    }
+
+    to_string() {
+        return this.name;
+    }
+}
+class package_analyzer_TypeFactory {
+    constructor() {
+        this.builtin_types = {};
+        this.setup_builtin_types();
+    }
+
+    setup_builtin_types() {
+        this.builtin_types["bool"] = Type.create_primitive("bool");
+        this.builtin_types["i32"] = Type.create_primitive("i32");
+        this.builtin_types["i64"] = Type.create_primitive("i64");
+        this.builtin_types["f32"] = Type.create_primitive("f32");
+        this.builtin_types["f64"] = Type.create_primitive("f64");
+        this.builtin_types["String"] = Type.create_primitive("String");
+        this.builtin_types["Object"] = Type.create_primitive("Object");
+        this.builtin_types["void"] = Type.create_primitive("void");
+        this.builtin_types["unknown"] = Type.create_primitive("unknown");
+        this.builtin_types["any"] = Type.create_primitive("any");
+    }
+
+    get_builtin_type(name) {
+        if (this.builtin_types[name]) {
+            return this.builtin_types[name];
+        }
+        return this.builtin_types["unknown"];
+    }
+
+    is_builtin_type(name) {
+        return this.builtin_types[name] != false;
+    }
+
+    infer_from_literal(value) {
+        if (value == "true" || value == "false") {
+            return this.builtin_types["bool"];
+        }
+        if (this.is_integer_literal(value)) {
+            return this.builtin_types["i32"];
+        }
+        if (this.is_float_literal(value)) {
+            return this.builtin_types["f64"];
+        }
+        if (this.is_string_literal(value)) {
+            return this.builtin_types["String"];
+        }
+        return this.builtin_types["unknown"];
+    }
+
+    is_integer_literal(value) {
+        return true;
+    }
+
+    is_float_literal(value) {
+        return true;
+    }
+
+    is_string_literal(value) {
+        return true;
+    }
+}
+class package_analyzer_TypeChecker {
+    constructor() {
+        this.type_factory = new package_analyzer_TypeFactory();
+        this.errors = [];
+        this.warnings = [];
+    }
+
+    check_symbol_table(symbol_table) {
+        this.errors = [];
+        this.warnings = [];
+        let all_symbols = symbol_table.get_all_symbols();
+        this.check_symbols(all_symbols);
+    }
+
+    check_symbols(symbols) {}
+
+    check_symbol_type(symbol) {
+        if (!symbol) {
+            return;
+        }
+        if (symbol.symbol_type == "variable") {
+            this.check_variable_type(symbol);
+        } else if (symbol.symbol_type == "function") {
+            this.check_function_type(symbol);
+        } else if (symbol.symbol_type == "class") {
+            this.check_class_type(symbol);
+        } else if (symbol.symbol_type == "micro_call") {
+            this.check_micro_call_type(symbol);
+        }
+    }
+
+    check_variable_type(symbol) {
+        if (!symbol.data_type && symbol.value) {
+            symbol.data_type = this.type_factory.infer_from_literal(
+                symbol.value
+            );
+        }
+        if (!symbol.data_type) {
+            symbol.data_type = this.type_factory.get_builtin_type("unknown");
+            this.add_warning("Variable '" + symbol.name + "' has unknown type");
+        }
+    }
+
+    check_function_type(symbol) {
+        if (!symbol.data_type) {
+            symbol.data_type = this.type_factory.get_builtin_type("void");
+        }
+    }
+
+    check_class_type(symbol) {
+        if (!symbol.data_type) {
+            let class_type = new package_analyzer_Type(symbol.name);
+            symbol.data_type = class_type;
+        }
+    }
+
+    check_micro_call_type(symbol) {
+        if (!symbol.data_type) {
+            symbol.data_type = this.type_factory.get_builtin_type("unknown");
+        }
+    }
+
+    check_type_compatibility(expected, actual, context) {
+        if (!expected || !actual) {
+            return false;
+        }
+        if (expected.is_compatible_with(actual)) {
+            return true;
+        }
+        let error_msg =
+            "Type mismatch in " +
+            context +
+            ": expected " +
+            expected.to_string() +
+            ", got " +
+            actual.to_string();
+        this.add_error(error_msg);
+        return false;
+    }
+
+    add_error(message) {
+        this.errors.push(message);
+    }
+
+    add_warning(message) {
+        this.warnings.push(message);
+    }
+
+    get_errors() {
+        return this.errors;
+    }
+
+    get_warnings() {
+        return this.warnings;
+    }
+
+    has_errors() {
+        return this.errors.length > 0;
+    }
+
+    has_warnings() {
+        return this.warnings.length > 0;
     }
 }
 class package_compiler_Compiler {

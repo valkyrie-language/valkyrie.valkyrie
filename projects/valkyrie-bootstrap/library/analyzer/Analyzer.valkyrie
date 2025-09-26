@@ -3,18 +3,39 @@ namespace package::analyzer;
 using package::parser::Node;
 using package::analyzer::Symbol;
 using package::analyzer::SymbolTable;
+using package::analyzer::TypeChecker;
 
 # Analyzer 负责将 Parser 的 Node 转换为分析层的 Symbol
 class Analyzer {
     constructor() {
         self.symbol_table = new SymbolTable();
+        self.type_checker = new TypeChecker();
     }
     
     # 分析 AST 节点，返回符号表
     micro analyze(self, ast: Node) -> SymbolTable {
         self.symbol_table.enter_scope("global");
         self.visit_node(ast);
+        
+        # 执行类型检查
+        self.type_checker.check_symbol_table(self.symbol_table);
+        
         return self.symbol_table;
+    }
+    
+    # 获取类型检查错误
+    micro get_type_errors(self) -> Array {
+        return self.type_checker.get_errors();
+    }
+    
+    # 获取类型检查警告
+    micro get_type_warnings(self) -> Array {
+        return self.type_checker.get_warnings();
+    }
+    
+    # 检查是否有类型错误
+    micro has_type_errors(self) -> bool {
+        return self.type_checker.has_errors();
     }
     
     # 访问节点并创建对应的符号

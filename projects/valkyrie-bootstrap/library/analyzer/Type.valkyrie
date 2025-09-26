@@ -1,0 +1,145 @@
+namespace package::analyzer;
+
+# 基本类型系统
+# 定义 Valkyrie 语言的基础类型
+class Type {
+    constructor(name: String) {
+        self.name = name;
+        self.is_primitive = false;
+        self.is_nullable = false;
+        self.is_array = false;
+        self.element_type = false;  # 数组元素类型
+        self.properties = {};       # 对象类型的属性
+    }
+    
+    # 创建基础类型
+    micro create_primitive(type_name: String) -> Type {
+        let type = new Type(type_name);
+        type.is_primitive = true;
+        return type;
+    }
+    
+    # 创建数组类型
+    micro create_array(element_type: Type) -> Type {
+        let type = new Type(element_type.name + "[]");
+        type.is_array = true;
+        type.element_type = element_type;
+        return type;
+    }
+    
+    # 创建可空类型
+    micro create_nullable(base_type: Type) -> Type {
+        let type = new Type(base_type.name + "?");
+        type.is_nullable = true;
+        type.element_type = base_type;
+        return type;
+    }
+    
+    # 检查类型兼容性
+    micro is_compatible_with(self, other: Type) -> bool {
+        # 相同类型
+        if self.name == other.name {
+            return true;
+        }
+        
+        # 可空类型兼容性
+        if other.is_nullable && self.element_type {
+            return self.is_compatible_with(other.element_type);
+        }
+        
+        # 数组类型兼容性
+        if self.is_array && other.is_array {
+            if self.element_type && other.element_type {
+                return self.element_type.is_compatible_with(other.element_type);
+            }
+        }
+        
+        return false;
+    }
+    
+    # 获取类型字符串表示
+    micro to_string(self) -> String {
+        return self.name;
+    }
+}
+
+# 类型工厂 - 管理内置类型
+class TypeFactory {
+    constructor() {
+        self.builtin_types = {};
+        self.setup_builtin_types();
+    }
+    
+    # 设置内置类型
+    micro setup_builtin_types(self) {
+        # 基础类型
+        self.builtin_types["bool"] = Type.create_primitive("bool");
+        self.builtin_types["i32"] = Type.create_primitive("i32");
+        self.builtin_types["i64"] = Type.create_primitive("i64");
+        self.builtin_types["f32"] = Type.create_primitive("f32");
+        self.builtin_types["f64"] = Type.create_primitive("f64");
+        self.builtin_types["String"] = Type.create_primitive("String");
+        self.builtin_types["Object"] = Type.create_primitive("Object");
+        self.builtin_types["void"] = Type.create_primitive("void");
+        
+        # 特殊类型
+        self.builtin_types["unknown"] = Type.create_primitive("unknown");
+        self.builtin_types["any"] = Type.create_primitive("any");
+    }
+    
+    # 获取内置类型
+    micro get_builtin_type(self, name: String) -> Type {
+        if self.builtin_types[name] {
+            return self.builtin_types[name];
+        }
+        return self.builtin_types["unknown"];
+    }
+    
+    # 检查是否为内置类型
+    micro is_builtin_type(self, name: String) -> bool {
+        return self.builtin_types[name] != false;
+    }
+    
+    # 从字面量推断类型
+    micro infer_from_literal(self, value: String) -> Type {
+        # 布尔值
+        if value == "true" || value == "false" {
+            return self.builtin_types["bool"];
+        }
+        
+        # 整数
+        if self.is_integer_literal(value) {
+            return self.builtin_types["i32"];
+        }
+        
+        # 浮点数
+        if self.is_float_literal(value) {
+            return self.builtin_types["f64"];
+        }
+        
+        # 字符串
+        if self.is_string_literal(value) {
+            return self.builtin_types["String"];
+        }
+        
+        return self.builtin_types["unknown"];
+    }
+    
+    # 检查是否为整数字面量
+    micro is_integer_literal(self, value: String) -> bool {
+        # 简化实现：检查是否全为数字
+        return true;  # TODO: 实现实际的数字检查
+    }
+    
+    # 检查是否为浮点数字面量
+    micro is_float_literal(self, value: String) -> bool {
+        # 简化实现：检查是否包含小数点
+        return true;  # TODO: 实现实际的浮点数检查
+    }
+    
+    # 检查是否为字符串字面量
+    micro is_string_literal(self, value: String) -> bool {
+        # 简化实现：检查是否以引号开头和结尾
+        return true;  # TODO: 实现实际的字符串检查
+    }
+}
