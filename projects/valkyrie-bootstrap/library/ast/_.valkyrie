@@ -1,2 +1,17 @@
 namespace package::ast;
 
+class IdentifierNode {
+    constructor() {
+        self.`type` = "Identifier";
+        self.name = "";
+    }
+}
+
+
+class NamepathNode {
+    constructor() {
+        self.`type` = "NamePath";
+        self.name = "";
+        self.name_path = [];
+    }
+}

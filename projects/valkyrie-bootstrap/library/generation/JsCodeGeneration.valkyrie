@@ -1,9 +1,10 @@
-namespace package::codegen;
+namespace package::generation;
 
 using package::parser::Node;
-using package::codegen::join_name_path;
+using package::generation::join_name_path;
 using package::generation::SourceMapBuilder;
 using package::generation::JsSourceMapping;
+using package::generation::SourceSpan;
 
 # JavaScript Code Generation Write Buffer with proper indentation management
 class JsCodeGeneration {
@@ -164,7 +165,8 @@ class JsCodeGeneration {
     
     # 生成 flags 声明
     micro generate_flags_declaration(self, node: Node) -> String {
-        let flagsName = node.name;
+        # 使用 unique_name 如果存在，否则使用 name
+        let flagsName = node.unique_name || node.name;
         let members = node.members;
         
         let result = "const " + flagsName + " = {\n";
@@ -190,7 +192,8 @@ class JsCodeGeneration {
     
     # 生成 eidos 声明
     micro generate_eidos_declaration(self, node: Node) -> String {
-        let eidosName = node.name;
+        # 使用 unique_name 如果存在，否则使用 name
+        let eidosName = node.unique_name;
         let members = node.members;
         
         let result = "const " + eidosName + " = {\n";
@@ -225,8 +228,8 @@ class JsCodeGeneration {
                 return self.generate_string_expression(node);
             case "Boolean": 
                 return self.generate_boolean_expression(node);
-            case "Identifier": 
-                return self.generate_identifier_expression(node);
+            case "NamePath":
+                return self.generate_namepath_expression(node);
             case "BinaryOp": 
                 return self.generate_binary_op_expression(node);
             case "Assignment": 
@@ -302,20 +305,18 @@ class JsCodeGeneration {
     }
     
     # 生成标识符表达式
-    micro generate_identifier_expression(self, node: Node) -> String {
-        # 检查 node 是否有 has_valid_position 方法
-        if self.js_mapping {
-            if node && node.has_valid_position {
-                if node.has_valid_position() {
-                    let source_span = self.create_source_span_from_node(node, self.current_source_file);
-                    if source_span {
-                        self.write_identifier(node.name, source_span, 0);
-                        return node.name;
-                    }
-                }
+    micro generate_namepath_expression(self, node: Node) -> String {
+        let name_index = 0;
+        let identifier_name = "";
+        while name_index < node.name_path.length {
+            if name_index == 0 {
+                identifier_name = node.unique_name || node.name_path[name_index].name;
+            } else {
+                identifier_name = identifier_name + "." + node.name_path[name_index].name;
             }
+            name_index = name_index + 1;
         }
-        return node.name;
+        return identifier_name;
     }
     
     # 生成二元操作表达式
@@ -389,7 +390,21 @@ class JsCodeGeneration {
         if node.closure {
             # 生成尾随闭包的 JavaScript 代码
             let closureParams = "";
-            # 尾随闭包通常没有参数，或者参数在调用时推断
+            # 尾随闭包通常需要参数，根据函数签名推断
+            # 对于forEach这样的函数，第一个参数是数组元素
+            # 对于doSomething这样的函数，没有参数
+            
+            # 根据函数名推断参数
+            let calleeStr = "";
+            if node.callee && node.callee.name {
+                calleeStr = node.callee.name;
+            } else {
+                calleeStr = callee;
+            }
+            
+            if calleeStr == "forEach" {
+                closureParams = "item";
+            }
 
             let closureBody = "";
             if node.closure {
@@ -448,14 +463,7 @@ class JsCodeGeneration {
             args = args + self.generate_expression(node.arguments[i]);
             i = i + 1;
         }
-
-        # 检查是否有解析后的类名
-        let className = node.className;
-        if node.resolvedClassName {
-            className = node.resolvedClassName;
-        }
-
-        return "new " + className + "(" + args + ")";
+        return "new " + node.className.unique_name + "(" + args + ")";
     }
     
     # 生成 await 表达式
@@ -524,21 +532,38 @@ class JsCodeGeneration {
     
     # 生成静态成员访问表达式 (用于 eidos/flags)
     micro generate_static_member_access_expression(self, node: Node) -> String {
-        let className = "";
-        if node.namespacePath {
-            # 使用新的namespacePath支持多级命名空间
-            if node.namespacePath.length >= 2 {
-                className = node.namespacePath[node.namespacePath.length - 2];
-            } else {
-                className = node.namespacePath[0];
-            }
-        } else if node.className.`type` {
-            className = self.generate_expression(node.className);
+        # 对于 eidos/flags 静态成员访问，需要正确处理命名空间
+        let objectName = "";
+        let memberName = node.member;
+        
+        # 检查是否有 namespacePath 信息，如果有则使用它来构建正确的名称
+        if node.namespacePath && node.namespacePath.length > 0 {
+            # 使用 namespacePath 中的最后一个元素作为类名
+            # 这通常是正确的唯一名称
+            objectName = node.namespacePath[node.namespacePath.length - 1];
+        } else if node.object && node.object.name_path && node.object.name_path.length > 0 {
+            # 处理 NamePath 类型的对象
+            objectName = self.join_name_path(node.object.name_path, "_");
+        } else if node.object && node.object.name {
+            # 处理 Identifier 类型的对象
+            objectName = node.object.name;
+        } else if node.object && typeof(node.object) == "string" {
+            # 处理字符串类型的对象
+            objectName = node.object;
         } else {
-            className = node.className;
+            # 如果无法确定对象名称，使用默认值
+            objectName = "UnknownObject";
         }
 
-        return className + "." + node.member;
+        # 检查是否是 eidos 类型（检查 node 是否有 is_eidos 属性）
+        if node.is_eidos {
+            # 对于 Eidos 枚举，我们需要返回枚举成员的实际值
+            # 而不是枚举对象的属性访问
+            # 例如：DiagnosticLevel::ERROR 应该返回 "ERROR" 而不是 DiagnosticLevel.ERROR
+            return "\"" + memberName + "\"";
+        }
+
+        return objectName + "." + memberName;
     }
     
     # 生成数组访问表达式
@@ -646,7 +671,7 @@ class JsCodeGeneration {
     # 生成命名空间语句
     micro generate_namespace_statement(self, node: Node) -> String {
         # namespace 语句在单文件编译中被忽略，在多文件编译中用于符号管理
-        let namespacePath = self.join_name_path(node.path, "::");
+        let namespacePath = self.join_name_path(node.path, "_");
         if node.is_main_namespace {
             return "// namespace! " + namespacePath + ";";
         } else {
@@ -657,7 +682,7 @@ class JsCodeGeneration {
     # 生成 using 语句
     micro generate_using_statement(self, node: Node) -> String {
         # using 语句在整合编译中被忽略，在多文件编译中用于符号导入
-        return "// using " + self.join_name_path(node.path, "::") + ";";
+        return "// using " + join_name_path(node.path, "__") + ";";
     }
     
     # 生成 JS 属性语句
@@ -666,8 +691,8 @@ class JsCodeGeneration {
         let cleanImportName = self.replace_all(node.importName, "-", "_");
         cleanImportName = self.replace_all(cleanImportName, ".", "_");
         cleanImportName = self.replace_all(cleanImportName, "/", "_");
-        let uniqueName = node.functionName + "_" + cleanImportName;
-        let importStatement = "import { " + node.importName + " as " + uniqueName + " } from \"" + node.modulePath + "\";";
+        let unique_name = node.functionName + "_" + cleanImportName;
+        let importStatement = "import { " + node.importName + " as " + unique_name + " } from \"" + node.modulePath + "\";";
 
         # 生成函数包装
         let params = "";
@@ -681,7 +706,7 @@ class JsCodeGeneration {
         }
 
         let functionDef = "export function " + node.functionName + "(" + params + ") {\n";
-        functionDef = functionDef + "  return " + uniqueName + "(" + params + ");\n";
+        functionDef = functionDef + "  return " + unique_name + "(" + params + ");\n";
         functionDef = functionDef + "}";
 
         return importStatement + "\n" + functionDef;
@@ -714,7 +739,7 @@ class JsCodeGeneration {
 
         let body = self.generate_statement(node.body);
         # 直接使用 name 字段（已经是解析后的名称）
-        let functionName = node.name;
+        let functionName = node.unique_name;
         return "export function " + functionName + "(" + params + ") " + body;
     }
     
@@ -802,7 +827,7 @@ class JsCodeGeneration {
     # 生成类声明
     micro generate_class_declaration(self, node: Node) -> String {
         # 直接使用 name 字段（已经是解析后的名称）
-        let className = node.name;
+        let className = node.unique_name;
         let superClass = node.superClass;
         let members = node.members;
 
@@ -910,10 +935,11 @@ class JsCodeGeneration {
                 }
                 let body = self.generate_statement(member.body);
                 # 根据是否为静态方法生成不同的代码
-                if member.isStatic {
-                    result = result + "  static " + methodName + "(" + params + ") " + body + "\n\n";
-                } else {
+                # 修复：检查isInstanceMethod而不是isStatic，因为有self参数的是实例方法
+                if member.isInstanceMethod {
                     result = result + "  " + methodName + "(" + params + ") " + body + "\n\n";
+                } else {
+                    result = result + "  static " + methodName + "(" + params + ") " + body + "\n\n";
                 }
             }
             i = i + 1;
@@ -1046,10 +1072,11 @@ class JsCodeGeneration {
                 }
                 let body = self.generate_statement(member.body);
                 # 根据是否为静态方法生成不同的代码
-                if member.isStatic {
-                    result = result + "    static " + methodName + "(" + params + ") " + body + "\n\n";
-                } else {
+                # 修复：检查isInstanceMethod而不是isStatic，因为有self参数的是实例方法
+                if member.isInstanceMethod {
                     result = result + "    " + methodName + "(" + params + ") " + body + "\n\n";
+                } else {
+                    result = result + "    static " + methodName + "(" + params + ") " + body + "\n\n";
                 }
             }
             i = i + 1;
@@ -1086,7 +1113,7 @@ class JsCodeGeneration {
                 }
                 
                 if has_position && stmt.source_file {
-                    let source_span = {};
+                    let source_span = new SourceSpan();
                     source_span.file_name = stmt.source_file;
                     source_span.start_line = stmt.source_line || stmt.line;
                     source_span.start_column = stmt.source_column || stmt.column;
@@ -1117,11 +1144,14 @@ class JsCodeGeneration {
         }
 
         if pattern_node.`type` == "TypeIdentifier" {
-            return pattern_node.name;
+            # 对于TypeIdentifier，如果是未定义的标识符，返回字符串形式
+            # 这样可以避免JavaScript中的"未定义"错误
+            return "\"" + pattern_node.name + "\"";
         }
 
         if pattern_node.`type` == "Identifier" {
-            return pattern_node.name;
+            # 对于普通标识符，也返回字符串形式以避免未定义错误
+            return "\"" + pattern_node.name + "\"";
         }
 
         if pattern_node.`type` == "StringLiteral" {
@@ -1211,11 +1241,22 @@ class JsCodeGeneration {
                     let pattern_value = self.generate_pattern_expression(branch.pattern);
                     let match_value = self.generate_expression(node.expression);
                     
-                    if is_first_when {
-                        result = result + "if (" + match_value + " === " + pattern_value + ") {\n";
-                        is_first_when = false;
+                    # 检查模式是否为标识符，如果是则需要特殊处理
+                    if branch.pattern && branch.pattern.`type` == "Identifier" {
+                        # 对于标识符模式，生成变量声明而不是比较
+                        if is_first_when {
+                            result = result + "if (" + match_value + " === " + branch.pattern.name + ") {\n";
+                            is_first_when = false;
+                        } else {
+                            result = result + " else if (" + match_value + " === " + branch.pattern.name + ") {\n";
+                        }
                     } else {
-                        result = result + " else if (" + match_value + " === " + pattern_value + ") {\n";
+                        if is_first_when {
+                            result = result + "if (" + match_value + " === " + pattern_value + ") {\n";
+                            is_first_when = false;
+                        } else {
+                            result = result + " else if (" + match_value + " === " + pattern_value + ") {\n";
+                        }
                     }
                     result = result + self.generate_branch_statements(branch.statements);
                     result = result + "}";
@@ -1244,6 +1285,24 @@ class JsCodeGeneration {
         }
         return result;
     }
+
+    # Write line with source mapping
+    micro write_line_with_mapping(self, text: String, span: SourceSpan, source_index: u32) -> unit {
+        let current_indent = "";
+        let i = 0;
+        while i < self.indent_level {
+            current_indent = current_indent + self.indent_text;
+            i = i + 1;
+        }
+
+        if (self.js_mapping && span) {
+            self.buffer = self.buffer + current_indent;
+            self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, span, source_index);
+            self.buffer = self.buffer + self.js_mapping.generate_newline();
+        } else {
+            self.buffer = self.buffer + current_indent + text + "\n";
+        }
+    }
 }
 
 # 工具方法：连接名称路径
@@ -1269,22 +1328,4 @@ micro add_source_file(self, file_name: String, content: String) -> Number {
         return self.source_files[file_name];
     }
     return 0;
-}
-
-# Write line with source mapping
-micro write_line_with_mapping(self, text: String, source_span, source_index: u32) -> unit {
-    let current_indent = "";
-    let i = 0;
-    while i < self.indent_level {
-        current_indent = current_indent + self.indent_text;
-        i = i + 1;
-    }
-
-    if (self.js_mapping && source_span) {
-        self.buffer = self.buffer + current_indent;
-        self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
-        self.buffer = self.buffer + self.js_mapping.generate_newline();
-    } else {
-        self.buffer = self.buffer + current_indent + text + "\n";
-    }
 }

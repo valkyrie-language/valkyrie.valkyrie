@@ -1,0 +1,314 @@
+namespace package::compiler;
+
+class NamespaceGroup {
+    # namespace parts
+    # namespaces: Array<Node>; # where Node { type: "NamespaceStatement", file: String, body: Array<Node> }
+    constructor(path: Array<String>) {
+        self.path = path;
+        self.namespaces = [];
+        self.declarations = []; # 存储所有声明
+        self.unique_names = {}; # 存储唯一名称映射
+    }
+    micro add_namespace(self, part: Node) {
+        self.namespaces.push(part);
+    }
+
+    # 收集所有声明
+    micro collect_declarations(self) {
+        self.declarations = [];
+
+        let ns_index = 0;
+        while ns_index < self.namespaces.length {
+            let `namespace` = self.namespaces[ns_index];
+
+            if `namespace`.body && `namespace`.body.length > 0 {
+                let stmt_index = 0;
+                while stmt_index < `namespace`.body.length {
+                    let statement = `namespace`.body[stmt_index];
+                    self.add_declaration(statement);
+                    stmt_index = stmt_index + 1;
+                }
+            }
+            ns_index = ns_index + 1;
+        }
+    }
+
+    # using, class, micro, singleton, eidos, flags, trait
+    micro add_declaration(self, declaration: Node) {
+        if declaration && declaration.`type` {
+            # 只收集特定类型的声明
+            let valid_types = Array();
+            valid_types.push("UsingStatement");  # 添加UsingStatement
+            valid_types.push("ClassDeclaration");
+            valid_types.push("MicroDeclaration");
+            valid_types.push("SingletonDeclaration");
+            valid_types.push("EidosDeclaration");
+            valid_types.push("FlagsDeclaration");
+            valid_types.push("TraitDeclaration");
+
+            # 使用直接的类型检查
+            let is_valid = false;
+            let type_index = 0;
+            while type_index < valid_types.length {
+                if valid_types[type_index] == declaration.`type` {
+                    is_valid = true;
+                    break;
+                }
+                type_index = type_index + 1;
+            }
+
+            if is_valid {
+                self.declarations.push(declaration);
+            }
+        }
+    }
+
+    # 为声明生成唯一名称
+    micro generate_unique_name(self, declaration: Node, namespace_path: Array<String>) -> String {
+        # 对于using语句，直接使用其完整的FQN作为唯一名称
+        if declaration.`type` == "UsingStatement" && declaration.path && declaration.path.name_path {
+            let fqn_parts = [];
+            let name_index = 0;
+            while name_index < declaration.path.name_path.length {
+                let identifier = declaration.path.name_path[name_index];
+                if identifier && identifier.name {
+                    fqn_parts.push(identifier.name);
+                }
+                name_index = name_index + 1;
+            }
+            return fqn_parts.join("__");
+        }
+        
+        # 对于常规声明，将名称与所在命名空间组合
+        let base_name = "";
+
+        if declaration.name {
+            base_name = declaration.name;
+        }
+
+        if base_name == "" {
+            return "";
+        }
+
+        # 组合namespace路径和声明名称
+        let full_path = namespace_path.slice();
+        full_path.push(base_name);
+
+        return full_path.join("__");
+    }
+
+    # 解析整个namespace组
+    micro resolve(self) {
+        # 1. 收集所有声明
+        self.collect_declarations();
+        # 2. 为每个声明生成唯一名称
+        let decl_index = 0;
+        while decl_index < self.declarations.length {
+            let declaration = self.declarations[decl_index];
+
+            let unique_name = self.generate_unique_name(declaration, self.path);
+
+            if unique_name != "" {
+                self.unique_names[unique_name] = declaration;
+
+                # 为声明添加unique_name属性
+                declaration.unique_name = unique_name;
+            }
+
+            decl_index = decl_index + 1;
+        }
+
+        # 3. 解析所有语句和表达式
+        let ns_index = 0;
+        while ns_index < self.namespaces.length {
+            let `namespace` = self.namespaces[ns_index];
+            if `namespace`.body && `namespace`.body.length > 0 {
+                let stmt_index = 0;
+                while stmt_index < `namespace`.body.length {
+                    let statement = `namespace`.body[stmt_index];
+                    self.resolve_statement(statement);
+                    stmt_index = stmt_index + 1;
+                }
+            }
+            ns_index = ns_index + 1;
+        }
+    }
+
+    # 解析语句，为其中的表达式调用附加唯一名称
+    micro resolve_statement(self, statement: Node) {
+        if !statement {
+            return;
+        }
+
+        # 根据语句类型处理
+        match statement.`type` {
+            case "UsingStatement":
+                # using 语句不应该被当作声明处理，直接跳过
+                return;
+            case "ClassDeclaration":
+                statement.unique_name = self.resolve_unique_name(statement.name);
+                let member_index = 0;
+                while member_index < statement.members.length {
+                    let member = statement.members[member_index];
+                    self.resolve_statement(member);
+                    member_index = member_index + 1;
+                }
+            case "Property":
+                # todo, as field
+            case "MicroDeclaration":
+                statement.unique_name = self.resolve_unique_name(statement.name);
+                self.resolve_statement(statement.body);
+            case "SingletonDeclaration":
+                self.resolve_expression(statement.initializer);
+            case "EidosDeclaration":
+                statement.unique_name = self.resolve_unique_name(statement.name);
+                # todo
+            case "ConstructorStatement":
+                self.resolve_statement(statement.body);
+                # console.log("ConstructorStatement", statement);
+            case "MemberStatement":
+                self.resolve_statement(statement.body);
+            case "ReturnStatement":
+                self.resolve_expression(statement.value);
+            case "LetStatement":
+                self.resolve_expression(statement.value);
+            case "WhileStatement":
+                self.resolve_expression(statement.condition);
+                self.resolve_statement(statement.body);
+            case "IfStatement":
+                self.resolve_expression(statement.condition);
+                self.resolve_statement(statement.thenBranch);
+                self.resolve_statement(statement.elseBranch);
+            case "Block":
+                let stmt = 0;
+                while stmt < statement.statements.length {
+                    let stmt_node = statement.statements[stmt];
+                    self.resolve_statement(stmt_node);
+                    stmt = stmt + 1;
+                }
+            case "ExpressionStatement":
+                self.resolve_expression(statement.expression);
+
+            else:
+                console.log("Unsolved statement type:", JSON.stringify(statement.`type`));
+        };
+    }
+
+    # 解析表达式，为标识符调用附加唯一名称
+    micro resolve_expression(self, expression: Node) {
+        if !expression {
+            return;
+        }
+
+        # 根据表达式类型处理
+        match expression.`type` {
+            case "String": # skip
+            case "Number": # skip
+            case "Boolean": # skip
+            case "ThisExpression": # skip
+            case "Assignment":
+                self.resolve_expression(expression.left);
+                self.resolve_expression(expression.right);
+            case "BinaryOp":
+                self.resolve_expression(expression.left);
+                self.resolve_expression(expression.right);
+            case "UnaryOp":
+                self.resolve_expression(expression.operand);
+            case "PropertyAccess":
+                self.resolve_expression(expression.object);
+            case "MicroCall":
+                self.resolve_expression(expression.callee);
+                let args = 0;
+                while args < expression.arguments.length {
+                    let stmt_node = expression.arguments[args];
+                    self.resolve_expression(stmt_node);
+                    args = args + 1;
+                }
+            case "String":
+                console.log("String:", expression);
+            case "ArrayLiteral":
+                let args = 0;
+                while args < expression.elements.length {
+                    let stmt_node = expression.elements[args];
+                    self.resolve_expression(stmt_node);
+                    args = args + 1;
+                }
+            case "ArrayAccess":
+                self.resolve_expression(expression.object);
+                self.resolve_expression(expression.index);
+            case "PropertyAccess":
+                console.log("PropertyAccess:", expression);
+            case "ObjectLiteral":
+                let prop_index = 0;
+                while prop_index < expression.properties.length {
+                    let prop = expression.properties[prop_index];
+                    self.resolve_expression(prop.value);
+                    prop_index = prop_index + 1;
+                }
+            case "Property":
+                console.log("Property:", expression);
+            case "PropertyAccess":
+                console.log("PropertyAccess:", expression);
+            case "MatchExpression":
+                let case_index = 0;
+                while case_index < expression.branches.length {
+                    let case_stmt = expression.branches[case_index];
+                    self.resolve_expression(case_stmt.expression);
+                    self.resolve_statement(case_stmt.body);
+                    case_index = case_index + 1;
+                }
+            case "CaseBranch":
+                console.log("CaseBranch:", expression);
+
+            case "NewExpression":
+                self.resolve_expression(expression.className);
+                let args = 0;
+                while args < expression.arguments.length {
+                    let stmt_node = expression.arguments[args];
+                    self.resolve_expression(stmt_node);
+                    args = args + 1;
+                }
+
+            case "MemberExpression":
+                self.resolve_expression(expression.object);
+                self.resolve_expression(expression.property);
+            case "CallExpression":
+                self.resolve_expression(expression.callee);
+                if expression.arguments && expression.arguments.length > 0 {
+                    let arg_index = 0;
+                    while arg_index < expression.arguments.length {
+                        self.resolve_expression(expression.arguments[arg_index]);
+                        arg_index = arg_index + 1;
+                    }
+                }
+            case "AnonymousFunction":
+                self.resolve_statement(expression.body);
+            case "NamePath":
+                # 为标识符查找对应的唯一名称
+                let identifier_name = expression.name_path[0].name;
+                expression.unique_name = self.resolve_unique_name(identifier_name);
+            case "Block":
+                console.trace("Block:", expression);
+            else:
+                console.log("Unsolved expression type:", JSON.stringify(expression.`type`));
+        };
+    }
+
+    micro resolve_unique_name(self, name: String) -> String {
+        # 首先在当前命名空间中查找
+        let unique_names = Object.keys(self.unique_names);
+        let name_index = 0;
+        while name_index < unique_names.length {
+            let unique_name = unique_names[name_index];
+            let parts = unique_name.split("__");
+            let last_part = parts[parts.length - 1];
+
+            if last_part == name {
+                return unique_name;
+            }
+            name_index = name_index + 1;
+        }
+        # 有可能是本地变量
+        return name;
+    }
+}

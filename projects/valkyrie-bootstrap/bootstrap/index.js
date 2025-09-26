@@ -1,2765 +1,11 @@
-export function package_compiler_compile_with_compiler(
-    compiler,
-    file_contents
-) {
-    compiler.diagnostics.clear_diagnostics();
-    compiler.namespace_manager = new package_compiler_NamespaceManager();
-    compiler.dependency_analyzer = new package_compiler_DependencyAnalyzer();
-    let file_names = Object.keys(file_contents);
-    let i = 0;
-    while (i < file_names.length) {
-        let file_name = file_names[i];
-        let content = file_contents[file_name];
-        compiler.dependency_analyzer.dependencies[file_name] = [];
-        let lexer_instance = new package_lexer_ValkyrieLexer(content);
-        let tokens = lexer_instance.tokenize();
-        if (tokens.length > 0) {
-            let ast = package_parser_parse(tokens);
-            if (ast.type == "Program") {
-                let j = 0;
-                while (j < ast.statements.length) {
-                    let stmt = ast.statements[j];
-                    if (stmt.type == "UsingStatement") {
-                        let using_path = package_codegen_join_name_path(
-                            stmt.path,
-                            "::"
-                        );
-                        let provider_file =
-                            package_compiler_find_namespace_provider(
-                                using_path,
-                                file_contents
-                            );
-                        if (
-                            provider_file != null &&
-                            provider_file != file_name
-                        ) {
-                            compiler.dependency_analyzer.dependencies[
-                                file_name
-                            ].push(provider_file);
-                        }
-                    }
-                    j = j + 1;
-                }
-            } else {
-                compiler.diagnostics.add_error(
-                    "Failed to parse " + file_name + ": " + JSON.stringify(ast),
-                    0,
-                    0,
-                    file_name
-                );
-            }
-        } else {
-            compiler.diagnostics.add_error(
-                "Lexical analysis failed for " + file_name,
-                0,
-                0,
-                file_name
-            );
-        }
-        i = i + 1;
-    }
-    let sort_result =
-        compiler.dependency_analyzer.topological_sort(file_contents);
-    if (sort_result.error != null) {
-        compiler.diagnostics.add_error(sort_result.error, 0, 0, "");
-        return package_compiler_create_compilation_result_with_diagnostics(
-            compiler,
-            null
-        );
-    }
-    let sorted_files = sort_result.sorted;
-    let js_import_statements = [];
-    let variable_statements = [];
-    let function_statements = [];
-    let class_statements = [];
-    let execution_statements = [];
-    let k = 0;
-    while (k < sorted_files.length) {
-        let file_name = sorted_files[k];
-        let content = file_contents[file_name];
-        compiler.namespace_manager.current_file = file_name;
-        let lexer_instance = new package_lexer_ValkyrieLexer(content);
-        let tokens = lexer_instance.tokenize();
-        if (tokens.length == 0) {
-            compiler.diagnostics.add_error(
-                "Empty or invalid file",
-                0,
-                0,
-                file_name
-            );
-            k = k + 1;
-            continue;
-        }
-        let ast = package_parser_parse(tokens);
-        if (ast.type != "Program") {
-            compiler.diagnostics.add_error(
-                "Failed to parse " + file_name + " at " + JSON.stringify(ast),
-                0,
-                0,
-                file_name
-            );
-            k = k + 1;
-            continue;
-        }
-        let validation_result = package_compiler_validate_namespace_rules(
-            ast,
-            compiler.options.mode
-        );
-        if (!validation_result.success) {
-            compiler.diagnostics.add_error(
-                validation_result.error,
-                0,
-                0,
-                file_name
-            );
-        }
-        let current_namespace = "";
-        let l = 0;
-        while (l < ast.statements.length) {
-            let stmt = ast.statements[l];
-            if (stmt.type == "NamespaceStatement") {
-                current_namespace = package_codegen_join_name_path(
-                    stmt.path,
-                    "::"
-                );
-                if (stmt.is_main_namespace) {
-                    current_namespace = current_namespace + "!";
-                    if (compiler.options.mode == "standard") {
-                        if (
-                            compiler.namespace_manager.namespaces[
-                                current_namespace
-                            ] != null
-                        ) {
-                            let clean_name = current_namespace.substring(
-                                0,
-                                current_namespace.length - 1
-                            );
-                            compiler.diagnostics.add_error(
-                                "Duplicate main namespace '" +
-                                    clean_name +
-                                    "' found. Each main namespace must have a unique name.",
-                                0,
-                                0,
-                                file_name
-                            );
-                        }
-                    }
-                }
-                compiler.namespace_manager.current_namespace =
-                    current_namespace;
-            } else if (stmt.type == "UsingStatement") {
-                let using_path = package_codegen_join_name_path(
-                    stmt.path,
-                    "::"
-                );
-                let is_global = package_compiler_is_main_namespace(using_path);
-                compiler.namespace_manager.add_using_import(
-                    using_path,
-                    is_global
-                );
-            } else if (stmt.type == "JSImportStatement") {
-                js_import_statements.push(stmt);
-            } else if (stmt.type == "LetStatement") {
-                stmt.sourceNamespace = current_namespace;
-                variable_statements.push(stmt);
-                compiler.namespace_manager.add_symbol_to_namespace(
-                    current_namespace,
-                    stmt.name,
-                    "variable",
-                    stmt,
-                    file_name
-                );
-            } else if (stmt.type == "MicroDeclaration") {
-                stmt.sourceNamespace = current_namespace;
-                function_statements.push(stmt);
-                compiler.namespace_manager.add_symbol_to_namespace(
-                    current_namespace,
-                    stmt.name,
-                    "function",
-                    stmt,
-                    file_name
-                );
-            } else if (stmt.type == "ClassDeclaration") {
-                stmt.sourceNamespace = current_namespace;
-                class_statements.push(stmt);
-                compiler.namespace_manager.add_symbol_to_namespace(
-                    current_namespace,
-                    stmt.name,
-                    "class",
-                    stmt,
-                    file_name
-                );
-            } else {
-                execution_statements.push(stmt);
-            }
-            l = l + 1;
-        }
-        k = k + 1;
-    }
-    if (compiler.options.mode == "standard") {
-        package_compiler_check_duplicate_main_namespaces_with_compiler(
-            compiler
-        );
-    }
-    package_compiler_generate_unique_names_with_compiler(
-        compiler,
-        function_statements,
-        class_statements,
-        variable_statements
-    );
-    let integrated_ast = package_compiler_create_integrated_ast_with_compiler(
-        compiler,
-        js_import_statements,
-        variable_statements,
-        function_statements,
-        class_statements,
-        execution_statements
-    );
-    return package_compiler_create_compilation_result_with_diagnostics(
-        compiler,
-        integrated_ast
-    );
-}
-export function package_compiler_check_duplicate_main_namespaces_with_compiler(
-    compiler
-) {
-    let main_namespaces = [];
-    let main_namespace_names = [];
-    let namespace_keys = Object.keys(compiler.namespace_manager.namespaces);
-    let ns_index = 0;
-    while (ns_index < namespace_keys.length) {
-        let ns_name = namespace_keys[ns_index];
-        if (ns_name.endsWith("!")) {
-            main_namespaces.push(ns_name);
-            let clean_name = ns_name.substring(0, ns_name.length - 1);
-            main_namespace_names.push(clean_name);
-        }
-        ns_index = ns_index + 1;
-    }
-    let duplicate_index = 0;
-    while (duplicate_index < main_namespace_names.length) {
-        let current_name = main_namespace_names[duplicate_index];
-        let check_index = duplicate_index + 1;
-        while (check_index < main_namespace_names.length) {
-            if (main_namespace_names[check_index] == current_name) {
-                compiler.diagnostics.add_error(
-                    "Duplicate main namespace '" +
-                        current_name +
-                        "' found. Each main namespace must have a unique name.",
-                    0,
-                    0,
-                    ""
-                );
-            }
-            check_index = check_index + 1;
-        }
-        duplicate_index = duplicate_index + 1;
-    }
-}
-export function package_compiler_generate_unique_names_with_compiler(
-    compiler,
-    function_statements,
-    class_statements,
-    variable_statements
-) {
-    let m = 0;
-    while (m < function_statements.length) {
-        let func_stmt = function_statements[m];
-        func_stmt.uniqueName =
-            compiler.namespace_manager.get_fully_qualified_name(
-                func_stmt.name,
-                func_stmt.sourceNamespace
-            );
-        m = m + 1;
-    }
-    let n = 0;
-    while (n < class_statements.length) {
-        let class_stmt = class_statements[n];
-        class_stmt.uniqueName =
-            compiler.namespace_manager.get_fully_qualified_name(
-                class_stmt.name,
-                class_stmt.sourceNamespace
-            );
-        n = n + 1;
-    }
-    let o = 0;
-    while (o < variable_statements.length) {
-        let var_stmt = variable_statements[o];
-        var_stmt.uniqueName =
-            compiler.namespace_manager.get_fully_qualified_name(
-                var_stmt.name,
-                var_stmt.sourceNamespace
-            );
-        o = o + 1;
-    }
-}
-export function package_compiler_create_integrated_ast_with_compiler(
-    compiler,
-    js_import_statements,
-    variable_statements,
-    function_statements,
-    class_statements,
-    execution_statements
-) {
-    let integrated_ast = { type: "Program", statements: [] };
-    let p = 0;
-    while (p < js_import_statements.length) {
-        integrated_ast.statements.push(js_import_statements[p]);
-        p = p + 1;
-    }
-    let q = 0;
-    while (q < variable_statements.length) {
-        let var_stmt = variable_statements[q];
-        if (
-            var_stmt.uniqueName != null &&
-            var_stmt.uniqueName != var_stmt.name
-        ) {
-            let modified_stmt = Object.assign({}, var_stmt);
-            modified_stmt.name = var_stmt.uniqueName;
-            integrated_ast.statements.push(modified_stmt);
-        } else {
-            integrated_ast.statements.push(var_stmt);
-        }
-        q = q + 1;
-    }
-    let r = 0;
-    while (r < function_statements.length) {
-        let func_stmt = function_statements[r];
-        let modified_stmt = Object.assign({}, func_stmt);
-        if (
-            func_stmt.uniqueName != null &&
-            func_stmt.uniqueName != func_stmt.name
-        ) {
-            modified_stmt.name = func_stmt.uniqueName;
-        }
-        modified_stmt.body =
-            compiler.namespace_manager.resolve_identifiers_in_statement(
-                func_stmt.body,
-                function_statements,
-                variable_statements,
-                class_statements,
-                compiler.options,
-                compiler.diagnostics
-            );
-        integrated_ast.statements.push(modified_stmt);
-        r = r + 1;
-    }
-    let s = 0;
-    while (s < class_statements.length) {
-        let class_stmt = class_statements[s];
-        let modified_stmt = Object.assign({}, class_stmt);
-        if (
-            class_stmt.uniqueName != null &&
-            class_stmt.uniqueName != class_stmt.name
-        ) {
-            modified_stmt.name = class_stmt.uniqueName;
-        }
-        if (class_stmt.members != null) {
-            let resolved_members = [];
-            let m = 0;
-            while (m < class_stmt.members.length) {
-                let member = class_stmt.members[m];
-                let resolved_member = Object.assign({}, member);
-                if (
-                    (member.type == "MemberStatement" ||
-                        member.type == "ConstructorStatement") &&
-                    member.body != null
-                ) {
-                    resolved_member.body =
-                        compiler.namespace_manager.resolve_identifiers_in_statement(
-                            member.body,
-                            function_statements,
-                            variable_statements,
-                            class_statements,
-                            compiler.options,
-                            compiler.diagnostics
-                        );
-                }
-                resolved_members.push(resolved_member);
-                m = m + 1;
-            }
-            modified_stmt.members = resolved_members;
-        }
-        integrated_ast.statements.push(modified_stmt);
-        s = s + 1;
-    }
-    let t = 0;
-    while (t < execution_statements.length) {
-        let resolved_stmt =
-            compiler.namespace_manager.resolve_identifiers_in_statement(
-                execution_statements[t],
-                function_statements,
-                variable_statements,
-                class_statements,
-                compiler.options,
-                compiler.diagnostics
-            );
-        integrated_ast.statements.push(resolved_stmt);
-        t = t + 1;
-    }
-    return integrated_ast;
-}
-export function package_compiler_create_compilation_result_with_diagnostics(
-    compiler,
-    integrated_ast
-) {
-    if (compiler.diagnostics.has_errors()) {
-        return {
-            success: false,
-            code: null,
-            diagnostics: compiler.diagnostics.get_all_diagnostics(),
-        };
-    }
-    if (integrated_ast != null) {
-        let generator = new package_codegen_JsCodeGeneration(
-            "    ",
-            compiler.options
-        );
-        let generated = generator.generate(integrated_ast);
-        let source_map = generator.get_source_map();
-        let source_map_json = false;
-        if (source_map) {
-            source_map_json = source_map.to_json();
-        }
-        return {
-            success: true,
-            code: generated,
-            source_map: source_map_json,
-            diagnostics: compiler.diagnostics.get_all_diagnostics(),
-        };
-    } else {
-        return {
-            success: false,
-            code: null,
-            diagnostics: compiler.diagnostics.get_all_diagnostics(),
-        };
-    }
-}
-export function package_compiler_is_main_namespace(namespace_path) {
-    if (namespace_path == null) {
-        return false;
-    }
-    return namespace_path.endsWith("!");
-}
-export function package_compiler_get_main_namespace_name(namespace_path) {
-    if (package_compiler_is_main_namespace(namespace_path)) {
-        return namespace_path.substring(0, namespace_path.length - 1);
-    }
-    return namespace_path;
-}
-export function package_compiler_validate_namespace_rules(ast, mode) {
-    let has_namespace = false;
-    let has_main_namespace = false;
-    let i = 0;
-    while (i < ast.statements.length) {
-        let stmt = ast.statements[i];
-        if (stmt.type == "NamespaceStatement") {
-            has_namespace = true;
-            if (stmt.is_main_namespace) {
-                has_main_namespace = true;
-            }
-        }
-        i = i + 1;
-    }
-    if (mode == "standard" && !has_namespace) {
-        return {
-            success: false,
-            error: "Standard mode requires at least one namespace declaration",
-        };
-    }
-    if (mode == "standard" && !has_main_namespace) {
-        return {
-            success: false,
-            error: "Standard mode requires exactly one main namespace (ending with !)",
-        };
-    }
-    return { success: true, error: null };
-}
-export function package_compiler_find_namespace_provider(
-    namespace_path,
-    file_contents
-) {
-    let file_names = Object.keys(file_contents);
-    let i = 0;
-    while (i < file_names.length) {
-        let file_name = file_names[i];
-        let content = file_contents[file_name];
-        if (content.indexOf("namespace " + namespace_path) >= 0) {
-            return file_name;
-        }
-        i = i + 1;
-    }
-    return null;
-}
-export function package_compiler_create_error(message, line, column) {
-    return {
-        type: "CompilerError",
-        message: message,
-        line: line,
-        column: column,
-    };
-}
-export function package_compiler_create_warning(message, line, column) {
-    return {
-        type: "CompilerWarning",
-        message: message,
-        line: line,
-        column: column,
-    };
-}
-export function package_compiler_count_ast_nodes(node) {
-    if (node == null) {
-        return 0;
-    }
-    let count = 1;
-    if (node.statements != null) {
-        let i = 0;
-        while (i < node.statements.length) {
-            count =
-                count + package_compiler_count_ast_nodes(node.statements[i]);
-            i = i + 1;
-        }
-    }
-    if (node.body != null) {
-        count = count + package_compiler_count_ast_nodes(node.body);
-    }
-    if (node.left != null) {
-        count = count + package_compiler_count_ast_nodes(node.left);
-    }
-    if (node.right != null) {
-        count = count + package_compiler_count_ast_nodes(node.right);
-    }
-    if (node.expression != null) {
-        count = count + package_compiler_count_ast_nodes(node.expression);
-    }
-    if (node.condition != null) {
-        count = count + package_compiler_count_ast_nodes(node.condition);
-    }
-    if (node.thenBranch != null) {
-        count = count + package_compiler_count_ast_nodes(node.thenBranch);
-    }
-    if (node.elseBranch != null) {
-        count = count + package_compiler_count_ast_nodes(node.elseBranch);
-    }
-    return count;
-}
-export function package_compiler_validate_syntax(source) {
-    let lexer = new package_lexer_ValkyrieLexer(source);
-    let tokens = lexer.tokenize();
-    if (tokens.length == 0) {
-        return { valid: false, error: "Lexical analysis failed" };
-    }
-    let ast = package_parser_parse(tokens);
-    if (ast.type == "" || ast.type == "ParseError") {
-        return { valid: false, error: "Syntax analysis failed" };
-    }
-    return { valid: true, error: null };
-}
-export function package_compiler_join_path(path_array, separator) {
-    if (path_array == null || path_array.length == 0) {
-        return "";
-    }
-    let result = path_array[0];
-    let i = 1;
-    while (i < path_array.length) {
-        result = result + separator + path_array[i];
-        i = i + 1;
-    }
-    return result;
-}
-export function package_compiler_compile_asts(file_contents, mode) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        mode,
-        null
-    );
-}
-export function package_compiler_generate_single_js(file_contents) {
-    return package_compiler_compile_asts(file_contents, "repl");
-}
-export function package_compiler_generate_single_js_standard(file_contents) {
-    return package_compiler_compile_asts(file_contents, "standard");
-}
-export function package_compiler_generate_single_js_with_options(
-    file_contents,
-    options
-) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        "repl",
-        options
-    );
-}
-export function package_compiler_generate_single_js_standard_with_options(
-    file_contents,
-    options
-) {
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        "standard",
-        options
-    );
-}
-export function package_compiler_package_compiler_compile_text(source_text) {
-    let file_contents = { "main.valkyrie": source_text };
-    return package_compiler_compile_asts(file_contents, "repl");
-}
-export function package_compiler_package_compiler_compile_text_with_options(
-    source_text,
-    options
-) {
-    let file_contents = { "main.valkyrie": source_text };
-    return package_compiler_compile_asts_with_options(
-        file_contents,
-        "repl",
-        options
-    );
-}
-export function package_compiler_compile_asts_with_options(
-    file_contents,
-    mode,
-    options
-) {
-    if (options == null) {
-        options = new package_compiler_CompilerOptions(
-            "js",
-            false,
-            false,
-            mode || "repl"
-        );
-    } else if (options.mode == null) {
-        options.mode = mode || "repl";
-    }
-    let compiler = new package_compiler_Compiler(options);
-    return package_compiler_compile_with_compiler(compiler, file_contents);
-}
-export function package_compiler_resolve_multiple_namespaces(ast) {
-    let manager = new package_compiler_NamespaceManager();
-    let i = 0;
-    while (i < ast.statements.length) {
-        let stmt = ast.statements[i];
-        if (stmt.type == "NamespaceStatement") {
-            let namespace_path = package_codegen_join_name_path(
-                stmt.path,
-                "::"
-            );
-            if (stmt.is_main_namespace) {
-                namespace_path = namespace_path + "!";
-            }
-            manager.current_namespace = namespace_path;
-        } else if (stmt.type == "UsingStatement") {
-            let using_path = package_codegen_join_name_path(stmt.path, "::");
-            let is_global = package_compiler_is_main_namespace(using_path);
-            manager.add_using_import(using_path, is_global);
-        } else if (stmt.type == "MicroDeclaration") {
-            manager.add_symbol_to_namespace(
-                manager.current_namespace,
-                stmt.name,
-                "function",
-                stmt,
-                manager.current_file
-            );
-        } else if (stmt.type == "ClassDeclaration") {
-            manager.add_symbol_to_namespace(
-                manager.current_namespace,
-                stmt.name,
-                "class",
-                stmt,
-                manager.current_file
-            );
-        } else if (stmt.type == "LetStatement") {
-            manager.add_symbol_to_namespace(
-                manager.current_namespace,
-                stmt.name,
-                "variable",
-                stmt,
-                manager.current_file
-            );
-        }
-        i = i + 1;
-    }
-    let j = 0;
-    while (j < ast.statements.length) {
-        let stmt = ast.statements[j];
-        if (stmt.type == "MicroDeclaration") {
-            stmt.uniqueName = manager.get_fully_qualified_name(
-                stmt.name,
-                manager.current_namespace
-            );
-        } else if (stmt.type == "ClassDeclaration") {
-            stmt.uniqueName = manager.get_fully_qualified_name(
-                stmt.name,
-                manager.current_namespace
-            );
-        } else if (stmt.type == "LetStatement") {
-            stmt.uniqueName = manager.get_fully_qualified_name(
-                stmt.name,
-                manager.current_namespace
-            );
-        }
-        j = j + 1;
-    }
-    return ast;
-}
-export function package_codegen_join_name_path(names, separator) {
-    let result = "";
-    let i = 0;
-    while (i < names.length) {
-        if (i > 0) {
-            result = result + separator;
-        }
-        result = result + names[i];
-        i = i + 1;
-    }
-    return result;
-}
-export function package_codegen_add_source_file(self, file_name, content) {
-    if (this.source_map_builder) {
-        if (!this.source_files[file_name]) {
-            this.source_files[file_name] = this.source_map_builder.add_source(
-                file_name,
-                content
-            );
-        }
-        return this.source_files[file_name];
-    }
-    return 0;
-}
-export function package_codegen_write_line_with_mapping(
-    self,
-    text,
-    source_span,
-    source_index
-) {
-    let current_indent = "";
-    let i = 0;
-    while (i < this.indent_level) {
-        current_indent = current_indent + this.indent_text;
-        i = i + 1;
-    }
-    if (this.js_mapping && source_span) {
-        this.buffer = this.buffer + current_indent;
-        this.buffer =
-            this.buffer +
-            this.js_mapping.generate_with_mapping(
-                text,
-                source_span,
-                source_index
-            );
-        this.buffer = this.buffer + this.js_mapping.generate_newline();
-    } else {
-        this.buffer = this.buffer + current_indent + text + "\n";
-    }
-}
-export function package_lexer_is_whitespace(ch) {
-    return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
-}
-export function package_lexer_is_alpha_numeric(ch) {
-    return package_lexer_is_alpha(ch) || package_lexer_is_digit(ch);
-}
-export function package_lexer_is_alpha(ch) {
-    return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
-}
-export function package_lexer_is_digit(ch) {
-    return ch >= "0" && ch <= "9";
-}
-export function package_lexer_get_keyword_type(value) {
-    if (value === "micro") {
-        return "MICRO";
-    } else if (value === "let") {
-        return "LET";
-    } else if (value === "if") {
-        return "IF";
-    } else if (value === "else") {
-        return "ELSE";
-    } else if (value === "while") {
-        return "WHILE";
-    } else if (value === "until") {
-        return "UNTIL";
-    } else if (value === "return") {
-        return "RETURN";
-    } else if (value === "true") {
-        return "BOOLEAN";
-    } else if (value === "false") {
-        return "BOOLEAN";
-    } else if (value === "namespace") {
-        return "NAMESPACE";
-    } else if (value === "using") {
-        return "USING";
-    } else if (value === "class") {
-        return "CLASS";
-    } else if (value === "singleton") {
-        return "SINGLETON";
-    } else if (value === "trait") {
-        return "TRAIT";
-    } else if (value === "constructor") {
-        return "CONSTRUCTOR";
-    } else if (value === "self") {
-        return "SELF";
-    } else if (value === "extends") {
-        return "EXTENDS";
-    } else if (value === "implements") {
-        return "IMPLEMENTS";
-    } else if (value === "new") {
-        return "NEW";
-    } else if (value === "default") {
-        return "DEFAULT";
-    } else if (value === "await") {
-        return "AWAIT";
-    } else if (value === "is") {
-        return "IS";
-    } else if (value === "as") {
-        return "AS";
-    } else if (value === "match") {
-        return "MATCH";
-    } else if (value === "when") {
-        return "WHEN";
-    } else if (value === "case") {
-        return "CASE";
-    } else if (value === "type") {
-        return "TYPE";
-    } else if (value === "flags") {
-        return "FLAGS";
-    } else if (value === "eidos") {
-        return "EIDOS";
-    } else {
-        return "SYMBOL_XID";
-    }
-}
-export function package_parser_parse_pattern_expression(parser) {
-    let token = parser.current_token;
-    if (token.type == "SYMBOL_XID") {
-        let name = token.value;
-        parser.advance();
-        if (parser.current_token.type == "DOUBLE_COLON") {
-            parser.advance();
-            if (parser.current_token.type == "SYMBOL_XID") {
-                let member_name = parser.current_token.value;
-                parser.advance();
-                let node = parser.mark_node("StaticMemberAccess");
-                node.object = name;
-                node.member = member_name;
-                return node;
-            } else {
-                let error = {};
-                error.type = "ParseError";
-                error.message =
-                    "Expected member name after '::' but got " +
-                    parser.current_token.type;
-                error.line = parser.current_token.line;
-                error.column = parser.current_token.column;
-                return error;
-            }
-        } else {
-            let node = parser.mark_node("TypeIdentifier");
-            node.name = name;
-            return node;
-        }
-    } else if (token.type == "STRING") {
-        parser.advance();
-        let node = parser.mark_node("StringLiteral");
-        node.value = token.value;
-        return node;
-    } else if (token.type == "NUMBER") {
-        parser.advance();
-        let node = parser.mark_node("NumberLiteral");
-        node.value = token.value;
-        return node;
-    } else if (token.type == "BOOLEAN") {
-        parser.advance();
-        let node = parser.mark_node("BooleanLiteral");
-        node.value = token.value;
-        return node;
-    } else if (
-        token.type == "KEYWORD" &&
-        (token.value == "true" || token.value == "false")
-    ) {
-        parser.advance();
-        let node = parser.mark_node("BooleanLiteral");
-        node.value = token.value;
-        return node;
-    } else {
-        let error = {};
-        error.type = "ParseError";
-        error.message =
-            "Expected identifier or literal in pattern expression but got " +
-            token.type;
-        error.line = token.line;
-        error.column = token.column;
-        return error;
-    }
-}
-export function package_parser_getOperatorPrecedence(tokenType) {
-    if (tokenType === "ASSIGN") {
-        return 1;
-    } else if (tokenType === "OR") {
-        return 2;
-    } else if (tokenType === "AND") {
-        return 3;
-    } else if (tokenType === "EQ") {
-        return 4;
-    } else if (tokenType === "NE") {
-        return 4;
-    } else if (tokenType === "GT") {
-        return 5;
-    } else if (tokenType === "LT") {
-        return 5;
-    } else if (tokenType === "GTE") {
-        return 5;
-    } else if (tokenType === "LTE") {
-        return 5;
-    } else if (tokenType === "IS") {
-        return 5;
-    } else if (tokenType === "AS") {
-        return 5;
-    } else if (tokenType === "PIPE") {
-        return 6;
-    } else if (tokenType === "AMPERSAND") {
-        return 6;
-    } else if (tokenType === "PLUS") {
-        return 7;
-    } else if (tokenType === "MINUS") {
-        return 7;
-    } else if (tokenType === "MULTIPLY") {
-        return 8;
-    } else if (tokenType === "DIVIDE") {
-        return 8;
-    } else if (tokenType === "MODULO") {
-        return 8;
-    } else {
-        return -1;
-    }
-}
-export function package_parser_isRightAssociative(tokenType) {
-    return tokenType == "ASSIGN";
-}
-export function package_parser_parseExpressionWithPrecedence(
-    parser,
-    minPrecedence,
-    inline
-) {
-    let left = package_parser_parseUnaryExpression(parser, inline);
-    if (left && left.type == "ParseError") {
-        return left;
-    }
-    while (true) {
-        let precedence = package_parser_getOperatorPrecedence(
-            parser.current_token.type
-        );
-        if (precedence < minPrecedence) {
-            break;
-        }
-        let op = parser.current_token.value;
-        let tokenType = parser.current_token.type;
-        parser.advance();
-        let nextMinPrecedence = precedence;
-        if (package_parser_isRightAssociative(tokenType)) {
-        } else {
-            nextMinPrecedence = precedence + 1;
-        }
-        let right = {};
-        if (tokenType == "IS") {
-            let isOptional = false;
-            if (parser.current_token.type == "QUESTION") {
-                isOptional = true;
-                parser.advance();
-            }
-            right = package_parser_parse_pattern_expression(parser);
-            if (isOptional) {
-                let node = parser.mark_node("OptionalTypeCheck");
-                node.expression = left;
-                node.pattern = right;
-                left = node;
-            } else {
-                let node = parser.mark_node("TypeCheck");
-                node.expression = left;
-                node.pattern = right;
-                left = node;
-            }
-        } else if (tokenType == "AS") {
-            let isOptional = false;
-            if (parser.current_token.type == "QUESTION") {
-                isOptional = true;
-                parser.advance();
-            }
-            right = package_parser_parseTypeExpression(parser);
-            if (isOptional) {
-                let node = parser.mark_node("OptionalTypeCast");
-                node.expression = left;
-                node.targetType = right;
-                left = node;
-            } else {
-                let node = parser.mark_node("TypeCast");
-                node.expression = left;
-                node.targetType = right;
-                left = node;
-            }
-        } else {
-            right = package_parser_parseExpressionWithPrecedence(
-                parser,
-                nextMinPrecedence,
-                inline
-            );
-            if (right && right.type == "ParseError") {
-                return right;
-            }
-            if (tokenType == "ASSIGN") {
-                let node = parser.mark_node("Assignment");
-                node.left = left;
-                node.right = right;
-                left = node;
-            } else {
-                let node = parser.mark_node("BinaryOp");
-                node.left = left;
-                node.operator = op;
-                node.right = right;
-                left = node;
-            }
-        }
-    }
-    return left;
-}
-export function package_parser_parseExpression(parser) {
-    return package_parser_parseExpressionWithPrecedence(parser, 0, false);
-}
-export function package_parser_parseInlineExpression(parser) {
-    return package_parser_parseExpressionWithPrecedence(parser, 0, true);
-}
-export function package_parser_parseUnaryExpression(parser, inline) {
-    if (
-        parser.current_token.type == "BANG" ||
-        parser.current_token.type == "MINUS"
-    ) {
-        let op = parser.current_token.value;
-        parser.advance();
-        let operand = package_parser_parseUnaryExpression(parser, inline);
-        if (operand && operand.type == "ParseError") {
-            return operand;
-        }
-        let node = parser.mark_node("UnaryOp");
-        node.operator = op;
-        node.operand = operand;
-        return node;
-    }
-    if (parser.current_token.type == "NEW") {
-        return package_parser_parseNewExpression(parser, inline);
-    }
-    return package_parser_parsePostfixExpression(parser, inline);
-}
-export function package_parser_parseNewExpression(parser, inline) {
-    parser.advance();
-    let className = parser.expectIdentifier();
-    if (className.type == "ParseError") {
-        return className;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen.type == "ParseError") {
-        return lparen;
-    }
-    let args = [];
-    if (parser.current_token.type != "RPAREN") {
-        let arg = package_parser_parseExpressionWithPrecedence(
-            parser,
-            0,
-            inline
-        );
-        if (arg.type == "ParseError") {
-            return arg;
-        }
-        args.push(arg);
-        while (parser.current_token.type == "COMMA") {
-            parser.advance();
-            arg = package_parser_parseExpressionWithPrecedence(
-                parser,
-                0,
-                inline
-            );
-            if (arg.type == "ParseError") {
-                return arg;
-            }
-            args.push(arg);
-        }
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen.type == "ParseError") {
-        return rparen;
-    }
-    let node = parser.mark_node("NewExpression");
-    node.className = className.value;
-    node.arguments = args;
-    return node;
-}
-export function package_parser_parsePostfixExpression(parser, inline) {
-    let expr = package_parser_parseAtomicExpression(parser, inline);
-    if (expr && expr.type == "ParseError") {
-        return expr;
-    }
-    while (true) {
-        if (parser.current_token.type == "LPAREN") {
-            let nextIndex = parser.position + 1;
-            let hasTrailingClosure = false;
-            parser.advance();
-            let args = [];
-            if (parser.current_token.type != "RPAREN") {
-                let arg = package_parser_parseExpressionWithPrecedence(
-                    parser,
-                    0,
-                    inline
-                );
-                if (arg && arg.type == "ParseError") {
-                    return arg;
-                }
-                args.push(arg);
-                while (parser.current_token.type == "COMMA") {
-                    parser.advance();
-                    arg = package_parser_parseExpressionWithPrecedence(
-                        parser,
-                        0,
-                        inline
-                    );
-                    if (arg && arg.type == "ParseError") {
-                        return arg;
-                    }
-                    args.push(arg);
-                }
-            }
-            let rparen = parser.expect("RPAREN");
-            if (rparen && rparen.type == "ParseError") {
-                return rparen;
-            }
-            let closure = null;
-            if (parser.current_token.type == "LBRACE" && !inline) {
-                closure = package_parser_parse_function_block(parser);
-                if (closure && closure.type == "ParseError") {
-                    return closure;
-                }
-                hasTrailingClosure = true;
-            }
-            let callNode = parser.mark_node("MicroCall");
-            callNode.callee = expr;
-            callNode.arguments = args;
-            if (hasTrailingClosure) {
-                callNode.closure = closure;
-            }
-            expr = callNode;
-        } else if (parser.current_token.type == "DOT") {
-            parser.advance();
-            if (parser.current_token.type == "AWAIT") {
-                parser.advance();
-                let awaitNode = parser.mark_node("AwaitExpression");
-                awaitNode.argument = expr;
-                expr = awaitNode;
-            } else {
-                let property = parser.expectIdentifier();
-                if (property && property.type == "ParseError") {
-                    return property;
-                }
-                let accessNode = parser.mark_node("PropertyAccess");
-                accessNode.object = expr;
-                accessNode.property = property.value;
-                expr = accessNode;
-            }
-        } else if (parser.current_token.type == "DOUBLE_COLON") {
-            parser.advance();
-            let methodName = parser.expectIdentifier();
-            if (methodName && methodName.type == "ParseError") {
-                return methodName;
-            }
-            let namespacePath = [];
-            namespacePath.push(methodName.value);
-            while (parser.current_token.type == "DOUBLE_COLON") {
-                parser.advance();
-                let nextName = parser.expectIdentifier();
-                if (nextName && nextName.type == "ParseError") {
-                    return nextName;
-                }
-                namespacePath.push(nextName.value);
-            }
-            if (parser.current_token.type == "LPAREN") {
-                parser.advance();
-                let args = [];
-                if (parser.current_token.type != "RPAREN") {
-                    let arg = package_parser_parseExpressionWithPrecedence(
-                        parser,
-                        0,
-                        inline
-                    );
-                    if (arg && arg.type == "ParseError") {
-                        return arg;
-                    }
-                    args.push(arg);
-                    while (parser.current_token.type == "COMMA") {
-                        parser.advance();
-                        arg = package_parser_parseExpressionWithPrecedence(
-                            parser,
-                            0,
-                            inline
-                        );
-                        if (arg && arg.type == "ParseError") {
-                            return arg;
-                        }
-                        args.push(arg);
-                    }
-                }
-                let rparen = parser.expect("RPAREN");
-                if (rparen && rparen.type == "ParseError") {
-                    return rparen;
-                }
-                let staticCallNode = parser.mark_node("StaticMethodCall");
-                staticCallNode.namespacePath = namespacePath;
-                staticCallNode.methodName =
-                    namespacePath[namespacePath.length - 1];
-                staticCallNode.className =
-                    namespacePath[namespacePath.length - 2];
-                staticCallNode.arguments = args;
-                expr = staticCallNode;
-            } else {
-                let staticAccessNode = parser.mark_node("StaticPropertyAccess");
-                staticAccessNode.namespacePath = namespacePath;
-                staticAccessNode.property =
-                    namespacePath[namespacePath.length - 1];
-                staticAccessNode.className =
-                    namespacePath[namespacePath.length - 2];
-                expr = staticAccessNode;
-            }
-        } else if (parser.current_token.type == "LBRACKET") {
-            parser.advance();
-            let index = package_parser_parseExpressionWithPrecedence(
-                parser,
-                0,
-                inline
-            );
-            if (index && index.type == "ParseError") {
-                return index;
-            }
-            let rbracket = parser.expect("RBRACKET");
-            if (rbracket && rbracket.type == "ParseError") {
-                return rbracket;
-            }
-            let accessNode = parser.mark_node("ArrayAccess");
-            accessNode.object = expr;
-            accessNode.index = index;
-            expr = accessNode;
-        } else {
-            break;
-        }
-    }
-    return expr;
-}
-export function package_parser_parseAtomicExpression(parser, inline) {
-    if (parser.current_token.type == "NUMBER") {
-        let value = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("Number");
-        node.value = value;
-        return node;
-    }
-    if (parser.current_token.type == "STRING") {
-        let value = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("String");
-        node.value = value;
-        return node;
-    }
-    if (parser.current_token.type == "MATCH") {
-        return package_parser_parseMatchExpression(parser, inline);
-    }
-    if (parser.current_token.type == "BOOLEAN") {
-        let value = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("Boolean");
-        node.value = value;
-        return node;
-    }
-    if (
-        parser.current_token.type == "SYMBOL_XID" ||
-        parser.current_token.type == "SYMBOL_RAW"
-    ) {
-        let name = parser.current_token.value;
-        parser.advance();
-        if (parser.current_token.type == "LBRACE" && !inline) {
-            let closure = package_parser_parse_function_block(parser);
-            if (closure && closure.type == "ParseError") {
-                return closure;
-            }
-            let callNode = parser.mark_node("MicroCall");
-            let identifierNode = parser.mark_node("Identifier");
-            identifierNode.name = name;
-            callNode.callee = identifierNode;
-            callNode.arguments = [];
-            callNode.closure = closure;
-            return callNode;
-        }
-        let node = parser.mark_node("Identifier");
-        node.name = name;
-        return node;
-    }
-    if (parser.current_token.type == "MICRO") {
-        parser.advance();
-        let lparen = parser.expect("LPAREN");
-        if (lparen.type == "ParseError") {
-            return lparen;
-        }
-        let params = package_parser_parseTermParameters(parser);
-        if (params && params.type == "ParseError") {
-            return params;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen.type == "ParseError") {
-            return rparen;
-        }
-        let body = package_parser_parse_function_block(parser);
-        if (body && body.type == "ParseError") {
-            return body;
-        }
-        let node = parser.mark_node("AnonymousFunction");
-        node.parameters = params;
-        node.body = body;
-        return node;
-    }
-    if (parser.current_token.type == "SELF") {
-        let nextIndex = parser.position + 1;
-        if (
-            nextIndex < parser.tokens.length &&
-            parser.tokens[nextIndex].type == "DOUBLE_COLON"
-        ) {
-            let name = "Self";
-            parser.advance();
-            let node = parser.mark_node("Identifier");
-            node.name = name;
-            return node;
-        } else {
-            parser.advance();
-            let node = parser.mark_node("ThisExpression");
-            return node;
-        }
-    }
-    if (parser.current_token.type == "NEW") {
-        parser.advance();
-        let className = parser.expectIdentifier();
-        if (className && className.type == "ParseError") {
-            return className;
-        }
-        let lparen = parser.expect("LPAREN");
-        if (lparen && lparen.type == "ParseError") {
-            return lparen;
-        }
-        let args = [];
-        if (parser.current_token.type != "RPAREN") {
-            let arg = package_parser_parseExpressionWithPrecedence(
-                parser,
-                0,
-                inline
-            );
-            if (arg && arg.type == "ParseError") {
-                return arg;
-            }
-            args.push(arg);
-            while (parser.current_token.type == "COMMA") {
-                parser.advance();
-                arg = package_parser_parseExpressionWithPrecedence(
-                    parser,
-                    0,
-                    inline
-                );
-                if (arg && arg.type == "ParseError") {
-                    return arg;
-                }
-                args.push(arg);
-            }
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        let node = parser.mark_node("NewExpression");
-        node.className = className.value;
-        node.arguments = args;
-        return node;
-    }
-    if (parser.current_token.type == "LPAREN") {
-        parser.advance();
-        let expr = package_parser_parseExpressionWithPrecedence(
-            parser,
-            0,
-            inline
-        );
-        if (expr && expr.type == "ParseError") {
-            return expr;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        return expr;
-    }
-    if (parser.current_token.type == "LBRACKET") {
-        parser.advance();
-        let node = parser.mark_node("ArrayLiteral");
-        node.elements = [];
-        if (parser.current_token.type != "RBRACKET") {
-            let element = package_parser_parseExpressionWithPrecedence(
-                parser,
-                0,
-                inline
-            );
-            if (element && element.type == "ParseError") {
-                return element;
-            }
-            node.elements.push(element);
-            while (parser.current_token.type == "COMMA") {
-                parser.advance();
-                element = package_parser_parseExpressionWithPrecedence(
-                    parser,
-                    0,
-                    inline
-                );
-                if (element && element.type == "ParseError") {
-                    return element;
-                }
-                node.elements.push(element);
-            }
-        }
-        let rbracket = parser.expect("RBRACKET");
-        if (rbracket && rbracket.type == "ParseError") {
-            return rbracket;
-        }
-        return node;
-    }
-    if (parser.current_token.type == "LBRACE" && !inline) {
-        parser.advance();
-        let node = parser.mark_node("ObjectLiteral");
-        node.properties = [];
-        if (parser.current_token.type != "RBRACE") {
-            while (
-                parser.current_token.type == "SYMBOL_XID" ||
-                parser.current_token.type == "STRING"
-            ) {
-                let key = parser.current_token.value;
-                parser.advance();
-                let colon = parser.expect("COLON");
-                if (colon && colon.type == "ParseError") {
-                    return colon;
-                }
-                let value = package_parser_parseExpressionWithPrecedence(
-                    parser,
-                    0,
-                    inline
-                );
-                if (value && value.type == "ParseError") {
-                    return value;
-                }
-                let propertyNode = parser.mark_node("Property");
-                propertyNode.key = key;
-                propertyNode.value = value;
-                node.properties.push(propertyNode);
-                if (parser.current_token.type == "COMMA") {
-                    parser.advance();
-                } else {
-                    break;
-                }
-            }
-        }
-        let rbrace = parser.expect("RBRACE");
-        if (rbrace && rbrace.type == "ParseError") {
-            return rbrace;
-        }
-        return node;
-    }
-    let error = {};
-    error.type = "ParseError";
-    error.message = "Expected expression but got " + parser.current_token.type;
-    error.line = parser.current_token.line;
-    error.column = parser.current_token.column;
-    return node;
-}
-export function package_parser_parseMatchExpression(parser, inline) {
-    parser.advance();
-    let expr = package_parser_parseInlineExpression(parser);
-    if (expr && expr.type == "ParseError") {
-        return expr;
-    }
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    let branches = [];
-    while (parser.current_token.type != "RBRACE") {
-        let branch = package_parser_parseMatchBranch(parser);
-        if (branch && branch.type == "ParseError") {
-            return branch;
-        }
-        branches.push(branch);
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    let node = parser.mark_node("MatchExpression");
-    node.expression = expr;
-    node.branches = branches;
-    return node;
-}
-export function package_parser_parseMatchBranch(parser) {
-    let branchType = parser.current_token.type;
-    if (branchType == "WHEN") {
-        return package_parser_parseWhenBranch(parser);
-    } else if (branchType == "CASE") {
-        return package_parser_parseCaseBranch(parser);
-    } else if (branchType == "TYPE") {
-        return package_parser_parseTypeBranch(parser);
-    } else if (branchType == "ELSE") {
-        return package_parser_parseElseBranch(parser);
-    } else {
-        let error = {};
-        error.type = "ParseError";
-        error.message =
-            "Expected when, case, type, or else in match branch but got " +
-            branchType;
-        error.line = parser.current_token.line;
-        error.column = parser.current_token.column;
-        return error;
-    }
-}
-export function package_parser_parseWhenBranch(parser) {
-    parser.advance();
-    let condition = package_parser_parseExpression(parser);
-    if (condition && condition.type == "ParseError") {
-        return condition;
-    }
-    let colon = parser.expect("COLON");
-    if (colon && colon.type == "ParseError") {
-        return colon;
-    }
-    let statements = package_parser_parseMatchBranchStatements(parser);
-    if (statements && statements.type == "ParseError") {
-        return statements;
-    }
-    let node = parser.mark_node("WhenBranch");
-    node.condition = condition;
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parseCaseBranch(parser) {
-    parser.advance();
-    let pattern = package_parser_parse_pattern_expression(parser);
-    if (pattern.type == "ParseError") {
-        return pattern;
-    }
-    let colon = parser.expect("COLON");
-    if (colon && colon.type == "ParseError") {
-        return colon;
-    }
-    let statements = package_parser_parseMatchBranchStatements(parser);
-    if (statements && statements.type == "ParseError") {
-        return statements;
-    }
-    let node = parser.mark_node("CaseBranch");
-    node.pattern = pattern;
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parseTypeBranch(parser) {
-    parser.advance();
-    let typeName = parser.expectIdentifierIn("Branches");
-    if (typeName.type == "ParseError") {
-        return typeName;
-    }
-    let colon = parser.expect("COLON");
-    if (colon && colon.type == "ParseError") {
-        return colon;
-    }
-    let statements = package_parser_parseMatchBranchStatements(parser);
-    if (statements && statements.type == "ParseError") {
-        return statements;
-    }
-    let node = parser.mark_node("TypeBranch");
-    node.typeName = typeName.value;
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parseElseBranch(parser) {
-    parser.advance();
-    let colon = parser.expect("COLON");
-    if (colon && colon.type == "ParseError") {
-        return colon;
-    }
-    let statements = package_parser_parseMatchBranchStatements(parser);
-    if (statements && statements.type == "ParseError") {
-        return statements;
-    }
-    let node = parser.mark_node("ElseBranch");
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parseMatchBranchStatements(parser) {
-    let statements = [];
-    while (
-        parser.current_token.type != "WHEN" &&
-        parser.current_token.type != "CASE" &&
-        parser.current_token.type != "TYPE" &&
-        parser.current_token.type != "ELSE" &&
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        let stmt = package_parser_parseStatement(parser);
-        if (stmt && stmt.type == "ParseError") {
-            return stmt;
-        }
-        statements.push(stmt);
-    }
-    return statements;
-}
-export function package_parser_parseTermParameters(parser) {
-    let params = [];
-    if (parser.current_token.type != "RPAREN") {
-        let param = package_parser_parseTypedParameter(parser);
-        if (param && param.type == "ParseError") {
-            return param;
-        }
-        params.push(param);
-        while (parser.current_token.type == "COMMA") {
-            parser.advance();
-            param = package_parser_parseTypedParameter(parser);
-            if (param && param.type == "ParseError") {
-                return param;
-            }
-            params.push(param);
-        }
-    }
-    return params;
-}
-export function package_parser_parseTypedParameter(parser) {
-    let paramName = null;
-    if (parser.current_token.type == "SYMBOL_XID") {
-        paramName = parser.expectIdentifier();
-    } else if (parser.current_token.type == "SELF") {
-        paramName = parser.expect("SELF");
-    } else {
-        paramName = parser.expectIdentifier();
-    }
-    if (paramName && paramName.type == "ParseError") {
-        return paramName;
-    }
-    let node = parser.mark_node("Parameter");
-    node.name = paramName.value;
-    node.typeAnnotation = null;
-    node.defaultValue = null;
-    if (parser.current_token.type == "COLON") {
-        parser.advance();
-        let typeExpr = package_parser_parseTypeExpression(parser);
-        if (typeExpr && typeExpr.type == "ParseError") {
-            return typeExpr;
-        }
-        node.typeAnnotation = typeExpr;
-    }
-    if (parser.current_token.type == "ASSIGN") {
-        parser.advance();
-        let defaultExpr = package_parser_parseExpression(parser);
-        if (defaultExpr && defaultExpr.type == "ParseError") {
-            return defaultExpr;
-        }
-        node.defaultValue = defaultExpr;
-    }
-    return node;
-}
-export function package_parser_getTypeOperatorPrecedence(tokenType) {
-    if (tokenType == "ARROW") {
-        return 1;
-    }
-    if (tokenType == "PIPE") {
-        return 2;
-    }
-    if (tokenType == "AMPERSAND") {
-        return 3;
-    }
-    if (tokenType == "PLUS") {
-        return 4;
-    }
-    if (tokenType == "MINUS") {
-        return 4;
-    }
-    return -1;
-}
-export function package_parser_isTypeRightAssociative(tokenType) {
-    return tokenType == "ARROW";
-}
-export function package_parser_parseTypeExpressionWithPrecedence(
-    parser,
-    minPrecedence
-) {
-    let left = package_parser_parseUnaryTypeExpression(parser);
-    if (left && left.type == "ParseError") {
-        return left;
-    }
-    while (true) {
-        let precedence = package_parser_getTypeOperatorPrecedence(
-            parser.current_token.type
-        );
-        if (precedence < minPrecedence) {
-            break;
-        }
-        let op = parser.current_token.value;
-        let tokenType = parser.current_token.type;
-        parser.advance();
-        let nextMinPrecedence = precedence;
-        if (package_parser_isTypeRightAssociative(tokenType)) {
-        } else {
-            nextMinPrecedence = precedence + 1;
-        }
-        let right = package_parser_parseTypeExpressionWithPrecedence(
-            parser,
-            nextMinPrecedence
-        );
-        if (right && right.type == "ParseError") {
-            return right;
-        }
-        if (tokenType == "ARROW") {
-            let node = parser.mark_node("FunctionType");
-            node.parameterType = left;
-            node.returnType = right;
-            left = node;
-        } else if (tokenType == "PIPE") {
-            let node = parser.mark_node("UnionType");
-            node.left = left;
-            node.right = right;
-            left = node;
-        } else if (tokenType == "AMPERSAND") {
-            let node = parser.mark_node("IntersectionType");
-            node.left = left;
-            node.right = right;
-            left = node;
-        } else {
-            let node = parser.mark_node("BinaryTypeOp");
-            node.left = left;
-            node.operator = op;
-            node.right = right;
-            left = node;
-        }
-    }
-    return left;
-}
-export function package_parser_parseTypeExpression(parser) {
-    return package_parser_parseTypeExpressionWithPrecedence(parser, 0);
-}
-export function package_parser_parseUnaryTypeExpression(parser) {
-    if (
-        parser.current_token.type == "PLUS" ||
-        parser.current_token.type == "MINUS"
-    ) {
-        let op = parser.current_token.value;
-        parser.advance();
-        let operand = package_parser_parseUnaryTypeExpression(parser);
-        if (operand && operand.type == "ParseError") {
-            return operand;
-        }
-        let node = parser.mark_node("VarianceType");
-        node.variance = op;
-        node.operand = operand;
-        return node;
-    }
-    return package_parser_parsePostfixTypeExpression(parser);
-}
-export function package_parser_parsePostfixTypeExpression(parser) {
-    let expr = package_parser_parseAtomicTypeExpression(parser);
-    if (expr && expr.type == "ParseError") {
-        return expr;
-    }
-    while (true) {
-        if (parser.current_token.type == "QUESTION") {
-            parser.advance();
-            let node = parser.mark_node("NullableType");
-            node.baseType = expr;
-            expr = node;
-        } else if (parser.current_token.type == "BANG") {
-            parser.advance();
-            let node = parser.mark_node("NonNullType");
-            node.baseType = expr;
-            expr = node;
-        } else if (parser.current_token.type == "LT") {
-            parser.advance();
-            let typeArgs = [];
-            if (parser.current_token.type != "GT") {
-                let arg = package_parser_parseTypeExpression(parser);
-                if (arg && arg.type == "ParseError") {
-                    return arg;
-                }
-                typeArgs.push(arg);
-                while (parser.current_token.type == "COMMA") {
-                    parser.advance();
-                    arg = package_parser_parseTypeExpression(parser);
-                    if (arg && arg.type == "ParseError") {
-                        return arg;
-                    }
-                    typeArgs.push(arg);
-                }
-            }
-            let gt = parser.expect("GT");
-            if (gt && gt.type == "ParseError") {
-                return gt;
-            }
-            let node = parser.mark_node("GenericType");
-            node.baseType = expr;
-            node.typeArguments = typeArgs;
-            expr = node;
-        } else if (parser.current_token.type == "LBRACKET") {
-            parser.advance();
-            let rbracket = parser.expect("RBRACKET");
-            if (rbracket && rbracket.type == "ParseError") {
-                return rbracket;
-            }
-            let node = parser.mark_node("ArrayType");
-            node.elementType = expr;
-            expr = node;
-        } else {
-            break;
-        }
-    }
-    return expr;
-}
-export function package_parser_parseAtomicTypeExpression(parser) {
-    if (parser.current_token.type == "SYMBOL_XID") {
-        let name = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("TypeIdentifier");
-        node.name = name;
-        return node;
-    }
-    if (parser.current_token.type == "LPAREN") {
-        parser.advance();
-        let expr = package_parser_parseTypeExpression(parser);
-        if (expr && expr.type == "ParseError") {
-            return expr;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        return expr;
-    }
-    if (parser.current_token.type == "LPAREN") {
-        parser.advance();
-        let elements = [];
-        if (parser.current_token.type != "RPAREN") {
-            let element = package_parser_parseTypeExpression(parser);
-            if (element && element.type == "ParseError") {
-                return element;
-            }
-            elements.push(element);
-            while (parser.current_token.type == "COMMA") {
-                parser.advance();
-                element = package_parser_parseTypeExpression(parser);
-                if (element && element.type == "ParseError") {
-                    return element;
-                }
-                elements.push(element);
-            }
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        if (elements.length == 1) {
-            return elements[0];
-        } else {
-            let node = parser.mark_node("TupleType");
-            node.elements = elements;
-            return node;
-        }
-    }
-    if (parser.current_token.type == "LBRACE") {
-        parser.advance();
-        let properties = [];
-        if (parser.current_token.type != "RBRACE") {
-            while (
-                parser.current_token.type == "SYMBOL_XID" ||
-                parser.current_token.type == "STRING"
-            ) {
-                let key = parser.current_token.value;
-                parser.advance();
-                let colon = parser.expect("COLON");
-                if (colon && colon.type == "ParseError") {
-                    return colon;
-                }
-                let valueType = package_parser_parseTypeExpression(parser);
-                if (valueType && valueType.type == "ParseError") {
-                    return valueType;
-                }
-                let propertyNode = parser.mark_node("TypeProperty");
-                propertyNode.key = key;
-                propertyNode.valueType = valueType;
-                properties.push(propertyNode);
-                if (parser.current_token.type == "COMMA") {
-                    parser.advance();
-                } else {
-                    break;
-                }
-            }
-        }
-        let rbrace = parser.expect("RBRACE");
-        if (rbrace && rbrace.type == "ParseError") {
-            return rbrace;
-        }
-        let node = parser.mark_node("ObjectType");
-        node.properties = properties;
-        return node;
-    }
-    if (parser.current_token.type == "STRING") {
-        let value = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("LiteralType");
-        node.value = value;
-        node.literalType = "string";
-        return node;
-    }
-    if (parser.current_token.type == "NUMBER") {
-        let value = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("LiteralType");
-        node.value = value;
-        node.literalType = "number";
-        return node;
-    }
-    if (parser.current_token.type == "BOOLEAN") {
-        let value = parser.current_token.value;
-        parser.advance();
-        let node = parser.mark_node("LiteralType");
-        node.value = value;
-        node.literalType = "boolean";
-        return node;
-    }
-    let error = {};
-    error.type = "ParseError";
-    error.message =
-        "Expected type expression but got " + parser.current_token.type;
-    error.line = parser.current_token.line;
-    error.column = parser.current_token.column;
-    return error;
-}
-export function package_parser_parseTypedParameters(parser) {
-    let params = [];
-    if (parser.current_token.type != "RPAREN") {
-        let param = package_parser_parseTypedParameter(parser);
-        if (param && param.type == "ParseError") {
-            return param;
-        }
-        params.push(param);
-        while (parser.current_token.type == "COMMA") {
-            parser.advance();
-            param = package_parser_parseTypedParameter(parser);
-            if (param && param.type == "ParseError") {
-                return param;
-            }
-            params.push(param);
-        }
-    }
-    return params;
-}
-export function package_parser_parseTypeHint(parser) {
-    if (parser.currentToken.type == "Colon") {
-        parser.advance();
-        return parser.parseTypeExpression();
-    }
-    return null;
-}
-export function package_parser_parseReturnType(parser) {
-    if (parser.currentToken.type == "Arrow") {
-        parser.advance();
-        return this.parseTypeExpression();
-    }
-    return null;
-}
-export function package_parser_parseEffectType(parser) {
-    if (parser.currentToken.type == "Slash") {
-        parser.advance();
-        return parser.parseTypeExpression();
-    }
-    return null;
-}
-export function package_parser_parseStatement(parser) {
-    if (parser.current_token.type == "EOF") {
-        let error = {};
-        error.type = "ParseError";
-        error.message = "Unexpected EOF in statement";
-        error.line = parser.current_token.line;
-        error.column = parser.current_token.column;
-        return error;
-    }
-    if (parser.current_token.type == "NAMESPACE") {
-        return package_parser_parseNamespaceStatement(parser);
-    }
-    if (parser.current_token.type == "USING") {
-        return package_parser_parseUsingStatement(parser);
-    }
-    if (parser.current_token.type == "ATTRIBUTE") {
-        return package_parser_parseAttributeStatement(parser);
-    }
-    if (parser.current_token.type == "CLASS") {
-        return package_parser_parseClassDeclaration(parser);
-    }
-    if (parser.current_token.type == "SINGLETON") {
-        return package_parser_parseSingletonDeclaration(parser);
-    }
-    if (parser.current_token.type == "TRAIT") {
-        return package_parser_parseTraitDeclaration(parser);
-    }
-    if (parser.current_token.type == "FLAGS") {
-        return package_parser_parseFlagsDeclaration(parser);
-    }
-    if (parser.current_token.type == "EIDOS") {
-        return package_parser_parseEidosDeclaration(parser);
-    }
-    if (parser.current_token.type == "LET") {
-        return package_parser_parseLetStatement(parser);
-    }
-    if (parser.current_token.type == "MICRO") {
-        let nextIndex = parser.position + 1;
-        if (
-            nextIndex < parser.tokens.length &&
-            parser.tokens[nextIndex].type == "SYMBOL_XID"
-        ) {
-            let afterNameIndex = nextIndex + 1;
-            if (
-                afterNameIndex < parser.tokens.length &&
-                parser.tokens[afterNameIndex].type == "LPAREN"
-            ) {
-                return package_parser_parseMicroFunctionDeclaration(parser);
-            }
-        }
-        return package_parser_parse_function_declaration(parser);
-    }
-    if (parser.current_token.type == "IF") {
-        return package_parser_parseIfStatement(parser);
-    }
-    if (parser.current_token.type == "WHILE") {
-        return package_parser_parseWhileStatement(parser);
-    }
-    if (parser.current_token.type == "UNTIL") {
-        return package_parser_parseUntilStatement(parser);
-    }
-    if (parser.current_token.type == "RETURN") {
-        return package_parser_parseReturnStatement(parser);
-    }
-    if (parser.current_token.type == "LBRACE") {
-        return package_parser_parse_function_block(parser);
-    }
-    let expr = package_parser_parseExpression(parser);
-    if (expr && expr.type == "ParseError") {
-        return expr;
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon && semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let stmt = parser.mark_node("ExpressionStatement");
-    stmt.expression = expr;
-    return stmt;
-}
-export function package_parser_parseLetStatement(parser) {
-    parser.advance();
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let assignToken = parser.expect("ASSIGN");
-    if (assignToken && assignToken.type == "ParseError") {
-        return assignToken;
-    }
-    let value = package_parser_parseExpression(parser);
-    if (value && value.type == "ParseError") {
-        return value;
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon && semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let node = parser.mark_node("LetStatement");
-    node.name = name.value;
-    node.value = value;
-    return node;
-}
-export function package_parser_parseNamespaceStatement(parser) {
-    parser.advance();
-    let path = [];
-    let is_main_namespace = false;
-    if (parser.current_token.type == "BANG") {
-        parser.advance();
-        package_compiler_is_main_namespace = true;
-    }
-    let identifier = parser.expectIdentifier();
-    if (identifier.type == "ParseError") {
-        return identifier;
-    }
-    path.push(identifier.value);
-    while (parser.current_token.type == "DOUBLE_COLON") {
-        parser.advance();
-        identifier = parser.expectIdentifier();
-        if (identifier.type == "ParseError") {
-            return identifier;
-        }
-        path.push(identifier.value);
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let node = parser.mark_node("NamespaceStatement");
-    node.path = path;
-    node.is_main_namespace = package_compiler_is_main_namespace;
-    return node;
-}
-export function package_parser_parseUsingStatement(parser) {
-    parser.advance();
-    let path = [];
-    let identifier = parser.expectIdentifier();
-    if (identifier.type == "ParseError") {
-        return identifier;
-    }
-    path.push(identifier.value);
-    while (parser.current_token.type == "DOUBLE_COLON") {
-        parser.advance();
-        identifier = parser.expectIdentifier();
-        if (identifier.type == "ParseError") {
-            return identifier;
-        }
-        path.push(identifier.value);
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    let node = parser.mark_node("UsingStatement");
-    node.path = path;
-    return node;
-}
-export function package_parser_parseAttributeStatement(parser) {
-    parser.advance();
-    let jsToken = parser.expectIdentifier();
-    if (jsToken.type == "ParseError") {
-        return jsToken;
-    }
-    if (jsToken.value != "js") {
-        let error = {};
-        error.type = "ParseError";
-        error.message = "Expected 'js' after ↯";
-        error.line = jsToken.line;
-        error.column = jsToken.column;
-        return error;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen.type == "ParseError") {
-        return lparen;
-    }
-    let modulePath = parser.expect("STRING");
-    if (modulePath.type == "ParseError") {
-        return modulePath;
-    }
-    let comma = parser.expect("COMMA");
-    if (comma.type == "ParseError") {
-        return comma;
-    }
-    let importName = parser.expect("STRING");
-    if (importName.type == "ParseError") {
-        return importName;
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen.type == "ParseError") {
-        return rparen;
-    }
-    let microToken = parser.expect("MICRO");
-    if (microToken.type == "ParseError") {
-        return microToken;
-    }
-    let functionName = parser.expectIdentifier();
-    if (functionName.type == "ParseError") {
-        return functionName;
-    }
-    let paramLparen = parser.expect("LPAREN");
-    if (paramLparen.type == "ParseError") {
-        return paramLparen;
-    }
-    let parameters = [];
-    if (parser.current_token.type != "RPAREN") {
-        let param = parser.expectIdentifier();
-        if (param.type == "ParseError") {
-            return param;
-        }
-        parameters.push(param.value);
-        while (parser.current_token.type == "COMMA") {
-            parser.advance();
-            param = parser.expectIdentifier();
-            if (param.type == "ParseError") {
-                return param;
-            }
-            parameters.push(param.value);
-        }
-    }
-    let paramRparen = parser.expect("RPAREN");
-    if (paramRparen.type == "ParseError") {
-        return paramRparen;
-    }
-    let body = package_parser_parseStatement(parser);
-    if (body.type == "ParseError") {
-        return body;
-    }
-    let node = parser.mark_node("JSAttributeStatement");
-    node.modulePath = modulePath.value;
-    node.importName = importName.value;
-    node.functionName = functionName.value;
-    node.parameters = parameters;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseMicroFunctionDeclaration(parser) {
-    parser.advance();
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen && lparen.type == "ParseError") {
-        return lparen;
-    }
-    let params = package_parser_parseTermParameters(parser);
-    if (params && params.type == "ParseError") {
-        return params;
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen && rparen.type == "ParseError") {
-        return rparen;
-    }
-    let returnType = null;
-    if (parser.current_token.type == "ARROW") {
-        parser.advance();
-        returnType = package_parser_parseTypeExpression(parser);
-        if (returnType && returnType.type == "ParseError") {
-            return returnType;
-        }
-    }
-    let effectType = null;
-    if (parser.current_token.type == "DIVIDE") {
-        parser.advance();
-        effectType = package_parser_parseTypeExpression(parser);
-        if (effectType && effectType.type == "ParseError") {
-            return effectType;
-        }
-    }
-    let body = package_parser_parse_function_block(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = parser.mark_node("MicroDeclaration");
-    node.name = name.value;
-    node.parameters = params;
-    node.returnType = returnType;
-    node.effectType = effectType;
-    node.body = body;
-    return node;
-}
-export function package_parser_parse_keyword(
-    parser,
-    expected_keyword,
-    node_type
-) {
-    parser.advance();
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let node = new package_parser_Node(node_type);
-    node.name = name.value;
-    node.superClass = null;
-    node.members = [];
-    return node;
-}
-export function package_parser_parse_inheritor(parser, node) {
-    if (parser.current_token.type == "EXTENDS") {
-        parser.advance();
-        let superName = parser.expectIdentifier();
-        if (superName && superName.type == "ParseError") {
-            return superName;
-        }
-        node.superClass = superName.value;
-    }
-    return node;
-}
-export function package_parser_parse_implements(parser, node) {
-    return node;
-}
-export function package_parser_parse_object_body(parser, node) {
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    while (
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        if (parser.current_token.type == "SEMICOLON") {
-            parser.advance();
-            continue;
-        }
-        let member = package_parser_parseClassMember(parser);
-        if (member && member.type != "ParseError") {
-            node.members.push(member);
-        } else if (member && member.type == "ParseError") {
-            return member;
-        }
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    return node;
-}
-export function package_parser_parseClassDeclaration(parser) {
-    let node = package_parser_parse_keyword(
-        parser,
-        "class",
-        "ClassDeclaration"
-    );
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_inheritor(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_implements(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_object_body(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    return node;
-}
-export function package_parser_parseSingletonDeclaration(parser) {
-    let node = package_parser_parse_keyword(
-        parser,
-        "singleton",
-        "SingletonDeclaration"
-    );
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_inheritor(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_implements(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_object_body(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    return node;
-}
-export function package_parser_parseTraitDeclaration(parser) {
-    let node = package_parser_parse_keyword(
-        parser,
-        "trait",
-        "TraitDeclaration"
-    );
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_inheritor(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_implements(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    node = package_parser_parse_object_body(parser, node);
-    if (node && node.type == "ParseError") {
-        return node;
-    }
-    return node;
-}
-export function package_parser_parseClassMember(parser) {
-    if (parser.current_token.type == "CONSTRUCTOR") {
-        parser.advance();
-        let lparen = parser.expect("LPAREN");
-        if (lparen && lparen.type == "ParseError") {
-            return lparen;
-        }
-        let params = package_parser_parseTermParameters(parser);
-        if (params && params.type == "ParseError") {
-            return params;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        let body = package_parser_parse_function_block(parser);
-        if (body && body.type == "ParseError") {
-            return body;
-        }
-        let ctorNode = parser.mark_node("ConstructorStatement");
-        ctorNode.parameters = params;
-        ctorNode.body = body;
-        return ctorNode;
-    }
-    if (parser.current_token.type == "MICRO") {
-        parser.advance();
-        let name = parser.expectIdentifier();
-        if (name && name.type == "ParseError") {
-            return name;
-        }
-        let lparen = parser.expect("LPAREN");
-        if (lparen && lparen.type == "ParseError") {
-            return lparen;
-        }
-        let params = package_parser_parseTermParameters(parser);
-        if (params && params.type == "ParseError") {
-            return params;
-        }
-        let rparen = parser.expect("RPAREN");
-        if (rparen && rparen.type == "ParseError") {
-            return rparen;
-        }
-        let returnType = null;
-        if (parser.current_token.type == "ARROW") {
-            parser.advance();
-            returnType = package_parser_parseTypeExpression(parser);
-            if (returnType && returnType.type == "ParseError") {
-                return returnType;
-            }
-        }
-        let effectType = null;
-        if (parser.current_token.type == "DIVIDE") {
-            parser.advance();
-            effectType = package_parser_parseTypeExpression(parser);
-            if (effectType && effectType.type == "ParseError") {
-                return effectType;
-            }
-        }
-        let body = package_parser_parse_function_block(parser);
-        if (body && body.type == "ParseError") {
-            return body;
-        }
-        let isInstanceMethod = false;
-        let i = 0;
-        while (i < params.length) {
-            let param = params[i];
-            let paramName = "";
-            if (param && param.name) {
-                paramName = param.name;
-            } else {
-                paramName = param;
-            }
-            if (paramName == "self") {
-                isInstanceMethod = true;
-                break;
-            }
-            i = i + 1;
-        }
-        let methodNode = parser.mark_node("MemberStatement");
-        methodNode.name = name.value;
-        methodNode.parameters = params;
-        methodNode.returnType = returnType;
-        methodNode.effectType = effectType;
-        methodNode.body = body;
-        methodNode.isInstanceMethod = isInstanceMethod;
-        methodNode.isStatic = !isInstanceMethod;
-        return methodNode;
-    }
-    if (parser.current_token.type == "SYMBOL_XID") {
-        let nextIndex = parser.position + 1;
-        if (nextIndex < parser.tokens.length) {
-            let next_token = parser.tokens[nextIndex];
-            if (
-                next_token.type == "COLON" ||
-                next_token.type == "ASSIGN" ||
-                next_token.type == "SEMICOLON"
-            ) {
-                let name = parser.expectIdentifier();
-                if (name && name.type == "ParseError") {
-                    return name;
-                }
-                let typeAnnotation = null;
-                if (parser.current_token.type == "COLON") {
-                    parser.advance();
-                    typeAnnotation = package_parser_parseTypeExpression(parser);
-                    if (typeAnnotation && typeAnnotation.type == "ParseError") {
-                        return typeAnnotation;
-                    }
-                }
-                let initValue = null;
-                if (parser.current_token.type == "ASSIGN") {
-                    parser.advance();
-                    initValue = package_parser_parseExpression(parser);
-                    if (initValue && initValue.type == "ParseError") {
-                        return initValue;
-                    }
-                }
-                let semicolon = parser.expect("SEMICOLON");
-                if (semicolon && semicolon.type == "ParseError") {
-                    return semicolon;
-                }
-                let node = parser.mark_node("Property");
-                node.name = name.value;
-                node.typeAnnotation = typeAnnotation;
-                node.initializer = initValue;
-                return node;
-            }
-        }
-    }
-    let error = {};
-    error.type = "ParseError";
-    error.message =
-        "Expected class member (field or method) but got " +
-        parser.current_token.type;
-    error.line = parser.current_token.line;
-    error.column = parser.current_token.column;
-    return error;
-}
-export function package_parser_parse_function_declaration(parser) {
-    parser.advance();
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let lparen = parser.expect("LPAREN");
-    if (lparen && lparen.type == "ParseError") {
-        return lparen;
-    }
-    let params = package_parser_parseTermParameters(parser);
-    if (params && params.type == "ParseError") {
-        return params;
-    }
-    let rparen = parser.expect("RPAREN");
-    if (rparen && rparen.type == "ParseError") {
-        return rparen;
-    }
-    let body = package_parser_parse_function_block(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = parser.mark_node("MicroDeclaration");
-    node.name = name.value;
-    node.parameters = params;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseIfStatement(parser) {
-    parser.advance();
-    let condition = package_parser_parseInlineExpression(parser);
-    if (condition && condition.type == "ParseError") {
-        return condition;
-    }
-    let thenBranch = package_parser_parseStatement(parser);
-    if (thenBranch && thenBranch.type == "ParseError") {
-        return thenBranch;
-    }
-    let node = parser.mark_node("IfStatement");
-    node.condition = condition;
-    node.thenBranch = thenBranch;
-    node.elseBranch = null;
-    if (parser.current_token.type == "ELSE") {
-        parser.advance();
-        let elseBranch = package_parser_parseStatement(parser);
-        if (elseBranch && elseBranch.type == "ParseError") {
-            return elseBranch;
-        }
-        node.elseBranch = elseBranch;
-    }
-    return node;
-}
-export function package_parser_parseWhileStatement(parser) {
-    parser.advance();
-    let condition = package_parser_parseInlineExpression(parser);
-    if (condition && condition.type == "ParseError") {
-        return condition;
-    }
-    let body = package_parser_parse_function_block(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = parser.mark_node("WhileStatement");
-    node.condition = condition;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseUntilStatement(parser) {
-    parser.advance();
-    let condition = package_parser_parseInlineExpression(parser);
-    if (condition && condition.type == "ParseError") {
-        return condition;
-    }
-    let body = package_parser_parse_function_block(parser);
-    if (body && body.type == "ParseError") {
-        return body;
-    }
-    let node = parser.mark_node("UntilStatement");
-    node.condition = condition;
-    node.body = body;
-    return node;
-}
-export function package_parser_parseReturnStatement(parser) {
-    parser.advance();
-    let node = parser.mark_node("ReturnStatement");
-    if (parser.current_token.type == "SEMICOLON") {
-        node.value = null;
-    } else {
-        let value = package_parser_parseExpression(parser);
-        if (value && value.type == "ParseError") {
-            return value;
-        }
-        node.value = value;
-    }
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon && semicolon.type == "ParseError") {
-        return semicolon;
-    }
-    return node;
-}
-export function package_parser_parse_function_block(parser) {
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    let statements = [];
-    while (
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        let stmt = package_parser_parseStatement(parser);
-        if (stmt && stmt.type == "ParseError") {
-            return stmt;
-        }
-        statements.push(stmt);
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    let node = parser.mark_node("Block");
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parseFlagsDeclaration(parser) {
-    parser.advance();
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    let members = [];
-    while (
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        let member = package_parser_parseFlagsMember(parser);
-        if (member && member.type == "ParseError") {
-            return member;
-        }
-        members.push(member);
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    let node = parser.mark_node("FlagsDeclaration");
-    node.name = name.value;
-    node.members = members;
-    return node;
-}
-export function package_parser_parseFlagsMember(parser) {
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let assign = parser.expect("ASSIGN");
-    if (assign && assign.type == "ParseError") {
-        return assign;
-    }
-    let value = package_parser_parseExpression(parser);
-    if (value && value.type == "ParseError") {
-        return value;
-    }
-    let node = parser.mark_node("FlagsMember");
-    node.name = name.value;
-    node.value = value;
-    return node;
-}
-export function package_parser_parseEidosDeclaration(parser) {
-    parser.advance();
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let lbrace = parser.expect("LBRACE");
-    if (lbrace && lbrace.type == "ParseError") {
-        return lbrace;
-    }
-    let members = [];
-    while (
-        parser.current_token.type != "RBRACE" &&
-        parser.current_token.type != "EOF"
-    ) {
-        let member = package_parser_parseEidosMember(parser);
-        if (member && member.type == "ParseError") {
-            return member;
-        }
-        members.push(member);
-    }
-    let rbrace = parser.expect("RBRACE");
-    if (rbrace && rbrace.type == "ParseError") {
-        return rbrace;
-    }
-    let node = parser.mark_node("EidosDeclaration");
-    node.name = name.value;
-    node.members = members;
-    return node;
-}
-export function package_parser_parseEidosMember(parser) {
-    let name = parser.expectIdentifier();
-    if (name && name.type == "ParseError") {
-        return name;
-    }
-    let assign = parser.expect("ASSIGN");
-    if (assign && assign.type == "ParseError") {
-        return assign;
-    }
-    let value = package_parser_parseExpression(parser);
-    if (value && value.type == "ParseError") {
-        return value;
-    }
-    let node = parser.mark_node("EidosMember");
-    node.name = name.value;
-    node.value = value;
-    return node;
-}
-export function package_parser_parseProgram(parser) {
-    let statements = [];
-    while (parser.current_token.type != "EOF") {
-        let stmt = package_parser_parseStatement(parser);
-        if (stmt && stmt.type == "ParseError") {
-            return stmt;
-        }
-        statements.push(stmt);
-    }
-    let node = parser.mark_node("Program");
-    node.statements = statements;
-    return node;
-}
-export function package_parser_parse(tokens) {
-    let parser = new package_parser_ValkyrieParser(tokens);
-    return package_parser_parseProgram(parser);
-}
-class package_analyzer_Analyzer {
+// using ;
+// using ;
+// using ;
+// using ;
+class package__analyzer__Analyzer {
     constructor() {
-        this.symbol_table = new package_analyzer_SymbolTable();
-        this.type_checker = new package_analyzer_TypeChecker();
+        this.symbol_table = new package__analyzer__SymbolTable();
+        this.type_checker = new package__analyzer__TypeChecker();
     }
 
     analyze(ast) {
@@ -2812,7 +58,7 @@ class package_analyzer_Analyzer {
     }
 
     visit_class_statement(node) {
-        let symbol = Symbol.from_node(node, "class");
+        let symbol = package__analyzer__Symbol.from_node(node, "class");
         symbol.is_exported = true;
         this.symbol_table.add_symbol(symbol);
         if (symbol.name) {
@@ -2821,7 +67,7 @@ class package_analyzer_Analyzer {
     }
 
     visit_function_statement(node) {
-        let symbol = Symbol.from_node(node, "function");
+        let symbol = package__analyzer__Symbol.from_node(node, "function");
         symbol.is_exported = true;
         this.symbol_table.add_symbol(symbol);
         if (symbol.name) {
@@ -2830,13 +76,36 @@ class package_analyzer_Analyzer {
     }
 
     visit_let_statement(node) {
-        let symbol = Symbol.from_node(node, "variable");
+        let symbol = package__analyzer__Symbol.from_node(node, "variable");
         symbol.is_mutable = true;
         this.symbol_table.add_symbol(symbol);
     }
 
     visit_identifier(node) {
-        let symbol = Symbol.from_node(node, "identifier");
+        let symbol = package__analyzer__Symbol.from_node(node, "identifier");
+        if (node.namepath && node.namepath.length > 1) {
+            let current_namespace = this.symbol_table.get_current_namespace();
+            if (current_namespace) {
+                let is_in_namespace = true;
+                let i = 0;
+                while (i < current_namespace.length) {
+                    if (
+                        i >= node.namepath.length ||
+                        node.namepath[i] != current_namespace[i]
+                    ) {
+                        is_in_namespace = false;
+                        break;
+                    }
+                    i = i + 1;
+                }
+                if (is_in_namespace) {
+                    symbol.namespace_path = current_namespace;
+                    symbol.resolved_name =
+                        node.namepath[node.namepath.length - 1];
+                    symbol.full_namepath = node.namepath;
+                }
+            }
+        }
         let existing = this.symbol_table.find_symbol(symbol.name);
         if (existing) {
             existing.references.push(symbol);
@@ -2846,12 +115,12 @@ class package_analyzer_Analyzer {
     }
 
     visit_micro_call(node) {
-        let symbol = Symbol.from_node(node, "micro_call");
+        let symbol = package__analyzer__Symbol.from_node(node, "micro_call");
         this.symbol_table.add_symbol(symbol);
     }
 
     visit_namespace_statement(node) {
-        let symbol = Symbol.from_node(node, "namespace");
+        let symbol = package__analyzer__Symbol.from_node(node, "namespace");
         this.symbol_table.add_symbol(symbol);
         if (symbol.name) {
             this.symbol_table.enter_scope(symbol.name);
@@ -2859,18 +128,20 @@ class package_analyzer_Analyzer {
     }
 
     visit_using_statement(node) {
-        let symbol = Symbol.from_node(node, "using");
+        let symbol = package__analyzer__Symbol.from_node(node, "using");
         this.symbol_table.add_symbol(symbol);
     }
 
     visit_generic_node(node) {
-        let symbol = Symbol.from_node(node, "generic");
+        let symbol = package__analyzer__Symbol.from_node(node, "generic");
         if (symbol.name) {
             this.symbol_table.add_symbol(symbol);
         }
     }
 }
-class package_analyzer_Symbol {
+// using ;
+// using ;
+class package__analyzer__Symbol {
     constructor(node, symbol_type) {
         this.node = node;
         this.symbol_type = symbol_type;
@@ -2882,10 +153,13 @@ class package_analyzer_Symbol {
         this.is_mutable = false;
         this.is_exported = false;
         this.references = [];
+        this.namespace_path = [];
+        this.resolved_name = false;
+        this.full_namepath = [];
     }
 
     static from_node(node, symbol_type) {
-        let symbol = new package_analyzer_Symbol(node, symbol_type);
+        let symbol = new package__analyzer__Symbol(node, symbol_type);
         return symbol;
     }
 
@@ -2893,7 +167,7 @@ class package_analyzer_Symbol {
         if (this.node && this.node.has_valid_position()) {
             let end_line = this.node.line;
             let end_column = this.node.column + this.node.length;
-            return new package_generation_SourceSpan(
+            return new package__generation__SourceSpan(
                 file_name,
                 this.node.line,
                 this.node.column,
@@ -2908,7 +182,8 @@ class package_analyzer_Symbol {
         return this.node && this.node.has_valid_position();
     }
 }
-class package_analyzer_SymbolTable {
+// using ;
+class package__analyzer__SymbolTable {
     constructor() {
         this.symbols = {};
         this.scopes = [];
@@ -2970,8 +245,21 @@ class package_analyzer_SymbolTable {
     get_all_symbols() {
         return this.symbols;
     }
+
+    get_current_namespace() {
+        if (!this.current_scope) {
+            return [];
+        }
+        let namespace = [];
+        let scope = this.current_scope;
+        while (scope && scope.name != "global") {
+            namespace.unshift(scope.name);
+            scope = scope.parent;
+        }
+        return namespace;
+    }
 }
-class package_analyzer_Type {
+class package__analyzer__Type {
     constructor(name) {
         this.name = name;
         this.is_primitive = false;
@@ -2985,34 +273,34 @@ class package_analyzer_Type {
     }
 
     static create_primitive(type_name) {
-        let ty = new package_analyzer_Type(type_name);
+        let ty = new package__analyzer__Type(type_name);
         ty.is_primitive = true;
         return ty;
     }
 
     static create_array(element_type) {
-        let ty = new package_analyzer_Type(element_type.name + "[]");
+        let ty = new package__analyzer__Type(element_type.name + "[]");
         ty.is_array = true;
         ty.element_type = element_type;
         return ty;
     }
 
     static create_nullable(base_type) {
-        let ty = new package_analyzer_Type(base_type.name + "?");
+        let ty = new package__analyzer__Type(base_type.name + "?");
         ty.is_nullable = true;
         ty.element_type = base_type;
         return ty;
     }
 
     static create_flags(type_name, members) {
-        let ty = new package_analyzer_Type(type_name);
+        let ty = new package__analyzer__Type(type_name);
         ty.is_flags = true;
         ty.members = members;
         return ty;
     }
 
     static create_eidos(type_name, members) {
-        let ty = new package_analyzer_Type(type_name);
+        let ty = new package__analyzer__Type(type_name);
         ty.is_eidos = true;
         ty.members = members;
         return ty;
@@ -3037,23 +325,33 @@ class package_analyzer_Type {
         return this.name;
     }
 }
-class package_analyzer_TypeFactory {
+class package__analyzer__TypeFactory {
     constructor() {
         this.builtin_types = {};
         this.setup_builtin_types();
     }
 
     setup_builtin_types() {
-        this.builtin_types["bool"] = Type.create_primitive("bool");
-        this.builtin_types["i32"] = Type.create_primitive("i32");
-        this.builtin_types["i64"] = Type.create_primitive("i64");
-        this.builtin_types["f32"] = Type.create_primitive("f32");
-        this.builtin_types["f64"] = Type.create_primitive("f64");
-        this.builtin_types["String"] = Type.create_primitive("String");
-        this.builtin_types["Object"] = Type.create_primitive("Object");
-        this.builtin_types["void"] = Type.create_primitive("void");
-        this.builtin_types["unknown"] = Type.create_primitive("unknown");
-        this.builtin_types["any"] = Type.create_primitive("any");
+        this.builtin_types["bool"] =
+            package__analyzer__Type.create_primitive("bool");
+        this.builtin_types["i32"] =
+            package__analyzer__Type.create_primitive("i32");
+        this.builtin_types["i64"] =
+            package__analyzer__Type.create_primitive("i64");
+        this.builtin_types["f32"] =
+            package__analyzer__Type.create_primitive("f32");
+        this.builtin_types["f64"] =
+            package__analyzer__Type.create_primitive("f64");
+        this.builtin_types["String"] =
+            package__analyzer__Type.create_primitive("String");
+        this.builtin_types["Object"] =
+            package__analyzer__Type.create_primitive("Object");
+        this.builtin_types["void"] =
+            package__analyzer__Type.create_primitive("void");
+        this.builtin_types["unknown"] =
+            package__analyzer__Type.create_primitive("unknown");
+        this.builtin_types["any"] =
+            package__analyzer__Type.create_primitive("any");
     }
 
     get_builtin_type(name) {
@@ -3095,9 +393,14 @@ class package_analyzer_TypeFactory {
         return true;
     }
 }
-class package_analyzer_TypeChecker {
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+class package__analyzer__TypeChecker {
     constructor() {
-        this.type_factory = new package_analyzer_TypeFactory();
+        this.type_factory = new package__analyzer__TypeFactory();
         this.errors = [];
         this.warnings = [];
     }
@@ -3152,7 +455,7 @@ class package_analyzer_TypeChecker {
 
     check_class_type(symbol) {
         if (!symbol.data_type) {
-            let class_type = new package_analyzer_Type(symbol.name);
+            let class_type = new package__analyzer__Type(symbol.name);
             symbol.data_type = class_type;
         }
     }
@@ -3272,94 +575,299 @@ class package_analyzer_TypeChecker {
         return this.warnings.length > 0;
     }
 }
-class package_compiler_Compiler {
+// using ;
+// using ;
+// using ;
+class package__compiler__Compiler {
     constructor(options) {
-        this.options = options || new package_compiler_CompilerOptions();
-        this.diagnostics = new package_compiler_CompilerDiagnostics();
-        this.namespace_manager = new package_compiler_NamespaceManager();
-        this.dependency_analyzer = new package_compiler_DependencyAnalyzer();
+        this.options = options || new package__compiler__CompilerOptions();
+        this.diagnostics = new package__compiler__CompilerDiagnostics();
     }
 }
-class package_compiler_CompilerDiagnostics {
+export function package__compiler__compile_with_compiler(compiler, files) {
+    compiler.diagnostics.clear_diagnostics();
+    let asts = {};
+    let file_paths = Object.keys(files);
+    let ast_index = 0;
+    while (ast_index < file_paths.length) {
+        let path = file_paths[ast_index];
+        let source_text = files[path];
+        let lexer = new package__lexer__ValkyrieLexer(source_text);
+        let tokens = lexer.tokenize();
+        if (compiler.diagnostics.has_errors()) {
+            ast_index = ast_index + 1;
+            continue;
+        }
+        let parser = new package__parser__ValkyrieParser(compiler.options);
+        let program = parser.parse(tokens);
+        if (program.type == "ParseError") {
+            compiler.diagnostics.add_error(
+                path + " " + program.message,
+                program.line,
+                program.column
+            );
+        } else {
+            asts[path] = program;
+        }
+        ast_index = ast_index + 1;
+    }
+    let namespace_groups = {};
+    let ast_paths = Object.keys(asts);
+    let path_index = 0;
+    console.log("Total AST files:", ast_paths.length);
+    while (path_index < ast_paths.length) {
+        let file_path = ast_paths[path_index];
+        let program = asts[file_path];
+        if (program && program.statements && program.statements.length > 0) {
+            let current_namespace = [];
+            let current_body = [];
+            let stmt_index = 0;
+            while (stmt_index < program.statements.length) {
+                let statement = program.statements[stmt_index];
+                if (statement && statement.type == "NamespaceStatement") {
+                    if (current_namespace.length > 0) {
+                        let path_key =
+                            package__compiler__make_namespace_key(
+                                current_namespace
+                            );
+                        let group = namespace_groups[path_key];
+                        if (!group) {
+                            group = new package__compiler__NamespaceGroup(
+                                current_namespace
+                            );
+                            namespace_groups[path_key] = group;
+                        }
+                        let namespace_node = {};
+                        namespace_node["type"] = "NamespaceStatement";
+                        namespace_node["file"] = file_path;
+                        namespace_node["path"] = current_namespace;
+                        namespace_node["is_main_namespace"] = false;
+                        namespace_node["body"] = current_body;
+                        group.add_namespace(namespace_node);
+                        current_namespace = [];
+                        current_body = [];
+                    }
+                    current_namespace = [];
+                    if (
+                        statement.path &&
+                        statement.path.name_path &&
+                        statement.path.name_path.length > 0
+                    ) {
+                        let name_index = 0;
+                        while (name_index < statement.path.name_path.length) {
+                            let identifier =
+                                statement.path.name_path[name_index];
+                            if (identifier && identifier.name) {
+                                current_namespace.push(identifier.name);
+                            }
+                            name_index = name_index + 1;
+                        }
+                    }
+                } else {
+                    current_body.push(statement);
+                }
+                stmt_index = stmt_index + 1;
+            }
+            if (current_namespace.length > 0) {
+                let path_key =
+                    package__compiler__make_namespace_key(current_namespace);
+                let group = namespace_groups[path_key];
+                if (!group) {
+                    group = new package__compiler__NamespaceGroup(
+                        current_namespace
+                    );
+                    namespace_groups[path_key] = group;
+                }
+                let namespace_node = {};
+                namespace_node["type"] = "NamespaceStatement";
+                namespace_node["file"] = file_path;
+                namespace_node["path"] = current_namespace;
+                namespace_node["is_main_namespace"] = false;
+                namespace_node["body"] = current_body;
+                group.add_namespace(namespace_node);
+            }
+        } else {
+            console.log("No statements found in program");
+        }
+        path_index = path_index + 1;
+    }
+    console.log("Found namespace groups:", Object.keys(namespace_groups));
+    let global_symbol_table = {};
+    let namespace_keys = Object.keys(namespace_groups);
+    let key_index = 0;
+    while (key_index < namespace_keys.length) {
+        let namespace_key = namespace_keys[key_index];
+        let group = namespace_groups[namespace_key];
+        group.collect_declarations();
+        let decl_index = 0;
+        while (decl_index < group.declarations.length) {
+            let declaration = group.declarations[decl_index];
+            let unique_name = group.generate_unique_name(
+                declaration,
+                group.path
+            );
+            if (unique_name != "") {
+                global_symbol_table[unique_name] = declaration;
+            }
+            decl_index = decl_index + 1;
+        }
+        key_index = key_index + 1;
+    }
+    key_index = 0;
+    while (key_index < namespace_keys.length) {
+        let namespace_key = namespace_keys[key_index];
+        let group = namespace_groups[namespace_key];
+        group.global_symbol_table = global_symbol_table;
+        group.resolve();
+        key_index = key_index + 1;
+    }
+    console.log("=== 第四阶段: AST整合和代码生成 ===");
+    let combined_ast = {};
+    combined_ast["type"] = "Program";
+    combined_ast.body = [];
+    combined_ast.declarations = [];
+    combined_ast.statements = [];
+    let group_keys = Object.keys(namespace_groups);
+    let group_index = 0;
+    while (group_index < group_keys.length) {
+        let namespace_key = group_keys[group_index];
+        let group = namespace_groups[namespace_key];
+        let decl_index = 0;
+        while (decl_index < group.declarations.length) {
+            let declaration = group.declarations[decl_index];
+            combined_ast.declarations.push(declaration);
+            decl_index = decl_index + 1;
+        }
+        let ns_index = 0;
+        while (ns_index < group.namespaces.length) {
+            let namespace = group.namespaces[ns_index];
+            let stmt_index = 0;
+            while (stmt_index < namespace.body.length) {
+                let statement = namespace.body[stmt_index];
+                combined_ast.body.push(statement);
+                combined_ast.statements.push(statement);
+                stmt_index = stmt_index + 1;
+            }
+            ns_index = ns_index + 1;
+        }
+        group_index = group_index + 1;
+    }
+    let code_generator = new package__generation__JsCodeGeneration(
+        "  ",
+        compiler.options
+    );
+    let generated_code = code_generator.generate(combined_ast);
+    console.log("=== 代码生成完成 ===");
+    return {
+        success: !compiler.diagnostics.has_errors(),
+        diagnostics: compiler.diagnostics.get_all_diagnostics(),
+        code: generated_code,
+    };
+}
+export function package__compiler__make_namespace_key(namespace_path) {
+    if (namespace_path.length == 0) {
+        return "";
+    }
+    return namespace_path.join("__");
+}
+// using ;
+class package__compiler__CompilerDiagnostics {
     constructor() {
-        this.errors = [];
-        this.warnings = [];
+        this.diagnostics = [];
     }
 
     get_all_diagnostics() {
         let result = [];
         let i = 0;
-        while (i < this.errors.length) {
-            result.push(this.errors[i]);
+        while (i < this.diagnostics.length) {
+            result.push(this.diagnostics[i]);
             i = i + 1;
-        }
-        let j = 0;
-        while (j < this.warnings.length) {
-            result.push(this.warnings[j]);
-            j = j + 1;
         }
         return result;
     }
 
-    add_error(message, line, column, file) {
-        let error = {
-            type: "error",
+    add_error(message, line, column) {
+        this.diagnostics.push({
+            level: package__compiler__DiagnosticLevel.ERROR,
             message: message,
-            line: line || 0,
-            column: column || 0,
-            file: file || "",
-        };
-        this.errors.push(error);
+            line: line,
+            column: column,
+        });
     }
 
-    add_warning(message, line, column, file) {
-        let warning = {
-            type: "warning",
+    add_warning(message, line, column) {
+        this.diagnostics.push({
+            level: package__compiler__DiagnosticLevel.WARNING,
             message: message,
-            line: line || 0,
-            column: column || 0,
-            file: file || "",
-        };
-        this.warnings.push(warning);
+            line: line,
+            column: column,
+        });
     }
 
     has_errors() {
-        return this.errors.length > 0;
+        let i = 0;
+        while (i < this.diagnostics.length) {
+            if (
+                this.diagnostics[i].level ==
+                package__compiler__DiagnosticLevel.ERROR
+            ) {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
     }
 
     has_warnings() {
-        return this.warnings.length > 0;
+        let i = 0;
+        while (i < this.diagnostics.length) {
+            if (
+                this.diagnostics[i].level ==
+                package__compiler__DiagnosticLevel.WARNING
+            ) {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
     }
 
     clear_diagnostics() {
-        this.errors = [];
-        this.warnings = [];
+        this.diagnostics = [];
     }
 }
-class package_compiler_CompilerOptions {
-    constructor(output_format, optimize, debug, mode) {
-        this.output_format = output_format;
-        if (output_format == false) {
-            this.output_format = "js";
-        }
-        this.optimize = optimize;
-        if (optimize == false) {
-            this.optimize = false;
-        }
-        this.debug = debug;
-        if (debug == false) {
-            this.debug = false;
-        }
-        this.implicit_member_call = "warning";
-        this.mode = mode;
-        if (mode == false) {
-            this.mode = "repl";
-        }
-        this.source_map = true;
-        this.source_map_output_path = "";
+const package__compiler__LintLevel = {
+    ALLOWED: 0,
+    WARNING: 1,
+    DISABLE: 2,
+};
+Object.freeze(package__compiler__LintLevel);
+const package__compiler__DiagnosticLevel = {
+    ERROR: 0,
+    WARNING: 1,
+};
+Object.freeze(package__compiler__DiagnosticLevel);
+const package__compiler__CompileMode = {
+    STANDARD: 0,
+    REPL: 1,
+};
+Object.freeze(package__compiler__CompileMode);
+const package__compiler__OutputFormat = {
+    JS: 0,
+};
+Object.freeze(package__compiler__OutputFormat);
+class package__compiler__CompilerOptions {
+    constructor(output_format, enable_source_map, enable_optimization, mode) {
+        this.output_format =
+            output_format || package__compiler__OutputFormat.JS;
+        this.source_map = enable_source_map || false;
+        this.enable_source_map = enable_source_map || false;
+        this.enable_optimization = enable_optimization || false;
+        this.mode = mode || package__compiler__CompileMode.STANDARD;
+        this.implicit_member_call = package__compiler__LintLevel.WARNING;
     }
 }
-class package_compiler_CompilerStatistics {
+class package__compiler__CompilerStatistics {
     constructor() {
         self.output_size = undefined;
         this.tokens_count = 0;
@@ -3368,7 +876,10 @@ class package_compiler_CompilerStatistics {
         this.output_size = 0;
     }
 }
-class package_compiler_DependencyAnalyzer {
+// using ;
+// using ;
+// using ;
+class package__compiler__DependencyAnalyzer {
     constructor() {
         this.dependencies = {};
         this.reverse_dependencies = {};
@@ -3407,7 +918,289 @@ class package_compiler_DependencyAnalyzer {
         sorted.push(file_path);
     }
 }
-class package_compiler_NamespaceManager {
+class package__compiler__NamespaceGroup {
+    constructor(path) {
+        this.path = path;
+        this.namespaces = [];
+        this.declarations = [];
+        this.unique_names = {};
+    }
+
+    add_namespace(part) {
+        this.namespaces.push(part);
+    }
+
+    collect_declarations() {
+        this.declarations = [];
+        let ns_index = 0;
+        while (ns_index < this.namespaces.length) {
+            let namespace = this.namespaces[ns_index];
+            if (namespace.body && namespace.body.length > 0) {
+                let stmt_index = 0;
+                while (stmt_index < namespace.body.length) {
+                    let statement = namespace.body[stmt_index];
+                    this.add_declaration(statement);
+                    stmt_index = stmt_index + 1;
+                }
+            }
+            ns_index = ns_index + 1;
+        }
+    }
+
+    add_declaration(declaration) {
+        if (declaration && declaration.type) {
+            let valid_types = Array();
+            valid_types.push("UsingStatement");
+            valid_types.push("ClassDeclaration");
+            valid_types.push("MicroDeclaration");
+            valid_types.push("SingletonDeclaration");
+            valid_types.push("EidosDeclaration");
+            valid_types.push("FlagsDeclaration");
+            valid_types.push("TraitDeclaration");
+            let is_valid = false;
+            let type_index = 0;
+            while (type_index < valid_types.length) {
+                if (valid_types[type_index] == declaration.type) {
+                    is_valid = true;
+                    break;
+                }
+                type_index = type_index + 1;
+            }
+            if (is_valid) {
+                this.declarations.push(declaration);
+            }
+        }
+    }
+
+    generate_unique_name(declaration, namespace_path) {
+        if (
+            declaration.type == "UsingStatement" &&
+            declaration.path &&
+            declaration.path.name_path
+        ) {
+            let fqn_parts = [];
+            let name_index = 0;
+            while (name_index < declaration.path.name_path.length) {
+                let identifier = declaration.path.name_path[name_index];
+                if (identifier && identifier.name) {
+                    fqn_parts.push(identifier.name);
+                }
+                name_index = name_index + 1;
+            }
+            return fqn_parts.join("__");
+        }
+        let base_name = "";
+        if (declaration.name) {
+            base_name = declaration.name;
+        }
+        if (base_name == "") {
+            return "";
+        }
+        let full_path = namespace_path.slice();
+        full_path.push(base_name);
+        return full_path.join("__");
+    }
+
+    resolve() {
+        this.collect_declarations();
+        let decl_index = 0;
+        while (decl_index < this.declarations.length) {
+            let declaration = this.declarations[decl_index];
+            let unique_name = this.generate_unique_name(declaration, this.path);
+            if (unique_name != "") {
+                this.unique_names[unique_name] = declaration;
+                declaration.unique_name = unique_name;
+            }
+            decl_index = decl_index + 1;
+        }
+        let ns_index = 0;
+        while (ns_index < this.namespaces.length) {
+            let namespace = this.namespaces[ns_index];
+            if (namespace.body && namespace.body.length > 0) {
+                let stmt_index = 0;
+                while (stmt_index < namespace.body.length) {
+                    let statement = namespace.body[stmt_index];
+                    this.resolve_statement(statement);
+                    stmt_index = stmt_index + 1;
+                }
+            }
+            ns_index = ns_index + 1;
+        }
+    }
+
+    resolve_statement(statement) {
+        if (!statement) {
+            return;
+        }
+        if (statement.type === "UsingStatement") {
+            return;
+        } else if (statement.type === "ClassDeclaration") {
+            statement.unique_name = this.resolve_unique_name(statement.name);
+            let member_index = 0;
+            while (member_index < statement.members.length) {
+                let member = statement.members[member_index];
+                this.resolve_statement(member);
+                member_index = member_index + 1;
+            }
+        } else if (statement.type === "Property") {
+        } else if (statement.type === "MicroDeclaration") {
+            statement.unique_name = this.resolve_unique_name(statement.name);
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "SingletonDeclaration") {
+            this.resolve_expression(statement.initializer);
+        } else if (statement.type === "EidosDeclaration") {
+            statement.unique_name = this.resolve_unique_name(statement.name);
+        } else if (statement.type === "ConstructorStatement") {
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "MemberStatement") {
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "ReturnStatement") {
+            this.resolve_expression(statement.value);
+        } else if (statement.type === "LetStatement") {
+            this.resolve_expression(statement.value);
+        } else if (statement.type === "WhileStatement") {
+            this.resolve_expression(statement.condition);
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "IfStatement") {
+            this.resolve_expression(statement.condition);
+            this.resolve_statement(statement.thenBranch);
+            this.resolve_statement(statement.elseBranch);
+        } else if (statement.type === "Block") {
+            let stmt = 0;
+            while (stmt < statement.statements.length) {
+                let stmt_node = statement.statements[stmt];
+                this.resolve_statement(stmt_node);
+                stmt = stmt + 1;
+            }
+        } else if (statement.type === "ExpressionStatement") {
+            this.resolve_expression(statement.expression);
+        } else {
+            console.log(
+                "Unsolved statement type:",
+                JSON.stringify(statement.type)
+            );
+        }
+    }
+
+    resolve_expression(expression) {
+        if (!expression) {
+            return;
+        }
+        if (expression.type === "String") {
+        } else if (expression.type === "Number") {
+        } else if (expression.type === "Boolean") {
+        } else if (expression.type === "ThisExpression") {
+        } else if (expression.type === "Assignment") {
+            this.resolve_expression(expression.left);
+            this.resolve_expression(expression.right);
+        } else if (expression.type === "BinaryOp") {
+            this.resolve_expression(expression.left);
+            this.resolve_expression(expression.right);
+        } else if (expression.type === "UnaryOp") {
+            this.resolve_expression(expression.operand);
+        } else if (expression.type === "PropertyAccess") {
+            this.resolve_expression(expression.object);
+        } else if (expression.type === "MicroCall") {
+            this.resolve_expression(expression.callee);
+            let args = 0;
+            while (args < expression.arguments.length) {
+                let stmt_node = expression.arguments[args];
+                this.resolve_expression(stmt_node);
+                args = args + 1;
+            }
+        } else if (expression.type === "String") {
+            console.log("String:", expression);
+        } else if (expression.type === "ArrayLiteral") {
+            let args = 0;
+            while (args < expression.elements.length) {
+                let stmt_node = expression.elements[args];
+                this.resolve_expression(stmt_node);
+                args = args + 1;
+            }
+        } else if (expression.type === "ArrayAccess") {
+            this.resolve_expression(expression.object);
+            this.resolve_expression(expression.index);
+        } else if (expression.type === "PropertyAccess") {
+            console.log("PropertyAccess:", expression);
+        } else if (expression.type === "ObjectLiteral") {
+            let prop_index = 0;
+            while (prop_index < expression.properties.length) {
+                let prop = expression.properties[prop_index];
+                this.resolve_expression(prop.value);
+                prop_index = prop_index + 1;
+            }
+        } else if (expression.type === "Property") {
+            console.log("Property:", expression);
+        } else if (expression.type === "PropertyAccess") {
+            console.log("PropertyAccess:", expression);
+        } else if (expression.type === "MatchExpression") {
+            let case_index = 0;
+            while (case_index < expression.branches.length) {
+                let case_stmt = expression.branches[case_index];
+                this.resolve_expression(case_stmt.expression);
+                this.resolve_statement(case_stmt.body);
+                case_index = case_index + 1;
+            }
+        } else if (expression.type === "CaseBranch") {
+            console.log("CaseBranch:", expression);
+        } else if (expression.type === "NewExpression") {
+            this.resolve_expression(expression.className);
+            let args = 0;
+            while (args < expression.arguments.length) {
+                let stmt_node = expression.arguments[args];
+                this.resolve_expression(stmt_node);
+                args = args + 1;
+            }
+        } else if (expression.type === "MemberExpression") {
+            this.resolve_expression(expression.object);
+            this.resolve_expression(expression.property);
+        } else if (expression.type === "CallExpression") {
+            this.resolve_expression(expression.callee);
+            if (expression.arguments && expression.arguments.length > 0) {
+                let arg_index = 0;
+                while (arg_index < expression.arguments.length) {
+                    this.resolve_expression(expression.arguments[arg_index]);
+                    arg_index = arg_index + 1;
+                }
+            }
+        } else if (expression.type === "AnonymousFunction") {
+            this.resolve_statement(expression.body);
+        } else if (expression.type === "NamePath") {
+            let identifier_name = expression.name_path[0].name;
+            expression.unique_name = this.resolve_unique_name(identifier_name);
+        } else if (expression.type === "Block") {
+            console.trace("Block:", expression);
+        } else {
+            console.log(
+                "Unsolved expression type:",
+                JSON.stringify(expression.type)
+            );
+        }
+    }
+
+    resolve_unique_name(name) {
+        let unique_names = Object.keys(this.unique_names);
+        let name_index = 0;
+        while (name_index < unique_names.length) {
+            let unique_name = unique_names[name_index];
+            let parts = unique_name.split("__");
+            let last_part = parts[parts.length - 1];
+            if (last_part == name) {
+                return unique_name;
+            }
+            name_index = name_index + 1;
+        }
+        return name;
+    }
+}
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+class package__compiler__ScopeManager {
     constructor(source) {
         this.namespaces = {};
         this.usings = {};
@@ -3416,7 +1209,262 @@ class package_compiler_NamespaceManager {
         this.symbol_table = {};
     }
 
-    resolve_identifiers_in_expression(
+    query_namepath_in_using(file, namepath) {
+        if (
+            !this.usings ||
+            !this.usings[file] ||
+            this.usings[file].length == 0
+        ) {
+            return null;
+        }
+        let u = 0;
+        while (u < this.usings[file].length) {
+            let using_import = this.usings[file][u];
+            if (using_import.path && using_import.path.length > 0) {
+                let last_part = using_import.path[using_import.path.length - 1];
+                if (last_part == namepath[0]) {
+                    let full_path = using_import.path.concat(namepath.slice(1));
+                    return package__generation__join_name_path(full_path, "_");
+                }
+            }
+            u = u + 1;
+        }
+        return null;
+    }
+
+    resolve_namepath_in_statement(
+        stmt,
+        function_statements,
+        variable_statements,
+        class_statements,
+        options,
+        diagnostics
+    ) {
+        if (stmt == null) {
+            return stmt;
+        }
+        let resolved_stmt = Object.assign({}, stmt);
+        if (stmt.type === "LetStatement") {
+            resolved_stmt.value = this.resolve_namepath_in_expression(
+                stmt.value,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        } else if (stmt.type === "ReturnStatement") {
+            resolved_stmt.argument = this.resolve_namepath_in_expression(
+                stmt.argument,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        } else if (stmt.type === "ExpressionStatement") {
+            resolved_stmt.expression = this.resolve_namepath_in_expression(
+                stmt.expression,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        } else if (stmt.type === "IfStatement") {
+            resolved_stmt.condition = this.resolve_namepath_in_expression(
+                stmt.condition,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_stmt.consequent = this.resolve_namepath_in_statement(
+                stmt.consequent,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            if (stmt.alternate != null) {
+                resolved_stmt.alternate = this.resolve_namepath_in_statement(
+                    stmt.alternate,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options,
+                    diagnostics
+                );
+            }
+            return resolved_stmt;
+        } else if (stmt.type === "WhileStatement") {
+            resolved_stmt.condition = this.resolve_namepath_in_expression(
+                stmt.condition,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_stmt.body = this.resolve_namepath_in_statement(
+                stmt.body,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        } else if (stmt.type === "UntilStatement") {
+            resolved_stmt.condition = this.resolve_namepath_in_expression(
+                stmt.condition,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_stmt.body = this.resolve_namepath_in_statement(
+                stmt.body,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        } else if (stmt.type === "Block") {
+            let resolved_body = [];
+            let i = 0;
+            while (i < stmt.statements.length) {
+                resolved_body.push(
+                    this.resolve_namepath_in_statement(
+                        stmt.statements[i],
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    )
+                );
+                i = i + 1;
+            }
+            resolved_stmt.body = resolved_body;
+            return resolved_stmt;
+        } else if (stmt.type === "FlagsDeclaration") {
+        } else if (stmt.type === "EidosDeclaration") {
+            let resolved_members = [];
+            let i = 0;
+            while (i < stmt.members.length) {
+                let member = stmt.members[i];
+                let resolved_member = Object.assign({}, member);
+                resolved_member.value = this.resolve_namepath_in_expression(
+                    member.value,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options,
+                    diagnostics
+                );
+                resolved_members.push(resolved_member);
+                i = i + 1;
+            }
+            resolved_stmt.members = resolved_members;
+            return resolved_stmt;
+        } else if (stmt.type === "MicroDeclaration") {
+            resolved_stmt.body = this.resolve_namepath_in_statement(
+                stmt.body,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_stmt;
+        } else if (stmt.type === "ClassDeclaration") {
+            let resolved_class_members = [];
+            let i = 0;
+            while (i < stmt.members.length) {
+                let member = stmt.members[i];
+                let resolved_member = Object.assign({}, member);
+                if (member.body != null) {
+                    resolved_member.body = this.resolve_namepath_in_statement(
+                        member.body,
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    );
+                }
+                resolved_class_members.push(resolved_member);
+                i = i + 1;
+            }
+            resolved_stmt.members = resolved_class_members;
+            console.log(
+                "ClassDeclaration: after processing members, name is still:",
+                resolved_stmt.name
+            );
+            return resolved_stmt;
+        } else {
+            return resolved_stmt;
+        }
+    }
+
+    resolve_namepath_using_imports(expr) {
+        if (expr && expr.type != "NamePath") {
+            return expr;
+        }
+        let simple_identifier = expr.name_path[0].name;
+        if (
+            this.usings &&
+            this.usings[this.current_file] &&
+            this.usings[this.current_file].length > 0
+        ) {
+            let u = 0;
+            while (u < this.usings[this.current_file].length) {
+                let using_import = this.usings[this.current_file][u];
+                if (using_import.path && using_import.path.length > 0) {
+                    let last_part =
+                        using_import.path[using_import.path.length - 1];
+                    if (last_part == simple_identifier) {
+                        let resolved_expr = Object.assign({}, expr);
+                        resolved_expr.name_path = using_import.path.map(
+                            function (part) {
+                                return { type: "Identifier", name: part };
+                            }
+                        );
+                        resolved_expr.unique_name =
+                            package__generation__join_name_path(
+                                using_import.path,
+                                "_"
+                            );
+                        if (expr.has_valid_position()) {
+                            resolved_expr.source_file = this.current_file;
+                            resolved_expr.source_line = expr.line;
+                            resolved_expr.source_column = expr.column;
+                            resolved_expr.source_offset = expr.offset;
+                            resolved_expr.source_length = expr.length;
+                        }
+                        return resolved_expr;
+                    }
+                }
+                u = u + 1;
+            }
+        }
+        if (expr.name_path && expr.name_path.length > 1) {
+            let class_name = expr.name_path[0].name;
+            let member_name = expr.name_path[1].name;
+        }
+        return expr;
+    }
+
+    resolve_namepath_in_expression(
         expr,
         function_statements,
         variable_statements,
@@ -3427,16 +1475,24 @@ class package_compiler_NamespaceManager {
         if (expr == null) {
             return expr;
         }
-        if (expr.type == "Identifier") {
+        if (expr.type == "StaticMemberAccess") {
+            let objectName = expr.object;
+            let memberName = expr.member;
             let i = 0;
-            while (i < function_statements.length) {
-                let func_stmt = function_statements[i];
+            while (i < class_statements.length) {
+                let class_stmt = class_statements[i];
                 if (
-                    func_stmt.name == expr.name &&
-                    func_stmt.uniqueName != null
+                    (class_stmt.type == "EidosDeclaration" ||
+                        class_stmt.type == "FlagsDeclaration") &&
+                    class_stmt.name == objectName
                 ) {
                     let resolved_expr = Object.assign({}, expr);
-                    resolved_expr.name = func_stmt.uniqueName;
+                    if (class_stmt.unique_name != null) {
+                        resolved_expr.object = class_stmt.unique_name;
+                    } else {
+                        resolved_expr.object = class_stmt.name;
+                    }
+                    resolved_expr.is_eidos = true;
                     if (expr.has_valid_position()) {
                         resolved_expr.source_file = this.current_file;
                         resolved_expr.source_line = expr.line;
@@ -3448,116 +1504,118 @@ class package_compiler_NamespaceManager {
                 }
                 i = i + 1;
             }
-            let j = 0;
-            while (j < variable_statements.length) {
-                let var_stmt = variable_statements[j];
-                if (var_stmt.name == expr.name && var_stmt.uniqueName != null) {
-                    let resolved_expr = Object.assign({}, expr);
-                    resolved_expr.name = var_stmt.uniqueName;
-                    if (expr.has_valid_position()) {
-                        resolved_expr.source_file = this.current_file;
-                        resolved_expr.source_line = expr.line;
-                        resolved_expr.source_column = expr.column;
-                        resolved_expr.source_offset = expr.offset;
-                        resolved_expr.source_length = expr.length;
-                    }
-                    return resolved_expr;
-                }
-                j = j + 1;
-            }
-            if (expr.has_valid_position()) {
-                let resolved_expr = Object.assign({}, expr);
-                resolved_expr.source_file = this.current_file;
-                resolved_expr.source_line = expr.line;
-                resolved_expr.source_column = expr.column;
-                resolved_expr.source_offset = expr.offset;
-                resolved_expr.source_length = expr.length;
-                return resolved_expr;
-            }
             return expr;
         }
-        if (expr.type == "MicroCall") {
-            let resolved_expr = Object.assign({}, expr);
-            if (expr.callee.type == "Identifier") {
-                let function_name = expr.callee.name;
-                let found_function = false;
+        if (expr.type == "NamePath") {
+            if (expr.name_path && expr.name_path.length > 1) {
+                let class_name = expr.name_path[0].name;
+                let member_name = expr.name_path[1].name;
                 let i = 0;
-                while (i < function_statements.length) {
-                    let func_stmt = function_statements[i];
+                while (i < class_statements.length) {
+                    let class_stmt = class_statements[i];
                     if (
-                        func_stmt.name == function_name &&
-                        func_stmt.uniqueName != null
+                        (class_stmt.type == "EidosDeclaration" ||
+                            class_stmt.type == "FlagsDeclaration") &&
+                        class_stmt.name == class_name
                     ) {
-                        let resolved_callee = Object.assign({}, expr.callee);
-                        resolved_callee.name = func_stmt.uniqueName;
-                        resolved_expr.callee = resolved_callee;
-                        found_function = true;
-                        break;
+                        let resolved_expr = Object.assign({}, expr);
+                        if (class_stmt.unique_name != null) {
+                            resolved_expr.name_path[0].name =
+                                class_stmt.unique_name;
+                            resolved_expr.unique_name =
+                                class_stmt.unique_name + "_" + member_name;
+                        } else {
+                            resolved_expr.name_path[0].name = class_stmt.name;
+                            resolved_expr.unique_name =
+                                class_stmt.name + "_" + member_name;
+                        }
+                        resolved_expr.is_eidos = true;
+                        if (expr.has_valid_position()) {
+                            resolved_expr.source_file = this.current_file;
+                            resolved_expr.source_line = expr.line;
+                            resolved_expr.source_column = expr.column;
+                            resolved_expr.source_offset = expr.offset;
+                            resolved_expr.source_length = expr.length;
+                        }
+                        return resolved_expr;
                     }
                     i = i + 1;
                 }
-                if (
-                    !found_function &&
-                    options != null &&
-                    options.implicit_member_call == "warning"
-                ) {
-                    let k = 0;
-                    while (k < class_statements.length) {
-                        let class_stmt = class_statements[k];
-                        if (class_stmt.members != null) {
-                            let m = 0;
-                            while (m < class_stmt.members.length) {
-                                let member = class_stmt.members[m];
-                                if (
-                                    member.type == "MemberStatement" &&
-                                    member.name == function_name
-                                ) {
-                                    diagnostics.add_warning(
-                                        "Implicit member call detected for '" +
-                                            function_name +
-                                            "'. Consider using 'Self::" +
-                                            function_name +
-                                            "()' for static methods or 'self." +
-                                            function_name +
-                                            "()' for instance methods.",
-                                        expr.line || 0,
-                                        expr.column || 0,
-                                        ""
-                                    );
-                                    break;
-                                }
-                                m = m + 1;
-                            }
-                        }
-                        k = k + 1;
-                    }
-                }
-                if (!found_function) {
-                    resolved_expr.callee =
-                        this.resolve_identifiers_in_expression(
-                            expr.callee,
-                            function_statements,
-                            variable_statements,
-                            class_statements,
-                            options,
-                            diagnostics
-                        );
-                }
+            }
+            return this.resolve_namepath_using_imports(expr);
+        }
+        if (expr.type == "BinaryOp") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = this.resolve_namepath_in_expression(
+                expr.left,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_expr.right = this.resolve_namepath_in_expression(
+                expr.right,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (expr.type == "Assignment") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = this.resolve_namepath_in_expression(
+                expr.left,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            resolved_expr.right = this.resolve_namepath_in_expression(
+                expr.right,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (
+            expr.type == "TypeCheck" ||
+            expr.type == "OptionalTypeCheck" ||
+            expr.type == "TypeCast" ||
+            expr.type == "OptionalTypeCast"
+        ) {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.expression = this.resolve_namepath_in_expression(
+                expr.expression,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (expr.type == "NewExpression") {
+            let resolved_expr = Object.assign({}, expr);
+            let resolved_className = this.resolve_namepath_using_imports(
+                expr.className
+            );
+            if (resolved_className && resolved_className.unique_name) {
+                resolved_expr.className = resolved_className;
             } else {
-                resolved_expr.callee = this.resolve_identifiers_in_expression(
-                    expr.callee,
-                    function_statements,
-                    variable_statements,
-                    class_statements,
-                    options,
-                    diagnostics
-                );
+                resolved_expr.className = expr.className;
             }
             let resolved_args = [];
             let k = 0;
             while (k < expr.arguments.length) {
                 resolved_args.push(
-                    this.resolve_identifiers_in_expression(
+                    this.resolve_namepath_in_expression(
                         expr.arguments[k],
                         function_statements,
                         variable_statements,
@@ -3571,38 +1629,10 @@ class package_compiler_NamespaceManager {
             resolved_expr.arguments = resolved_args;
             return resolved_expr;
         }
-        if (expr.type == "BinaryOp") {
+        if (expr.type == "AwaitExpression" || expr.type == "UnaryOp") {
             let resolved_expr = Object.assign({}, expr);
-            resolved_expr.left = this.resolve_identifiers_in_expression(
-                expr.left,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            resolved_expr.right = this.resolve_identifiers_in_expression(
-                expr.right,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            return resolved_expr;
-        }
-        if (expr.type == "Assignment") {
-            let resolved_expr = Object.assign({}, expr);
-            resolved_expr.left = this.resolve_identifiers_in_expression(
-                expr.left,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            resolved_expr.right = this.resolve_identifiers_in_expression(
-                expr.right,
+            resolved_expr.operand = this.resolve_namepath_in_expression(
+                expr.operand,
                 function_statements,
                 variable_statements,
                 class_statements,
@@ -3613,7 +1643,7 @@ class package_compiler_NamespaceManager {
         }
         if (expr.type == "PropertyAccess") {
             let resolved_expr = Object.assign({}, expr);
-            resolved_expr.object = this.resolve_identifiers_in_expression(
+            resolved_expr.object = this.resolve_namepath_in_expression(
                 expr.object,
                 function_statements,
                 variable_statements,
@@ -3623,171 +1653,147 @@ class package_compiler_NamespaceManager {
             );
             return resolved_expr;
         }
-        if (expr.type == "NewExpression") {
+        if (
+            expr.type == "StaticMethodCall" ||
+            expr.type == "StaticPropertyAccess"
+        ) {
             let resolved_expr = Object.assign({}, expr);
-            let m = 0;
-            while (m < class_statements.length) {
-                let class_stmt = class_statements[m];
-                if (
-                    class_stmt.name == expr.className &&
-                    class_stmt.uniqueName != null
-                ) {
-                    resolved_expr.className = class_stmt.uniqueName;
-                    break;
+            resolved_expr.className = this.resolve_namepath_in_expression(
+                expr.className,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            if (expr.namespacePath && expr.namespacePath.length > 0) {
+                let resolved_namespace_path = [];
+                let i = 0;
+                while (i < expr.namespacePath.length) {
+                    let path_element = expr.namespacePath[i];
+                    let resolved_element = path_element;
+                    let found = false;
+                    let j = 0;
+                    while (j < variable_statements.length) {
+                        if (variable_statements[j].name == path_element) {
+                            if (variable_statements[j].unique_name != null) {
+                                resolved_element =
+                                    variable_statements[j].unique_name;
+                            } else {
+                                resolved_element = variable_statements[j].name;
+                            }
+                            found = true;
+                            break;
+                        }
+                        j = j + 1;
+                    }
+                    if (!found) {
+                        let k = 0;
+                        while (k < function_statements.length) {
+                            if (function_statements[k].name == path_element) {
+                                if (
+                                    function_statements[k].unique_name != null
+                                ) {
+                                    resolved_element =
+                                        function_statements[k].unique_name;
+                                } else {
+                                    resolved_element =
+                                        function_statements[k].name;
+                                }
+                                found = true;
+                                break;
+                            }
+                            k = k + 1;
+                        }
+                    }
+                    if (!found) {
+                        let l = 0;
+                        while (l < class_statements.length) {
+                            if (class_statements[l].name == path_element) {
+                                if (class_statements[l].unique_name != null) {
+                                    resolved_element =
+                                        class_statements[l].unique_name;
+                                } else {
+                                    resolved_element = class_statements[l].name;
+                                }
+                                found = true;
+                                break;
+                            }
+                            l = l + 1;
+                        }
+                    }
+                    resolved_namespace_path.push(resolved_element);
+                    i = i + 1;
                 }
-                m = m + 1;
+                resolved_expr.namespacePath = resolved_namespace_path;
             }
             let resolved_args = [];
-            if (expr.arguments != null) {
-                let n = 0;
-                while (n < expr.arguments.length) {
-                    resolved_args.push(
-                        this.resolve_identifiers_in_expression(
-                            expr.arguments[n],
-                            function_statements,
-                            variable_statements,
-                            class_statements,
-                            options,
-                            diagnostics
-                        )
-                    );
-                    n = n + 1;
-                }
+            let k = 0;
+            while (k < expr.arguments.length) {
+                resolved_args.push(
+                    this.resolve_namepath_in_expression(
+                        expr.arguments[k],
+                        function_statements,
+                        variable_statements,
+                        class_statements,
+                        options,
+                        diagnostics
+                    )
+                );
+                k = k + 1;
             }
             resolved_expr.arguments = resolved_args;
             return resolved_expr;
         }
-        return expr;
-    }
-
-    resolve_identifiers_in_statement(
-        stmt,
-        function_statements,
-        variable_statements,
-        class_statements,
-        options,
-        diagnostics
-    ) {
-        if (stmt == null) {
-            return stmt;
-        }
-        if (stmt.type == "LetStatement") {
-            let resolved_stmt = Object.assign({}, stmt);
-            resolved_stmt.value = this.resolve_identifiers_in_expression(
-                stmt.value,
+        if (expr.type == "ArrayAccess") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.object = this.resolve_namepath_in_expression(
+                expr.object,
                 function_statements,
                 variable_statements,
                 class_statements,
                 options,
                 diagnostics
             );
-            return resolved_stmt;
-        }
-        if (stmt.type == "ExpressionStatement") {
-            let resolved_stmt = Object.assign({}, stmt);
-            resolved_stmt.expression = this.resolve_identifiers_in_expression(
-                stmt.expression,
+            resolved_expr.index = this.resolve_namepath_in_expression(
+                expr.index,
                 function_statements,
                 variable_statements,
                 class_statements,
                 options,
                 diagnostics
             );
-            return resolved_stmt;
+            return resolved_expr;
         }
-        if (stmt.type == "ReturnStatement") {
-            let resolved_stmt = Object.assign({}, stmt);
-            if (stmt.value != null) {
-                resolved_stmt.value = this.resolve_identifiers_in_expression(
-                    stmt.value,
+        if (expr.type == "ObjectLiteral") {
+            let resolved_expr = Object.assign({}, expr);
+            let resolved_properties = [];
+            let i = 0;
+            while (i < expr.properties.length) {
+                let prop = expr.properties[i];
+                let resolved_prop = Object.assign({}, prop);
+                resolved_prop.value = this.resolve_namepath_in_expression(
+                    prop.value,
                     function_statements,
                     variable_statements,
                     class_statements,
                     options,
                     diagnostics
                 );
+                resolved_properties.push(resolved_prop);
+                i = i + 1;
             }
-            return resolved_stmt;
+            resolved_expr.properties = resolved_properties;
+            return resolved_expr;
         }
-        if (stmt.type == "IfStatement") {
-            let resolved_stmt = Object.assign({}, stmt);
-            resolved_stmt.condition = this.resolve_identifiers_in_expression(
-                stmt.condition,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            resolved_stmt.thenBranch = this.resolve_identifiers_in_statement(
-                stmt.thenBranch,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            if (stmt.elseBranch != null) {
-                resolved_stmt.elseBranch =
-                    this.resolve_identifiers_in_statement(
-                        stmt.elseBranch,
-                        function_statements,
-                        variable_statements,
-                        class_statements,
-                        options,
-                        diagnostics
-                    );
-            }
-            return resolved_stmt;
-        }
-        if (stmt.type == "WhileStatement") {
-            let resolved_stmt = Object.assign({}, stmt);
-            resolved_stmt.condition = this.resolve_identifiers_in_expression(
-                stmt.condition,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            resolved_stmt.body = this.resolve_identifiers_in_statement(
-                stmt.body,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            return resolved_stmt;
-        }
-        if (stmt.type == "UntilStatement") {
-            let resolved_stmt = Object.assign({}, stmt);
-            resolved_stmt.condition = this.resolve_identifiers_in_expression(
-                stmt.condition,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            resolved_stmt.body = this.resolve_identifiers_in_statement(
-                stmt.body,
-                function_statements,
-                variable_statements,
-                class_statements,
-                options,
-                diagnostics
-            );
-            return resolved_stmt;
-        }
-        if (stmt.type == "Block") {
-            let resolved_stmt = Object.assign({}, stmt);
-            let resolved_statements = [];
+        if (expr.type == "ArrayLiteral") {
+            let resolved_expr = Object.assign({}, expr);
+            let resolved_elements = [];
             let i = 0;
-            while (i < stmt.statements.length) {
-                resolved_statements.push(
-                    this.resolve_identifiers_in_statement(
-                        stmt.statements[i],
+            while (i < expr.elements.length) {
+                resolved_elements.push(
+                    this.resolve_namepath_in_expression(
+                        expr.elements[i],
                         function_statements,
                         variable_statements,
                         class_statements,
@@ -3797,182 +1803,377 @@ class package_compiler_NamespaceManager {
                 );
                 i = i + 1;
             }
-            resolved_stmt.statements = resolved_statements;
-            return resolved_stmt;
+            resolved_expr.elements = resolved_elements;
+            return resolved_expr;
         }
-        return stmt;
+        if (expr.type == "DefaultValue") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.value = this.resolve_namepath_in_expression(
+                expr.value,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            return resolved_expr;
+        }
+        if (expr.type == "MatchExpression") {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.expression = this.resolve_namepath_in_expression(
+                expr.expression,
+                function_statements,
+                variable_statements,
+                class_statements,
+                options,
+                diagnostics
+            );
+            let resolved_arms = [];
+            let i = 0;
+            while (i < expr.branches.length) {
+                let arm = expr.branches[i];
+                let resolved_arm = Object.assign({}, arm);
+                resolved_arm.pattern = this.resolve_namepath_in_expression(
+                    arm.pattern,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options,
+                    diagnostics
+                );
+                resolved_arm.body = this.resolve_namepath_in_expression(
+                    arm.body,
+                    function_statements,
+                    variable_statements,
+                    class_statements,
+                    options,
+                    diagnostics
+                );
+                resolved_arms.push(resolved_arm);
+                i = i + 1;
+            }
+            resolved_expr.branches = resolved_arms;
+            return resolved_expr;
+        }
+        return expr;
     }
 
-    add_symbol_to_namespace(
-        namespace_path,
-        symbol_name,
-        symbol_type,
-        symbol_data,
-        file_path
-    ) {
-        let namespace_key = namespace_path;
-        if (this.namespaces[namespace_key] == null) {
-            this.namespaces[namespace_key] = { symbols: {}, files: [] };
+    get_fully_qualified_name(name, source_namespace) {
+        if (source_namespace == null || source_namespace.length == 0) {
+            return name;
         }
-        let namespace_data = this.namespaces[namespace_key];
-        namespace_data.symbols[symbol_name] = {
-            type: symbol_type,
-            data: symbol_data,
-            filePath: file_path,
-        };
-        let fully_qualified_name = this.get_fully_qualified_name(
-            symbol_name,
-            namespace_path
-        );
-        this.symbol_table[fully_qualified_name] = {
-            namespace: namespace_path,
-            name: symbol_name,
-            type: symbol_type,
-            data: symbol_data,
-            filePath: file_path,
-        };
-        let file_exists = false;
-        let i = 0;
-        while (i < namespace_data.files.length) {
-            if (namespace_data.files[i] == file_path) {
-                file_exists = true;
-                break;
+        let last_element = source_namespace[source_namespace.length - 1];
+        if (last_element == "!") {
+            if (source_namespace.length == 1) {
+                return name;
             }
-            i = i + 1;
+            let namespace_path = source_namespace.slice(
+                0,
+                source_namespace.length - 1
+            );
+            return (
+                package__generation__join_name_path(namespace_path, "_") +
+                "_" +
+                name
+            );
         }
-        if (!file_exists) {
-            namespace_data.files.push(file_path);
+        return (
+            package__generation__join_name_path(source_namespace, "_") +
+            "_" +
+            name
+        );
+    }
+
+    add_symbol_to_namespace(namespace, name, type, node, file_name) {
+        let namespace_key = package__generation__join_name_path(namespace, "_");
+        if (this.namespaces[namespace_key] == null) {
+            this.namespaces[namespace_key] = {};
         }
+        this.namespaces[namespace_key][name] = {
+            type: type,
+            node: node,
+            file: file_name,
+        };
     }
 
     add_using_import(using_path, is_global) {
         if (this.usings[this.current_file] == null) {
             this.usings[this.current_file] = [];
         }
-        let using_info = { namespace: using_path, isGlobal: is_global };
-        this.usings[this.current_file].push(using_info);
+        this.usings[this.current_file].push({
+            path: using_path,
+            is_global: is_global,
+        });
     }
 
-    find_symbol_namespace(symbol_name, symbol_type) {
-        let namespace_keys = Object.keys(this.namespaces);
-        let i = 0;
-        while (i < namespace_keys.length) {
-            let namespace_name = namespace_keys[i];
-            let namespace_data = this.namespaces[namespace_name];
-            if (namespace_data != null && namespace_data.symbols != null) {
-                let symbol = namespace_data.symbols[symbol_name];
-                if (symbol != null && symbol.type == symbol_type) {
-                    return namespace_name;
-                }
-            }
-            i = i + 1;
-        }
-        return "";
-    }
-
-    get_fully_qualified_name(symbol_name, namespace_path) {
-        if (namespace_path == "" || namespace_path == null) {
-            return symbol_name;
-        }
-        let namespace_parts = this.parse_namespace_path(namespace_path);
-        if (namespace_parts.length == 0) {
-            return symbol_name;
-        }
-        let qualified_name = namespace_parts.join("_") + "_" + symbol_name;
-        return qualified_name;
-    }
-
-    parse_namespace_path(namespace_path) {
-        if (namespace_path == "" || namespace_path == null) {
-            return [];
-        }
-        let clean_path = namespace_path;
-        if (clean_path.endsWith("!")) {
-            clean_path = clean_path.substring(0, clean_path.length - 1);
-        }
-        if (clean_path == "") {
-            return [];
-        }
-        return clean_path.split("::");
-    }
-
-    resolve_symbol(symbol_name, current_namespace, current_file) {
-        let fully_qualified_name = this.get_fully_qualified_name(
-            symbol_name,
-            current_namespace
-        );
-        let symbol_entry = this.symbol_table[fully_qualified_name];
-        if (symbol_entry != null) {
-            return {
-                found: true,
-                symbol: symbol_entry,
-                namespace: current_namespace,
-            };
-        }
-        let current_namespace_data = this.namespaces[current_namespace];
+    get_symbol_from_namespace(namespace, name) {
+        let namespace_key = package__generation__join_name_path(namespace, "_");
         if (
-            current_namespace_data != null &&
-            current_namespace_data.symbols != null
+            this.namespaces[namespace_key] != null &&
+            this.namespaces[namespace_key][name] != null
         ) {
-            let symbol = current_namespace_data.symbols[symbol_name];
-            if (symbol != null) {
-                return {
-                    found: true,
-                    symbol: symbol,
-                    namespace: current_namespace,
-                };
-            }
+            return this.namespaces[namespace_key][name];
         }
-        let file_usings = this.usings[current_file];
-        if (file_usings != null) {
-            let i = 0;
-            while (i < file_usings.length) {
-                let using_info = file_usings[i];
-                let using_namespace = using_info["namespace"];
-                let using_qualified_name = this.get_fully_qualified_name(
-                    symbol_name,
-                    using_namespace
-                );
-                let using_symbol_entry =
-                    this.symbol_table[using_qualified_name];
-                if (using_symbol_entry != null) {
-                    return {
-                        found: true,
-                        symbol: using_symbol_entry,
-                        namespace: using_namespace,
-                    };
-                }
-                let using_namespace_data = this.namespaces[using_namespace];
-                if (
-                    using_namespace_data != null &&
-                    using_namespace_data.symbols != null
-                ) {
-                    let symbol = using_namespace_data.symbols[symbol_name];
-                    if (symbol != null) {
-                        return {
-                            found: true,
-                            symbol: symbol,
-                            namespace: using_namespace,
-                        };
-                    }
-                }
-                i = i + 1;
-            }
-        }
-        let global_namespace_data = this.namespaces[""];
-        if (
-            global_namespace_data != null &&
-            global_namespace_data.symbols != null
-        ) {
-            let symbol = global_namespace_data.symbols[symbol_name];
-            if (symbol != null) {
-                return { found: true, symbol: symbol, namespace: "" };
-            }
-        }
-        return { found: false, symbol: null, namespace: null };
+        return null;
+    }
+
+    clear_diagnostics() {
+        this.diagnostics = new package__compiler__CompilerDiagnostics();
+    }
+
+    add_error(message, line, column, file) {
+        this.diagnostics.add_error(message, line, column, file);
+    }
+
+    add_warning(message, line, column, file) {
+        this.diagnostics.add_warning(message, line, column, file);
+    }
+
+    add_info(message, line, column, file) {
+        this.diagnostics.add_info(message, line, column, file);
+    }
+
+    has_errors() {
+        return this.diagnostics.has_errors();
+    }
+
+    get_all_diagnostics() {
+        return this.diagnostics.get_all_diagnostics();
     }
 }
-class package_codegen_JsCodeGeneration {
+export function package__compiler__is_main_namespace(namespace_path) {
+    if (namespace_path == null) {
+        return false;
+    }
+    return namespace_path.endsWith("!");
+}
+export function package__compiler__is_main_namespace_array(namespace_array) {
+    if (namespace_array == null || namespace_array.length == 0) {
+        return false;
+    }
+    return namespace_array[namespace_array.length - 1] == "!";
+}
+export function package__compiler__get_main_namespace_name(namespace_path) {
+    if (package__compiler__is_main_namespace(namespace_path)) {
+        return namespace_path.substring(0, namespace_path.length - 1);
+    }
+    return namespace_path;
+}
+export function package__compiler__validate_namespace_rules(ast, mode) {
+    let has_namespace = false;
+    let has_main_namespace = false;
+    let i = 0;
+    while (i < ast.statements.length) {
+        let stmt = ast.statements[i];
+        if (stmt.type == "NamespaceStatement") {
+            has_namespace = true;
+            if (stmt.is_main_namespace) {
+                has_main_namespace = true;
+            }
+        }
+        i = i + 1;
+    }
+    if (mode == "standard" && !has_namespace) {
+        return {
+            success: false,
+            error: "Standard mode requires at least one namespace declaration",
+        };
+    }
+    if (mode == "standard" && !has_main_namespace) {
+        return {
+            success: false,
+            error: "Standard mode requires exactly one main namespace (ending with !)",
+        };
+    }
+    return { success: true, error: null };
+}
+export function package__compiler__find_namespace_provider(
+    namespace_path,
+    file_contents
+) {
+    let file_names = Object.keys(file_contents);
+    let i = 0;
+    while (i < file_names.length) {
+        let file_name = file_names[i];
+        let content = file_contents[file_name];
+        if (content.indexOf("namespace " + namespace_path) >= 0) {
+            return file_name;
+        }
+        i = i + 1;
+    }
+    return null;
+}
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+export function package__compiler__create_error(message, line, column) {
+    return {
+        type: "CompilerError",
+        message: message,
+        line: line,
+        column: column,
+    };
+}
+export function package__compiler__create_warning(message, line, column) {
+    return {
+        type: "CompilerWarning",
+        message: message,
+        line: line,
+        column: column,
+    };
+}
+export function package__compiler__count_ast_nodes(node) {
+    if (node == null) {
+        return 0;
+    }
+    let count = 1;
+    if (node.statements != null) {
+        let i = 0;
+        while (i < node.statements.length) {
+            count =
+                count + package__compiler__count_ast_nodes(node.statements[i]);
+            i = i + 1;
+        }
+    }
+    if (node.body != null) {
+        count = count + package__compiler__count_ast_nodes(node.body);
+    }
+    if (node.left != null) {
+        count = count + package__compiler__count_ast_nodes(node.left);
+    }
+    if (node.right != null) {
+        count = count + package__compiler__count_ast_nodes(node.right);
+    }
+    if (node.expression != null) {
+        count = count + package__compiler__count_ast_nodes(node.expression);
+    }
+    if (node.condition != null) {
+        count = count + package__compiler__count_ast_nodes(node.condition);
+    }
+    if (node.thenBranch != null) {
+        count = count + package__compiler__count_ast_nodes(node.thenBranch);
+    }
+    if (node.elseBranch != null) {
+        count = count + package__compiler__count_ast_nodes(node.elseBranch);
+    }
+    return count;
+}
+export function package__compiler__validate_syntax(source) {
+    let lexer = new package__lexer__ValkyrieLexer(source);
+    let tokens = lexer.tokenize();
+    if (tokens.length == 0) {
+        return { valid: false, error: "Lexical analysis failed" };
+    }
+    let ast = package__parser__parse(tokens);
+    if (ast.type == "" || ast.type == "ParseError") {
+        return { valid: false, error: "Syntax analysis failed" };
+    }
+    return { valid: true, error: null };
+}
+export function package__compiler__join_path(path_array, separator) {
+    if (path_array == null || path_array.length == 0) {
+        return "";
+    }
+    let result = path_array[0];
+    let i = 1;
+    while (i < path_array.length) {
+        result = result + separator + path_array[i];
+        i = i + 1;
+    }
+    return result;
+}
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+export function package__compiler__compile_asts(file_contents, mode) {
+    return package__compiler__compile_asts_with_options(
+        file_contents,
+        mode,
+        null
+    );
+}
+export function package__compiler__generate_single_js(file_contents) {
+    return package__compiler__compile_asts(file_contents, "repl");
+}
+export function package__compiler__generate_single_js_standard(file_contents) {
+    return package__compiler__compile_asts(file_contents, "standard");
+}
+export function package__compiler__generate_single_js_with_options(
+    file_contents,
+    options
+) {
+    return package__compiler__compile_asts_with_options(
+        file_contents,
+        "repl",
+        options
+    );
+}
+export function package__compiler__generate_single_js_standard_with_options(
+    file_contents,
+    options
+) {
+    return package__compiler__compile_asts_with_options(
+        file_contents,
+        "standard",
+        options
+    );
+}
+export function package__compiler__compile_text(source_text) {
+    let file_contents = { "main.valkyrie": source_text };
+    return package__compiler__compile_asts(file_contents, "repl");
+}
+export function package__compiler__compile_text_with_options(
+    source_text,
+    options
+) {
+    let file_contents = { "main.valkyrie": source_text };
+    return package__compiler__compile_asts_with_options(
+        file_contents,
+        "repl",
+        options
+    );
+}
+export function package__compiler__compile_asts_with_options(
+    file_contents,
+    mode,
+    options
+) {
+    if (options == null) {
+        options = new package__compiler__CompilerOptions(
+            "js",
+            false,
+            false,
+            mode || "repl"
+        );
+    } else if (options.mode == null) {
+        options.mode = mode || "repl";
+    }
+    let compiler = new package__compiler__Compiler(options);
+    return package__compiler__compile_with_compiler(compiler, file_contents);
+}
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+class package__generation__JsCodeGeneration {
     constructor(indent_text, options) {
         this.buffer = "";
         this.indent_level = 0;
@@ -3982,8 +2183,9 @@ class package_codegen_JsCodeGeneration {
         }
         this.options = options;
         if (options && options.source_map) {
-            this.source_map_builder = new package_generation_SourceMapBuilder();
-            this.js_mapping = new package_generation_JsSourceMapping(
+            this.source_map_builder =
+                new package__generation__SourceMapBuilder();
+            this.js_mapping = new package__generation__JsSourceMapping(
                 this.source_map_builder
             );
         } else {
@@ -4069,7 +2271,7 @@ class package_codegen_JsCodeGeneration {
         if (node && node.has_valid_position()) {
             let end_line = node.line;
             let end_column = node.column + node.length;
-            return new package_generation_SourceSpan(
+            return new package__generation__SourceSpan(
                 file_name,
                 node.line,
                 node.column,
@@ -4128,7 +2330,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_flags_declaration(node) {
-        let flagsName = node.name;
+        let flagsName = node.unique_name || node.name;
         let members = node.members;
         let result = "const " + flagsName + " = {\n";
         let i = 0;
@@ -4151,7 +2353,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_eidos_declaration(node) {
-        let eidosName = node.name;
+        let eidosName = node.unique_name;
         let members = node.members;
         let result = "const " + eidosName + " = {\n";
         let i = 0;
@@ -4180,8 +2382,8 @@ class package_codegen_JsCodeGeneration {
             return this.generate_string_expression(node);
         } else if (node.type === "Boolean") {
             return this.generate_boolean_expression(node);
-        } else if (node.type === "Identifier") {
-            return this.generate_identifier_expression(node);
+        } else if (node.type === "NamePath") {
+            return this.generate_namepath_expression(node);
         } else if (node.type === "BinaryOp") {
             return this.generate_binary_op_expression(node);
         } else if (node.type === "Assignment") {
@@ -4247,22 +2449,20 @@ class package_codegen_JsCodeGeneration {
         return node.value;
     }
 
-    generate_identifier_expression(node) {
-        if (this.js_mapping) {
-            if (node && node.has_valid_position) {
-                if (node.has_valid_position()) {
-                    let source_span = this.create_source_span_from_node(
-                        node,
-                        this.current_source_file
-                    );
-                    if (source_span) {
-                        this.write_identifier(node.name, source_span, 0);
-                        return node.name;
-                    }
-                }
+    generate_namepath_expression(node) {
+        let name_index = 0;
+        let identifier_name = "";
+        while (name_index < node.name_path.length) {
+            if (name_index == 0) {
+                identifier_name =
+                    node.unique_name || node.name_path[name_index].name;
+            } else {
+                identifier_name =
+                    identifier_name + "." + node.name_path[name_index].name;
             }
+            name_index = name_index + 1;
         }
-        return node.name;
+        return identifier_name;
     }
 
     generate_binary_op_expression(node) {
@@ -4331,6 +2531,15 @@ class package_codegen_JsCodeGeneration {
         }
         if (node.closure) {
             let closureParams = "";
+            let calleeStr = "";
+            if (node.callee && node.callee.name) {
+                calleeStr = node.callee.name;
+            } else {
+                calleeStr = callee;
+            }
+            if (calleeStr == "forEach") {
+                closureParams = "item";
+            }
             let closureBody = "";
             if (node.closure) {
                 closureBody = this.generate_statement(node.closure);
@@ -4379,11 +2588,7 @@ class package_codegen_JsCodeGeneration {
             args = args + this.generate_expression(node.arguments[i]);
             i = i + 1;
         }
-        let className = node.className;
-        if (node.resolvedClassName) {
-            className = node.resolvedClassName;
-        }
-        return "new " + className + "(" + args + ")";
+        return "new " + node.className.unique_name + "(" + args + ")";
     }
 
     generate_await_expression(node) {
@@ -4442,19 +2647,27 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_static_member_access_expression(node) {
-        let className = "";
-        if (node.namespacePath) {
-            if (node.namespacePath.length >= 2) {
-                className = node.namespacePath[node.namespacePath.length - 2];
-            } else {
-                className = node.namespacePath[0];
-            }
-        } else if (node.className.type) {
-            className = this.generate_expression(node.className);
+        let objectName = "";
+        let memberName = node.member;
+        if (node.namespacePath && node.namespacePath.length > 0) {
+            objectName = node.namespacePath[node.namespacePath.length - 1];
+        } else if (
+            node.object &&
+            node.object.name_path &&
+            node.object.name_path.length > 0
+        ) {
+            objectName = this.join_name_path(node.object.name_path, "_");
+        } else if (node.object && node.object.name) {
+            objectName = node.object.name;
+        } else if (node.object && typeof node.object == "string") {
+            objectName = node.object;
         } else {
-            className = node.className;
+            objectName = "UnknownObject";
         }
-        return className + "." + node.member;
+        if (node.is_eidos) {
+            return '"' + memberName + '"';
+        }
+        return objectName + "." + memberName;
     }
 
     generate_array_access_expression(node) {
@@ -4556,7 +2769,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_namespace_statement(node) {
-        let namespacePath = this.join_name_path(node.path, "::");
+        let namespacePath = this.join_name_path(node.path, "_");
         if (node.is_main_namespace) {
             return "// namespace! " + namespacePath + ";";
         } else {
@@ -4565,19 +2778,23 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_using_statement(node) {
-        return "// using " + this.join_name_path(node.path, "::") + ";";
+        return (
+            "// using " +
+            package__generation__join_name_path(node.path, "__") +
+            ";"
+        );
     }
 
     generate_js_attribute_statement(node) {
         let cleanImportName = this.replace_all(node.importName, "-", "_");
         cleanImportName = this.replace_all(cleanImportName, ".", "_");
         cleanImportName = this.replace_all(cleanImportName, "/", "_");
-        let uniqueName = node.functionName + "_" + cleanImportName;
+        let unique_name = node.functionName + "_" + cleanImportName;
         let importStatement =
             "import { " +
             node.importName +
             " as " +
-            uniqueName +
+            unique_name +
             ' } from "' +
             node.modulePath +
             '";';
@@ -4593,7 +2810,7 @@ class package_codegen_JsCodeGeneration {
         let functionDef =
             "export function " + node.functionName + "(" + params + ") {\n";
         functionDef =
-            functionDef + "  return " + uniqueName + "(" + params + ");\n";
+            functionDef + "  return " + unique_name + "(" + params + ");\n";
         functionDef = functionDef + "}";
         return importStatement + "\n" + functionDef;
     }
@@ -4626,7 +2843,7 @@ class package_codegen_JsCodeGeneration {
             i = i + 1;
         }
         let body = this.generate_statement(node.body);
-        let functionName = node.name;
+        let functionName = node.unique_name;
         return "export function " + functionName + "(" + params + ") " + body;
     }
 
@@ -4700,7 +2917,7 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_class_declaration(node) {
-        let className = node.name;
+        let className = node.unique_name;
         let superClass = node.superClass;
         let members = node.members;
         let result = "class " + className;
@@ -4799,10 +3016,10 @@ class package_codegen_JsCodeGeneration {
                     j = j + 1;
                 }
                 let body = this.generate_statement(member.body);
-                if (member.isStatic) {
+                if (member.isInstanceMethod) {
                     result =
                         result +
-                        "  static " +
+                        "  " +
                         methodName +
                         "(" +
                         params +
@@ -4812,7 +3029,7 @@ class package_codegen_JsCodeGeneration {
                 } else {
                     result =
                         result +
-                        "  " +
+                        "  static " +
                         methodName +
                         "(" +
                         params +
@@ -4940,10 +3157,10 @@ class package_codegen_JsCodeGeneration {
                     j = j + 1;
                 }
                 let body = this.generate_statement(member.body);
-                if (member.isStatic) {
+                if (member.isInstanceMethod) {
                     result =
                         result +
-                        "    static " +
+                        "    " +
                         methodName +
                         "(" +
                         params +
@@ -4953,7 +3170,7 @@ class package_codegen_JsCodeGeneration {
                 } else {
                     result =
                         result +
-                        "    " +
+                        "    static " +
                         methodName +
                         "(" +
                         params +
@@ -4990,7 +3207,7 @@ class package_codegen_JsCodeGeneration {
                     has_position = stmt.line && stmt.column;
                 }
                 if (has_position && stmt.source_file) {
-                    let source_span = {};
+                    let source_span = new package__generation__SourceSpan();
                     source_span.file_name = stmt.source_file;
                     source_span.start_line = stmt.source_line || stmt.line;
                     source_span.start_column =
@@ -5025,10 +3242,10 @@ class package_codegen_JsCodeGeneration {
             return "Object";
         }
         if (pattern_node.type == "TypeIdentifier") {
-            return pattern_node.name;
+            return '"' + pattern_node.name + '"';
         }
         if (pattern_node.type == "Identifier") {
-            return pattern_node.name;
+            return '"' + pattern_node.name + '"';
         }
         if (pattern_node.type == "StringLiteral") {
             return '"' + pattern_node.value + '"';
@@ -5099,23 +3316,44 @@ class package_codegen_JsCodeGeneration {
                     branch.pattern
                 );
                 let match_value = this.generate_expression(node.expression);
-                if (is_first_when) {
-                    result =
-                        result +
-                        "if (" +
-                        match_value +
-                        " === " +
-                        pattern_value +
-                        ") {\n";
-                    is_first_when = false;
+                if (branch.pattern && branch.pattern.type == "Identifier") {
+                    if (is_first_when) {
+                        result =
+                            result +
+                            "if (" +
+                            match_value +
+                            " === " +
+                            branch.pattern.name +
+                            ") {\n";
+                        is_first_when = false;
+                    } else {
+                        result =
+                            result +
+                            " else if (" +
+                            match_value +
+                            " === " +
+                            branch.pattern.name +
+                            ") {\n";
+                    }
                 } else {
-                    result =
-                        result +
-                        " else if (" +
-                        match_value +
-                        " === " +
-                        pattern_value +
-                        ") {\n";
+                    if (is_first_when) {
+                        result =
+                            result +
+                            "if (" +
+                            match_value +
+                            " === " +
+                            pattern_value +
+                            ") {\n";
+                        is_first_when = false;
+                    } else {
+                        result =
+                            result +
+                            " else if (" +
+                            match_value +
+                            " === " +
+                            pattern_value +
+                            ") {\n";
+                    }
                 }
                 result =
                     result + this.generate_branch_statements(branch.statements);
@@ -5141,8 +3379,50 @@ class package_codegen_JsCodeGeneration {
         }
         return result;
     }
+
+    write_line_with_mapping(text, span, source_index) {
+        let current_indent = "";
+        let i = 0;
+        while (i < this.indent_level) {
+            current_indent = current_indent + this.indent_text;
+            i = i + 1;
+        }
+        if (this.js_mapping && span) {
+            this.buffer = this.buffer + current_indent;
+            this.buffer =
+                this.buffer +
+                this.js_mapping.generate_with_mapping(text, span, source_index);
+            this.buffer = this.buffer + this.js_mapping.generate_newline();
+        } else {
+            this.buffer = this.buffer + current_indent + text + "\n";
+        }
+    }
 }
-class package_generation_JsSourceMapping {
+export function package__generation__join_name_path(names, separator) {
+    let result = "";
+    let i = 0;
+    while (i < names.length) {
+        if (i > 0) {
+            result = result + separator;
+        }
+        result = result + names[i];
+        i = i + 1;
+    }
+    return result;
+}
+export function package__generation__add_source_file(self, file_name, content) {
+    if (this.source_map_builder) {
+        if (!this.source_files[file_name]) {
+            this.source_files[file_name] = this.source_map_builder.add_source(
+                file_name,
+                content
+            );
+        }
+        return this.source_files[file_name];
+    }
+    return 0;
+}
+class package__generation__JsSourceMapping {
     constructor(source_map_builder) {
         this.source_map_builder = source_map_builder;
         this.current_line = 1;
@@ -5210,7 +3490,7 @@ class package_generation_JsSourceMapping {
         return indent;
     }
 }
-class package_generation_SourceMap {
+class package__generation__SourceMap {
     constructor() {
         this.version = 3;
         this.sources = [];
@@ -5248,9 +3528,10 @@ class package_generation_SourceMap {
         );
     }
 }
-class package_generation_SourceMapBuilder {
+// using ;
+class package__generation__SourceMapBuilder {
     constructor() {
-        this.source_map = new package_generation_SourceMap();
+        this.source_map = new package__generation__SourceMap();
         this.mappings = [];
         this.current_generated_line = 1;
         this.current_generated_column = 0;
@@ -5336,7 +3617,7 @@ class package_generation_SourceMapBuilder {
         return result;
     }
 }
-class package_generation_SourceSpan {
+class package__generation__SourceSpan {
     constructor(file_name, start_line, start_column, end_line, end_column) {
         this.file_name = file_name;
         if (file_name == false) {
@@ -5389,10 +3670,15 @@ class package_generation_SourceSpan {
         );
     }
 }
-class package_generation_SymbolBasedGenerator {
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+class package__generation__SymbolBasedGenerator {
     constructor() {
-        this.analyzer = new package_analyzer_Analyzer();
-        this.js_generator = new package_codegen_JsCodeGeneration();
+        this.analyzer = new package__analyzer__Analyzer();
+        this.js_generator = new package__generation__JsCodeGeneration();
         this.symbol_table = false;
     }
 
@@ -5495,7 +3781,12 @@ class package_generation_SymbolBasedGenerator {
         return false;
     }
 }
-class package_lexer_Token {
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+class package__lexer__Token {
     constructor(typing, value, line, column, offset, length) {
         this.type = typing;
         this.value = value;
@@ -5515,7 +3806,7 @@ class package_lexer_Token {
         return this.offset + this.length;
     }
 }
-class package_lexer_ValkyrieLexer {
+class package__lexer__ValkyrieLexer {
     constructor(source) {
         this.source = source;
         this.position = 0;
@@ -5545,7 +3836,7 @@ class package_lexer_ValkyrieLexer {
     skip_whitespace() {
         while (
             this.current_char != "" &&
-            package_lexer_is_whitespace(this.current_char)
+            package__lexer__is_whitespace(this.current_char)
         ) {
             this.advance();
         }
@@ -5555,7 +3846,7 @@ class package_lexer_ValkyrieLexer {
         let result = "";
         while (
             this.current_char != "" &&
-            package_lexer_is_digit(this.current_char)
+            package__lexer__is_digit(this.current_char)
         ) {
             result = result + this.current_char;
             this.advance();
@@ -5567,7 +3858,7 @@ class package_lexer_ValkyrieLexer {
         let result = "";
         while (
             this.current_char != "" &&
-            package_lexer_is_alpha_numeric(this.current_char)
+            package__lexer__is_alpha_numeric(this.current_char)
         ) {
             result = result + this.current_char;
             this.advance();
@@ -5634,7 +3925,7 @@ class package_lexer_ValkyrieLexer {
 
     next_token() {
         while (this.current_char != "") {
-            if (package_lexer_is_whitespace(this.current_char)) {
+            if (package__lexer__is_whitespace(this.current_char)) {
                 this.skip_whitespace();
                 continue;
             }
@@ -5644,22 +3935,27 @@ class package_lexer_ValkyrieLexer {
             }
             let line = this.line;
             let column = this.column;
-            if (package_lexer_is_alpha(this.current_char)) {
+            if (package__lexer__is_alpha(this.current_char)) {
                 let value = this.read_identifier();
-                let tokenType = package_lexer_get_keyword_type(value);
-                return new package_lexer_Token(tokenType, value, line, column);
+                let tokenType = package__lexer__get_keyword_type(value);
+                return new package__lexer__Token(
+                    tokenType,
+                    value,
+                    line,
+                    column
+                );
             }
-            if (package_lexer_is_digit(this.current_char)) {
+            if (package__lexer__is_digit(this.current_char)) {
                 let value = this.read_number();
-                return new package_lexer_Token("NUMBER", value, line, column);
+                return new package__lexer__Token("NUMBER", value, line, column);
             }
             if (this.current_char == '"') {
                 let value = this.read_string();
-                return new package_lexer_Token("STRING", value, line, column);
+                return new package__lexer__Token("STRING", value, line, column);
             }
             if (this.current_char == "`") {
                 let value = this.read_raw_identifier();
-                return new package_lexer_Token(
+                return new package__lexer__Token(
                     "SYMBOL_RAW",
                     value,
                     line,
@@ -5669,28 +3965,28 @@ class package_lexer_ValkyrieLexer {
             let ch = this.current_char;
             this.advance();
             if (ch == "{") {
-                return new package_lexer_Token("LBRACE", ch, line, column);
+                return new package__lexer__Token("LBRACE", ch, line, column);
             }
             if (ch == "}") {
-                return new package_lexer_Token("RBRACE", ch, line, column);
+                return new package__lexer__Token("RBRACE", ch, line, column);
             }
             if (ch == "(") {
-                return new package_lexer_Token("LPAREN", ch, line, column);
+                return new package__lexer__Token("LPAREN", ch, line, column);
             }
             if (ch == ")") {
-                return new package_lexer_Token("RPAREN", ch, line, column);
+                return new package__lexer__Token("RPAREN", ch, line, column);
             }
             if (ch == "[") {
-                return new package_lexer_Token("LBRACKET", ch, line, column);
+                return new package__lexer__Token("LBRACKET", ch, line, column);
             }
             if (ch == "]") {
-                return new package_lexer_Token("RBRACKET", ch, line, column);
+                return new package__lexer__Token("RBRACKET", ch, line, column);
             }
             if (ch == ";") {
-                return new package_lexer_Token("SEMICOLON", ch, line, column);
+                return new package__lexer__Token("SEMICOLON", ch, line, column);
             }
             if (ch == ",") {
-                return new package_lexer_Token("COMMA", ch, line, column);
+                return new package__lexer__Token("COMMA", ch, line, column);
             }
             if (ch == ":") {
                 if (
@@ -5698,14 +3994,14 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == ":"
                 ) {
                     this.advance();
-                    return new package_lexer_Token(
+                    return new package__lexer__Token(
                         "DOUBLE_COLON",
                         "::",
                         line,
                         column
                     );
                 }
-                return new package_lexer_Token("COLON", ch, line, column);
+                return new package__lexer__Token("COLON", ch, line, column);
             }
             if (ch == "=") {
                 if (
@@ -5713,12 +4009,12 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == "="
                 ) {
                     this.advance();
-                    return new package_lexer_Token("EQ", "==", line, column);
+                    return new package__lexer__Token("EQ", "==", line, column);
                 }
-                return new package_lexer_Token("ASSIGN", ch, line, column);
+                return new package__lexer__Token("ASSIGN", ch, line, column);
             }
             if (ch == "+") {
-                return new package_lexer_Token("PLUS", ch, line, column);
+                return new package__lexer__Token("PLUS", ch, line, column);
             }
             if (ch == "-") {
                 if (
@@ -5726,18 +4022,23 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == ">"
                 ) {
                     this.advance();
-                    return new package_lexer_Token("ARROW", "->", line, column);
+                    return new package__lexer__Token(
+                        "ARROW",
+                        "->",
+                        line,
+                        column
+                    );
                 }
-                return new package_lexer_Token("MINUS", ch, line, column);
+                return new package__lexer__Token("MINUS", ch, line, column);
             }
             if (ch == "*") {
-                return new package_lexer_Token("MULTIPLY", ch, line, column);
+                return new package__lexer__Token("MULTIPLY", ch, line, column);
             }
             if (ch == "/") {
-                return new package_lexer_Token("DIVIDE", ch, line, column);
+                return new package__lexer__Token("DIVIDE", ch, line, column);
             }
             if (ch == "%") {
-                return new package_lexer_Token("MODULO", ch, line, column);
+                return new package__lexer__Token("MODULO", ch, line, column);
             }
             if (ch == "&") {
                 if (
@@ -5745,9 +4046,9 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == "&"
                 ) {
                     this.advance();
-                    return new package_lexer_Token("AND", "&&", line, column);
+                    return new package__lexer__Token("AND", "&&", line, column);
                 }
-                return new package_lexer_Token("AMPERSAND", ch, line, column);
+                return new package__lexer__Token("AMPERSAND", ch, line, column);
             }
             if (ch == "|") {
                 if (
@@ -5755,9 +4056,9 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == "|"
                 ) {
                     this.advance();
-                    return new package_lexer_Token("OR", "||", line, column);
+                    return new package__lexer__Token("OR", "||", line, column);
                 }
-                return new package_lexer_Token("PIPE", ch, line, column);
+                return new package__lexer__Token("PIPE", ch, line, column);
             }
             if (ch == ">") {
                 if (
@@ -5765,9 +4066,9 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == "="
                 ) {
                     this.advance();
-                    return new package_lexer_Token("GTE", ">=", line, column);
+                    return new package__lexer__Token("GTE", ">=", line, column);
                 }
-                return new package_lexer_Token("GT", ch, line, column);
+                return new package__lexer__Token("GT", ch, line, column);
             }
             if (ch == "<") {
                 if (
@@ -5775,9 +4076,9 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == "="
                 ) {
                     this.advance();
-                    return new package_lexer_Token("LTE", "<=", line, column);
+                    return new package__lexer__Token("LTE", "<=", line, column);
                 }
-                return new package_lexer_Token("LT", ch, line, column);
+                return new package__lexer__Token("LT", ch, line, column);
             }
             if (ch == "!") {
                 if (
@@ -5785,27 +4086,27 @@ class package_lexer_ValkyrieLexer {
                     this.source.charAt(this.position) == "="
                 ) {
                     this.advance();
-                    return new package_lexer_Token("NE", "!=", line, column);
+                    return new package__lexer__Token("NE", "!=", line, column);
                 }
-                return new package_lexer_Token("BANG", ch, line, column);
+                return new package__lexer__Token("BANG", ch, line, column);
             }
             if (ch == "?") {
-                return new package_lexer_Token("QUESTION", ch, line, column);
+                return new package__lexer__Token("QUESTION", ch, line, column);
             }
             if (ch == ".") {
-                return new package_lexer_Token("DOT", ch, line, column);
+                return new package__lexer__Token("DOT", ch, line, column);
             }
             if (ch == "↯") {
-                return new package_lexer_Token("ATTRIBUTE", ch, line, column);
+                return new package__lexer__Token("ATTRIBUTE", ch, line, column);
             }
-            return new package_lexer_Token(
+            return new package__lexer__Token(
                 "ERROR",
                 "Unknown character: " + ch,
                 line,
                 column
             );
         }
-        return new package_lexer_Token("EOF", "", this.line, this.column);
+        return new package__lexer__Token("EOF", "", this.line, this.column);
     }
 
     tokenize() {
@@ -5820,15 +4121,93 @@ class package_lexer_ValkyrieLexer {
         return tokens;
     }
 }
-class package_optimizer_Optimizer {
+export function package__lexer__is_whitespace(ch) {
+    return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
+}
+export function package__lexer__is_alpha_numeric(ch) {
+    return package__lexer__is_alpha(ch) || package__lexer__is_digit(ch);
+}
+export function package__lexer__is_alpha(ch) {
+    return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_";
+}
+export function package__lexer__is_digit(ch) {
+    return ch >= "0" && ch <= "9";
+}
+export function package__lexer__get_keyword_type(value) {
+    if (value === "micro") {
+        return "MICRO";
+    } else if (value === "let") {
+        return "LET";
+    } else if (value === "if") {
+        return "IF";
+    } else if (value === "else") {
+        return "ELSE";
+    } else if (value === "while") {
+        return "WHILE";
+    } else if (value === "until") {
+        return "UNTIL";
+    } else if (value === "return") {
+        return "RETURN";
+    } else if (value === "true") {
+        return "BOOLEAN";
+    } else if (value === "false") {
+        return "BOOLEAN";
+    } else if (value === "namespace") {
+        return "NAMESPACE";
+    } else if (value === "using") {
+        return "USING";
+    } else if (value === "class") {
+        return "CLASS";
+    } else if (value === "singleton") {
+        return "SINGLETON";
+    } else if (value === "trait") {
+        return "TRAIT";
+    } else if (value === "constructor") {
+        return "CONSTRUCTOR";
+    } else if (value === "self") {
+        return "SELF";
+    } else if (value === "extends") {
+        return "EXTENDS";
+    } else if (value === "implements") {
+        return "IMPLEMENTS";
+    } else if (value === "new") {
+        return "NEW";
+    } else if (value === "default") {
+        return "DEFAULT";
+    } else if (value === "await") {
+        return "AWAIT";
+    } else if (value === "is") {
+        return "IS";
+    } else if (value === "as") {
+        return "AS";
+    } else if (value === "match") {
+        return "MATCH";
+    } else if (value === "when") {
+        return "WHEN";
+    } else if (value === "case") {
+        return "CASE";
+    } else if (value === "type") {
+        return "TYPE";
+    } else if (value === "flags") {
+        return "FLAGS";
+    } else if (value === "eidos") {
+        return "EIDOS";
+    } else {
+        return "SYMBOL_XID";
+    }
+}
+// using ;
+// using ;
+// using ;
+class package__optimizer__Optimizer {
     constructor() {
-        this.pipeline = new package_optimizer_TransformPipeline();
+        this.pipeline = new package__optimizer__TransformPipeline();
         this.setup_default_transforms();
     }
 
     setup_default_transforms() {
         let constant_folding =
-            new package_optimizer_transforms_ConstantFoldingTransform();
+            new package__optimizer__transforms__ConstantFoldingTransform();
         this.pipeline.add_transform(constant_folding);
     }
 
@@ -5848,7 +4227,8 @@ class package_optimizer_Optimizer {
         this.pipeline.clear_transforms();
     }
 }
-class package_optimizer_Transform {
+// using ;
+class package__optimizer__Transform {
     constructor(name) {
         this.name = name;
     }
@@ -5861,7 +4241,8 @@ class package_optimizer_Transform {
         this.name = name;
     }
 }
-class package_optimizer_TransformPipeline {
+// using ;
+class package__optimizer__TransformPipeline {
     constructor() {
         this.transforms = [];
     }
@@ -5891,9 +4272,11 @@ class package_optimizer_TransformPipeline {
         this.transforms = [];
     }
 }
-class package_optimizer_transforms_ConstantFoldingTransform {
+// using ;
+// using ;
+class package__optimizer__transforms__ConstantFoldingTransform {
     constructor() {
-        this.base_transform = new package_optimizer_Transform(
+        this.base_transform = new package__optimizer__Transform(
             "ConstantFolding"
         );
     }
@@ -5907,7 +4290,7 @@ class package_optimizer_transforms_ConstantFoldingTransform {
     fold_constants_in_table(symbol_table) {}
 
     clone_symbol_table(original) {
-        let new_table = new package_analyzer_SymbolTable();
+        let new_table = new package__analyzer__SymbolTable();
         return new_table;
     }
 
@@ -5919,7 +4302,20 @@ class package_optimizer_transforms_ConstantFoldingTransform {
         return this.base_transform.get_name();
     }
 }
-class package_parser_Node {
+class package__ast__IdentifierNode {
+    constructor() {
+        this.type = "Identifier";
+        this.name = "";
+    }
+}
+class package__ast__NamepathNode {
+    constructor() {
+        this.type = "NamePath";
+        this.name = "";
+        this.name_path = [];
+    }
+}
+class package__parser__Node {
     constructor(typing, offset, length, line, column) {
         this.type = typing;
         this.offset = offset;
@@ -5958,7 +4354,8 @@ class package_parser_Node {
         );
     }
 }
-class package_parser_NodeMetadata {
+// using ;
+class package__parser__NodeMetadata {
     constructor() {
         this.node_names = {};
         this.node_values = {};
@@ -6030,12 +4427,1114 @@ class package_parser_NodeMetadata {
         this.node_properties = {};
     }
 }
-class package_parser_ValkyrieParser {
-    constructor(tokens) {
-        this.tokens = tokens;
-        this.position = 0;
-        this.current_token = tokens[0];
+export function package__parser__parse_pattern_expression(parser) {
+    let token = parser.current_token;
+    if (token.type == "SYMBOL_XID") {
+        let name = token.value;
+        parser.advance();
+        if (parser.current_token.type == "DOUBLE_COLON") {
+            parser.advance();
+            if (parser.current_token.type == "SYMBOL_XID") {
+                let member_name = parser.current_token.value;
+                parser.advance();
+                let node = parser.make_node("StaticMemberAccess");
+                node.object = name;
+                node.member = member_name;
+                return node;
+            } else {
+                let error = {};
+                error.type = "ParseError";
+                error.message =
+                    "Expected member name after '::' but got " +
+                    parser.current_token.type;
+                error.line = parser.current_token.line;
+                error.column = parser.current_token.column;
+                return error;
+            }
+        } else {
+            let node = parser.make_node("TypeIdentifier");
+            node.name = name;
+            return node;
+        }
+    } else if (token.type == "STRING") {
+        parser.advance();
+        let node = parser.make_node("StringLiteral");
+        node.value = token.value;
+        return node;
+    } else if (token.type == "NUMBER") {
+        parser.advance();
+        let node = parser.make_node("NumberLiteral");
+        node.value = token.value;
+        return node;
+    } else if (token.type == "BOOLEAN") {
+        parser.advance();
+        let node = parser.make_node("BooleanLiteral");
+        node.value = token.value;
+        return node;
+    } else if (
+        token.type == "KEYWORD" &&
+        (token.value == "true" || token.value == "false")
+    ) {
+        parser.advance();
+        let node = parser.make_node("BooleanLiteral");
+        node.value = token.value;
+        return node;
+    } else {
+        let error = {};
+        error.type = "ParseError";
+        error.message =
+            "Expected identifier or literal in pattern expression but got " +
+            token.type;
+        error.line = token.line;
+        error.column = token.column;
+        return error;
     }
+}
+// using ;
+// using ;
+// using ;
+// using ;
+export function package__parser__getOperatorPrecedence(tokenType) {
+    if (tokenType === "ASSIGN") {
+        return 1;
+    } else if (tokenType === "OR") {
+        return 2;
+    } else if (tokenType === "AND") {
+        return 3;
+    } else if (tokenType === "EQ") {
+        return 4;
+    } else if (tokenType === "NE") {
+        return 4;
+    } else if (tokenType === "GT") {
+        return 5;
+    } else if (tokenType === "LT") {
+        return 5;
+    } else if (tokenType === "GTE") {
+        return 5;
+    } else if (tokenType === "LTE") {
+        return 5;
+    } else if (tokenType === "IS") {
+        return 5;
+    } else if (tokenType === "AS") {
+        return 5;
+    } else if (tokenType === "PIPE") {
+        return 6;
+    } else if (tokenType === "AMPERSAND") {
+        return 6;
+    } else if (tokenType === "PLUS") {
+        return 7;
+    } else if (tokenType === "MINUS") {
+        return 7;
+    } else if (tokenType === "MULTIPLY") {
+        return 8;
+    } else if (tokenType === "DIVIDE") {
+        return 8;
+    } else if (tokenType === "MODULO") {
+        return 8;
+    } else {
+        return -1;
+    }
+}
+export function package__parser__isRightAssociative(tokenType) {
+    return tokenType == "ASSIGN";
+}
+export function package__parser__parseExpressionWithPrecedence(
+    parser,
+    minPrecedence,
+    inline
+) {
+    let left = package__parser__parseUnaryExpression(parser, inline);
+    if (left && left.type == "ParseError") {
+        return left;
+    }
+    while (true) {
+        let precedence = package__parser__getOperatorPrecedence(
+            parser.current_token.type
+        );
+        if (precedence < minPrecedence) {
+            break;
+        }
+        let op = parser.current_token.value;
+        let tokenType = parser.current_token.type;
+        parser.advance();
+        let nextMinPrecedence = precedence;
+        if (package__parser__isRightAssociative(tokenType)) {
+        } else {
+            nextMinPrecedence = precedence + 1;
+        }
+        let right = {};
+        if (tokenType == "IS") {
+            let isOptional = false;
+            if (parser.current_token.type == "QUESTION") {
+                isOptional = true;
+                parser.advance();
+            }
+            right = package__parser__parse_pattern_expression(parser);
+            if (isOptional) {
+                let node = parser.make_node("OptionalTypeCheck");
+                node.expression = left;
+                node.pattern = right;
+                left = node;
+            } else {
+                let node = parser.make_node("TypeCheck");
+                node.expression = left;
+                node.pattern = right;
+                left = node;
+            }
+        } else if (tokenType == "AS") {
+            let isOptional = false;
+            if (parser.current_token.type == "QUESTION") {
+                isOptional = true;
+                parser.advance();
+            }
+            right = package__parser__parseTypeExpression(parser);
+            if (isOptional) {
+                let node = parser.make_node("OptionalTypeCast");
+                node.expression = left;
+                node.targetType = right;
+                left = node;
+            } else {
+                let node = parser.make_node("TypeCast");
+                node.expression = left;
+                node.targetType = right;
+                left = node;
+            }
+        } else {
+            right = package__parser__parseExpressionWithPrecedence(
+                parser,
+                nextMinPrecedence,
+                inline
+            );
+            if (right && right.type == "ParseError") {
+                return right;
+            }
+            if (tokenType == "ASSIGN") {
+                let node = parser.make_node("Assignment");
+                node.left = left;
+                node.right = right;
+                left = node;
+            } else {
+                let node = parser.make_node("BinaryOp");
+                node.left = left;
+                node.operator = op;
+                node.right = right;
+                left = node;
+            }
+        }
+    }
+    return left;
+}
+export function package__parser__parseExpression(parser) {
+    return package__parser__parseExpressionWithPrecedence(parser, 0, false);
+}
+export function package__parser__parseInlineExpression(parser) {
+    return package__parser__parseExpressionWithPrecedence(parser, 0, true);
+}
+export function package__parser__parseUnaryExpression(parser, inline) {
+    if (
+        parser.current_token.type == "BANG" ||
+        parser.current_token.type == "MINUS"
+    ) {
+        let op = parser.current_token.value;
+        parser.advance();
+        let operand = package__parser__parseUnaryExpression(parser, inline);
+        if (operand && operand.type == "ParseError") {
+            return operand;
+        }
+        let node = parser.make_node("UnaryOp");
+        node.operator = op;
+        node.operand = operand;
+        return node;
+    }
+    return package__parser__parsePostfixExpression(parser, inline);
+}
+export function package__parser__parse_new_expression(parser, inline) {
+    parser.advance();
+    let className = parser.parse_name_path(true);
+    let lparen = parser.expect("LPAREN");
+    if (lparen.type == "ParseError") {
+        return lparen;
+    }
+    let args = [];
+    if (parser.current_token.type != "RPAREN") {
+        let arg = package__parser__parseExpressionWithPrecedence(
+            parser,
+            0,
+            inline
+        );
+        if (arg.type == "ParseError") {
+            return arg;
+        }
+        args.push(arg);
+        while (parser.current_token.type == "COMMA") {
+            parser.advance();
+            arg = package__parser__parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
+            if (arg.type == "ParseError") {
+                return arg;
+            }
+            args.push(arg);
+        }
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen.type == "ParseError") {
+        return rparen;
+    }
+    let node = parser.make_node("NewExpression");
+    node.className = className;
+    node.arguments = args;
+    return node;
+}
+export function package__parser__parsePostfixExpression(parser, inline) {
+    let expr = package__parser__parse_term_expression_atomic(parser, inline);
+    if (expr && expr.type == "ParseError") {
+        return expr;
+    }
+    while (true) {
+        if (parser.current_token.type == "LPAREN") {
+            let nextIndex = parser.position + 1;
+            let hasTrailingClosure = false;
+            parser.advance();
+            let args = [];
+            if (parser.current_token.type != "RPAREN") {
+                let arg = package__parser__parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
+                if (arg && arg.type == "ParseError") {
+                    return arg;
+                }
+                args.push(arg);
+                while (parser.current_token.type == "COMMA") {
+                    parser.advance();
+                    arg = package__parser__parseExpressionWithPrecedence(
+                        parser,
+                        0,
+                        inline
+                    );
+                    if (arg && arg.type == "ParseError") {
+                        return arg;
+                    }
+                    args.push(arg);
+                }
+            }
+            let rparen = parser.expect("RPAREN");
+            if (rparen && rparen.type == "ParseError") {
+                return rparen;
+            }
+            let closure = null;
+            if (parser.current_token.type == "LBRACE" && !inline) {
+                closure = package__parser__parse_function_block(parser);
+                if (closure && closure.type == "ParseError") {
+                    return closure;
+                }
+                hasTrailingClosure = true;
+            }
+            let callNode = parser.make_node("MicroCall");
+            callNode.callee = expr;
+            callNode.arguments = args;
+            if (hasTrailingClosure) {
+                callNode.closure = closure;
+            }
+            expr = callNode;
+        } else if (parser.current_token.type == "DOT") {
+            parser.advance();
+            if (parser.current_token.type == "AWAIT") {
+                parser.advance();
+                let awaitNode = parser.make_node("AwaitExpression");
+                awaitNode.argument = expr;
+                expr = awaitNode;
+            } else {
+                let property = parser.parse_identifier();
+                if (property && property.type == "ParseError") {
+                    return property;
+                }
+                let accessNode = parser.make_node("PropertyAccess");
+                accessNode.object = expr;
+                accessNode.property = property.value;
+                expr = accessNode;
+            }
+        } else if (parser.current_token.type == "DOUBLE_COLON") {
+            parser.advance();
+            let methodName = parser.parse_identifier();
+            if (methodName && methodName.type == "ParseError") {
+                return methodName;
+            }
+            let namespacePath = [];
+            namespacePath.push(methodName.value);
+            while (parser.current_token.type == "DOUBLE_COLON") {
+                parser.advance();
+                let nextName = parser.parse_identifier();
+                if (nextName && nextName.type == "ParseError") {
+                    return nextName;
+                }
+                namespacePath.push(nextName.value);
+            }
+            if (parser.current_token.type == "LPAREN") {
+                parser.advance();
+                let args = [];
+                if (parser.current_token.type != "RPAREN") {
+                    let arg = package__parser__parseExpressionWithPrecedence(
+                        parser,
+                        0,
+                        inline
+                    );
+                    if (arg && arg.type == "ParseError") {
+                        return arg;
+                    }
+                    args.push(arg);
+                    while (parser.current_token.type == "COMMA") {
+                        parser.advance();
+                        arg = package__parser__parseExpressionWithPrecedence(
+                            parser,
+                            0,
+                            inline
+                        );
+                        if (arg && arg.type == "ParseError") {
+                            return arg;
+                        }
+                        args.push(arg);
+                    }
+                }
+                let rparen = parser.expect("RPAREN");
+                if (rparen && rparen.type == "ParseError") {
+                    return rparen;
+                }
+                let staticCallNode = parser.make_node("StaticMethodCall");
+                staticCallNode.namespacePath = namespacePath;
+                staticCallNode.methodName =
+                    namespacePath[namespacePath.length - 1];
+                staticCallNode.className =
+                    namespacePath[namespacePath.length - 2];
+                staticCallNode.arguments = args;
+                expr = staticCallNode;
+            } else {
+                let staticAccessNode = parser.make_node("StaticPropertyAccess");
+                staticAccessNode.namespacePath = namespacePath;
+                staticAccessNode.property =
+                    namespacePath[namespacePath.length - 1];
+                staticAccessNode.className =
+                    namespacePath[namespacePath.length - 2];
+                expr = staticAccessNode;
+            }
+        } else if (parser.current_token.type == "LBRACKET") {
+            parser.advance();
+            let index = package__parser__parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
+            if (index && index.type == "ParseError") {
+                return index;
+            }
+            let rbracket = parser.expect("RBRACKET");
+            if (rbracket && rbracket.type == "ParseError") {
+                return rbracket;
+            }
+            let accessNode = parser.make_node("ArrayAccess");
+            accessNode.object = expr;
+            accessNode.index = index;
+            expr = accessNode;
+        } else {
+            break;
+        }
+    }
+    return expr;
+}
+export function package__parser__parse_micro_anonymous(parser, name) {
+    let closure = package__parser__parse_function_block(parser);
+    if (closure && closure.type == "ParseError") {
+        return closure;
+    }
+    let callNode = parser.make_node("MicroCall");
+    let identifierNode = parser.make_node("Identifier");
+    identifierNode.name = name;
+    callNode.callee = identifierNode;
+    callNode.arguments = [];
+    callNode.closure = closure;
+    return callNode;
+}
+export function package__parser__parse_term_expression_atomic(parser, inline) {
+    if (parser.current_token.type == "NUMBER") {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("Number");
+        node.value = value;
+        return node;
+    }
+    if (parser.current_token.type == "STRING") {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("String");
+        node.value = value;
+        return node;
+    }
+    if (parser.current_token.type == "MATCH") {
+        return package__parser__parseMatchExpression(parser, inline);
+    }
+    if (parser.current_token.type == "BOOLEAN") {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("Boolean");
+        node.value = value;
+        return node;
+    }
+    if (
+        parser.current_token.type == "SYMBOL_XID" ||
+        parser.current_token.type == "SYMBOL_RAW"
+    ) {
+        return parser.parse_name_path(false);
+    }
+    if (parser.current_token.type == "MICRO") {
+        parser.advance();
+        let lparen = parser.expect("LPAREN");
+        if (lparen.type == "ParseError") {
+            return lparen;
+        }
+        let params = package__parser__parseTermParameters(parser);
+        if (params && params.type == "ParseError") {
+            return params;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen.type == "ParseError") {
+            return rparen;
+        }
+        let body = package__parser__parse_function_block(parser);
+        if (body && body.type == "ParseError") {
+            return body;
+        }
+        let node = parser.make_node("AnonymousFunction");
+        node.parameters = params;
+        node.body = body;
+        return node;
+    }
+    if (parser.current_token.type == "SELF") {
+        let nextIndex = parser.position + 1;
+        if (
+            nextIndex < parser.tokens.length &&
+            parser.tokens[nextIndex].type == "DOUBLE_COLON"
+        ) {
+            let name = "Self";
+            parser.advance();
+            let node = parser.make_node("Identifier");
+            node.name = name;
+            return node;
+        } else {
+            parser.advance();
+            let node = parser.make_node("ThisExpression");
+            return node;
+        }
+    }
+    if (parser.current_token.type == "NEW") {
+        return package__parser__parse_new_expression(parser, true);
+    }
+    if (parser.current_token.type == "LPAREN") {
+        parser.advance();
+        let expr = package__parser__parseExpressionWithPrecedence(
+            parser,
+            0,
+            inline
+        );
+        if (expr && expr.type == "ParseError") {
+            return expr;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        return expr;
+    }
+    if (parser.current_token.type == "LBRACKET") {
+        parser.advance();
+        let node = parser.make_node("ArrayLiteral");
+        node.elements = [];
+        if (parser.current_token.type != "RBRACKET") {
+            let element = package__parser__parseExpressionWithPrecedence(
+                parser,
+                0,
+                inline
+            );
+            if (element && element.type == "ParseError") {
+                return element;
+            }
+            node.elements.push(element);
+            while (parser.current_token.type == "COMMA") {
+                parser.advance();
+                element = package__parser__parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
+                if (element && element.type == "ParseError") {
+                    return element;
+                }
+                node.elements.push(element);
+            }
+        }
+        let rbracket = parser.expect("RBRACKET");
+        if (rbracket && rbracket.type == "ParseError") {
+            return rbracket;
+        }
+        return node;
+    }
+    if (parser.current_token.type == "LBRACE" && !inline) {
+        parser.advance();
+        let node = parser.make_node("ObjectLiteral");
+        node.properties = [];
+        if (parser.current_token.type != "RBRACE") {
+            while (
+                parser.current_token.type == "SYMBOL_XID" ||
+                parser.current_token.type == "STRING"
+            ) {
+                let key = parser.current_token.value;
+                parser.advance();
+                let colon = parser.expect("COLON");
+                if (colon && colon.type == "ParseError") {
+                    return colon;
+                }
+                let value = package__parser__parseExpressionWithPrecedence(
+                    parser,
+                    0,
+                    inline
+                );
+                if (value && value.type == "ParseError") {
+                    return value;
+                }
+                let propertyNode = parser.make_node("Property");
+                propertyNode.key = key;
+                propertyNode.value = value;
+                node.properties.push(propertyNode);
+                if (parser.current_token.type == "COMMA") {
+                    parser.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+        let rbrace = parser.expect("RBRACE");
+        if (rbrace && rbrace.type == "ParseError") {
+            return rbrace;
+        }
+        return node;
+    }
+    let error = {};
+    error.type = "ParseError";
+    error.message = "Expected expression but got " + parser.current_token.type;
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
+}
+export function package__parser__parseMatchExpression(parser, inline) {
+    parser.advance();
+    let expr = package__parser__parseInlineExpression(parser);
+    if (expr && expr.type == "ParseError") {
+        return expr;
+    }
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let branches = [];
+    while (parser.current_token.type != "RBRACE") {
+        let branch = package__parser__parseMatchBranch(parser);
+        if (branch && branch.type == "ParseError") {
+            return branch;
+        }
+        branches.push(branch);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = parser.make_node("MatchExpression");
+    node.expression = expr;
+    node.branches = branches;
+    return node;
+}
+export function package__parser__parseMatchBranch(parser) {
+    let branchType = parser.current_token.type;
+    if (branchType == "WHEN") {
+        return package__parser__parseWhenBranch(parser);
+    } else if (branchType == "CASE") {
+        return package__parser__parseCaseBranch(parser);
+    } else if (branchType == "TYPE") {
+        return package__parser__parseTypeBranch(parser);
+    } else if (branchType == "ELSE") {
+        return package__parser__parseElseBranch(parser);
+    } else {
+        let error = {};
+        error.type = "ParseError";
+        error.message =
+            "Expected when, case, type, or else in match branch but got " +
+            branchType;
+        error.line = parser.current_token.line;
+        error.column = parser.current_token.column;
+        return error;
+    }
+}
+export function package__parser__parseWhenBranch(parser) {
+    parser.advance();
+    let condition = package__parser__parseExpression(parser);
+    if (condition && condition.type == "ParseError") {
+        return condition;
+    }
+    let colon = parser.expect("COLON");
+    if (colon && colon.type == "ParseError") {
+        return colon;
+    }
+    let statements = package__parser__parseMatchBranchStatements(parser);
+    if (statements && statements.type == "ParseError") {
+        return statements;
+    }
+    let node = parser.make_node("WhenBranch");
+    node.condition = condition;
+    node.statements = statements;
+    return node;
+}
+export function package__parser__parseCaseBranch(parser) {
+    parser.advance();
+    let pattern = package__parser__parse_pattern_expression(parser);
+    if (pattern.type == "ParseError") {
+        return pattern;
+    }
+    let colon = parser.expect("COLON");
+    if (colon && colon.type == "ParseError") {
+        return colon;
+    }
+    let statements = package__parser__parseMatchBranchStatements(parser);
+    if (statements && statements.type == "ParseError") {
+        return statements;
+    }
+    let node = parser.make_node("CaseBranch");
+    node.pattern = pattern;
+    node.statements = statements;
+    return node;
+}
+export function package__parser__parseTypeBranch(parser) {
+    parser.advance();
+    let typeName = parser.parse_identifier_in("Branches");
+    if (typeName.type == "ParseError") {
+        return typeName;
+    }
+    let colon = parser.expect("COLON");
+    if (colon && colon.type == "ParseError") {
+        return colon;
+    }
+    let statements = package__parser__parseMatchBranchStatements(parser);
+    if (statements && statements.type == "ParseError") {
+        return statements;
+    }
+    let node = parser.make_node("TypeBranch");
+    node.typeName = typeName.value;
+    node.statements = statements;
+    return node;
+}
+export function package__parser__parseElseBranch(parser) {
+    parser.advance();
+    let colon = parser.expect("COLON");
+    if (colon && colon.type == "ParseError") {
+        return colon;
+    }
+    let statements = package__parser__parseMatchBranchStatements(parser);
+    if (statements && statements.type == "ParseError") {
+        return statements;
+    }
+    let node = parser.make_node("ElseBranch");
+    node.statements = statements;
+    return node;
+}
+export function package__parser__parseMatchBranchStatements(parser) {
+    let statements = [];
+    while (
+        parser.current_token.type != "WHEN" &&
+        parser.current_token.type != "CASE" &&
+        parser.current_token.type != "TYPE" &&
+        parser.current_token.type != "ELSE" &&
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let stmt = package__parser__parseStatement(parser);
+        if (stmt && stmt.type == "ParseError") {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+    return statements;
+}
+export function package__parser__parseTermParameters(parser) {
+    let params = [];
+    if (parser.current_token.type != "RPAREN") {
+        let param = package__parser__parseTypedParameter(parser);
+        if (param && param.type == "ParseError") {
+            return param;
+        }
+        params.push(param);
+        while (parser.current_token.type == "COMMA") {
+            parser.advance();
+            param = package__parser__parseTypedParameter(parser);
+            if (param && param.type == "ParseError") {
+                return param;
+            }
+            params.push(param);
+        }
+    }
+    return params;
+}
+export function package__parser__parseTypedParameter(parser) {
+    let paramName = null;
+    if (parser.current_token.type == "SYMBOL_XID") {
+        paramName = parser.parse_identifier();
+    } else if (parser.current_token.type == "SELF") {
+        paramName = parser.expect("SELF");
+    } else {
+        paramName = parser.parse_identifier();
+    }
+    if (paramName && paramName.type == "ParseError") {
+        return paramName;
+    }
+    let node = parser.make_node("Parameter");
+    node.name = paramName.value;
+    node.typeAnnotation = null;
+    node.defaultValue = null;
+    if (parser.current_token.type == "COLON") {
+        parser.advance();
+        let typeExpr = package__parser__parseTypeExpression(parser);
+        if (typeExpr && typeExpr.type == "ParseError") {
+            return typeExpr;
+        }
+        node.typeAnnotation = typeExpr;
+    }
+    if (parser.current_token.type == "ASSIGN") {
+        parser.advance();
+        let defaultExpr = package__parser__parseExpression(parser);
+        if (defaultExpr && defaultExpr.type == "ParseError") {
+            return defaultExpr;
+        }
+        node.defaultValue = defaultExpr;
+    }
+    return node;
+}
+// using ;
+// using ;
+export function package__parser__getTypeOperatorPrecedence(tokenType) {
+    if (tokenType == "ARROW") {
+        return 1;
+    }
+    if (tokenType == "PIPE") {
+        return 2;
+    }
+    if (tokenType == "AMPERSAND") {
+        return 3;
+    }
+    if (tokenType == "PLUS") {
+        return 4;
+    }
+    if (tokenType == "MINUS") {
+        return 4;
+    }
+    return -1;
+}
+export function package__parser__isTypeRightAssociative(tokenType) {
+    return tokenType == "ARROW";
+}
+export function package__parser__parseTypeExpressionWithPrecedence(
+    parser,
+    minPrecedence
+) {
+    let left = package__parser__parseUnaryTypeExpression(parser);
+    if (left && left.type == "ParseError") {
+        return left;
+    }
+    while (true) {
+        let precedence = package__parser__getTypeOperatorPrecedence(
+            parser.current_token.type
+        );
+        if (precedence < minPrecedence) {
+            break;
+        }
+        let op = parser.current_token.value;
+        let tokenType = parser.current_token.type;
+        parser.advance();
+        let nextMinPrecedence = precedence;
+        if (package__parser__isTypeRightAssociative(tokenType)) {
+        } else {
+            nextMinPrecedence = precedence + 1;
+        }
+        let right = package__parser__parseTypeExpressionWithPrecedence(
+            parser,
+            nextMinPrecedence
+        );
+        if (right && right.type == "ParseError") {
+            return right;
+        }
+        if (tokenType == "ARROW") {
+            let node = parser.make_node("FunctionType");
+            node.parameterType = left;
+            node.returnType = right;
+            left = node;
+        } else if (tokenType == "PIPE") {
+            let node = parser.make_node("UnionType");
+            node.left = left;
+            node.right = right;
+            left = node;
+        } else if (tokenType == "AMPERSAND") {
+            let node = parser.make_node("IntersectionType");
+            node.left = left;
+            node.right = right;
+            left = node;
+        } else {
+            let node = parser.make_node("BinaryTypeOp");
+            node.left = left;
+            node.operator = op;
+            node.right = right;
+            left = node;
+        }
+    }
+    return left;
+}
+export function package__parser__parseTypeExpression(parser) {
+    return package__parser__parseTypeExpressionWithPrecedence(parser, 0);
+}
+export function package__parser__parseUnaryTypeExpression(parser) {
+    if (
+        parser.current_token.type == "PLUS" ||
+        parser.current_token.type == "MINUS"
+    ) {
+        let op = parser.current_token.value;
+        parser.advance();
+        let operand = package__parser__parseUnaryTypeExpression(parser);
+        if (operand && operand.type == "ParseError") {
+            return operand;
+        }
+        let node = parser.make_node("VarianceType");
+        node.variance = op;
+        node.operand = operand;
+        return node;
+    }
+    return package__parser__parsePostfixTypeExpression(parser);
+}
+export function package__parser__parsePostfixTypeExpression(parser) {
+    let expr = package__parser__parseAtomicTypeExpression(parser);
+    if (expr && expr.type == "ParseError") {
+        return expr;
+    }
+    while (true) {
+        if (parser.current_token.type == "QUESTION") {
+            parser.advance();
+            let node = parser.make_node("NullableType");
+            node.baseType = expr;
+            expr = node;
+        } else if (parser.current_token.type == "BANG") {
+            parser.advance();
+            let node = parser.make_node("NonNullType");
+            node.baseType = expr;
+            expr = node;
+        } else if (parser.current_token.type == "LT") {
+            parser.advance();
+            let typeArgs = [];
+            if (parser.current_token.type != "GT") {
+                let arg = package__parser__parseTypeExpression(parser);
+                if (arg && arg.type == "ParseError") {
+                    return arg;
+                }
+                typeArgs.push(arg);
+                while (parser.current_token.type == "COMMA") {
+                    parser.advance();
+                    arg = package__parser__parseTypeExpression(parser);
+                    if (arg && arg.type == "ParseError") {
+                        return arg;
+                    }
+                    typeArgs.push(arg);
+                }
+            }
+            let gt = parser.expect("GT");
+            if (gt && gt.type == "ParseError") {
+                return gt;
+            }
+            let node = parser.make_node("GenericType");
+            node.baseType = expr;
+            node.typeArguments = typeArgs;
+            expr = node;
+        } else if (parser.current_token.type == "LBRACKET") {
+            parser.advance();
+            let rbracket = parser.expect("RBRACKET");
+            if (rbracket && rbracket.type == "ParseError") {
+                return rbracket;
+            }
+            let node = parser.make_node("ArrayType");
+            node.elementType = expr;
+            expr = node;
+        } else {
+            break;
+        }
+    }
+    return expr;
+}
+export function package__parser__parseAtomicTypeExpression(parser) {
+    if (parser.current_token.type == "SYMBOL_XID") {
+        let name = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("TypeIdentifier");
+        node.name = name;
+        return node;
+    }
+    if (parser.current_token.type == "LPAREN") {
+        parser.advance();
+        let expr = package__parser__parseTypeExpression(parser);
+        if (expr && expr.type == "ParseError") {
+            return expr;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        return expr;
+    }
+    if (parser.current_token.type == "LPAREN") {
+        parser.advance();
+        let elements = [];
+        if (parser.current_token.type != "RPAREN") {
+            let element = package__parser__parseTypeExpression(parser);
+            if (element && element.type == "ParseError") {
+                return element;
+            }
+            elements.push(element);
+            while (parser.current_token.type == "COMMA") {
+                parser.advance();
+                element = package__parser__parseTypeExpression(parser);
+                if (element && element.type == "ParseError") {
+                    return element;
+                }
+                elements.push(element);
+            }
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        if (elements.length == 1) {
+            return elements[0];
+        } else {
+            let node = parser.make_node("TupleType");
+            node.elements = elements;
+            return node;
+        }
+    }
+    if (parser.current_token.type == "LBRACE") {
+        parser.advance();
+        let properties = [];
+        if (parser.current_token.type != "RBRACE") {
+            while (
+                parser.current_token.type == "SYMBOL_XID" ||
+                parser.current_token.type == "STRING"
+            ) {
+                let key = parser.current_token.value;
+                parser.advance();
+                let colon = parser.expect("COLON");
+                if (colon && colon.type == "ParseError") {
+                    return colon;
+                }
+                let valueType = package__parser__parseTypeExpression(parser);
+                if (valueType && valueType.type == "ParseError") {
+                    return valueType;
+                }
+                let propertyNode = parser.make_node("TypeProperty");
+                propertyNode.key = key;
+                propertyNode.valueType = valueType;
+                properties.push(propertyNode);
+                if (parser.current_token.type == "COMMA") {
+                    parser.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+        let rbrace = parser.expect("RBRACE");
+        if (rbrace && rbrace.type == "ParseError") {
+            return rbrace;
+        }
+        let node = parser.make_node("ObjectType");
+        node.properties = properties;
+        return node;
+    }
+    if (parser.current_token.type == "STRING") {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("LiteralType");
+        node.value = value;
+        node.literalType = "string";
+        return node;
+    }
+    if (parser.current_token.type == "NUMBER") {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("LiteralType");
+        node.value = value;
+        node.literalType = "number";
+        return node;
+    }
+    if (parser.current_token.type == "BOOLEAN") {
+        let value = parser.current_token.value;
+        parser.advance();
+        let node = parser.make_node("LiteralType");
+        node.value = value;
+        node.literalType = "boolean";
+        return node;
+    }
+    let error = {};
+    error.type = "ParseError";
+    error.message =
+        "Expected type expression but got " + parser.current_token.type;
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
+}
+export function package__parser__parseTypedParameters(parser) {
+    let params = [];
+    if (parser.current_token.type != "RPAREN") {
+        let param = package__parser__parseTypedParameter(parser);
+        if (param && param.type == "ParseError") {
+            return param;
+        }
+        params.push(param);
+        while (parser.current_token.type == "COMMA") {
+            parser.advance();
+            param = package__parser__parseTypedParameter(parser);
+            if (param && param.type == "ParseError") {
+                return param;
+            }
+            params.push(param);
+        }
+    }
+    return params;
+}
+export function package__parser__parseTypeHint(parser) {
+    if (parser.currentToken.type == "Colon") {
+        parser.advance();
+        return parser.parseTypeExpression();
+    }
+    return null;
+}
+export function package__parser__parseReturnType(parser) {
+    if (parser.currentToken.type == "Arrow") {
+        parser.advance();
+        return this.parseTypeExpression();
+    }
+    return null;
+}
+export function package__parser__parseEffectType(parser) {
+    if (parser.currentToken.type == "Slash") {
+        parser.advance();
+        return parser.parseTypeExpression();
+    }
+    return null;
+}
+class package__parser__ValkyrieParser {
+    constructor(options) {}
 
     advance() {
         this.position = this.position + 1;
@@ -6062,7 +5561,24 @@ class package_parser_ValkyrieParser {
         return token;
     }
 
-    expectIdentifier() {
+    make_node(node_type) {
+        return new package__parser__Node(
+            node_type,
+            this.current_token.offset,
+            this.current_token.length,
+            this.current_token.line,
+            this.current_token.column
+        );
+    }
+
+    parse(tokens) {
+        this.tokens = tokens;
+        this.position = 0;
+        this.current_token = tokens[0];
+        return package__parser__parse_program(this);
+    }
+
+    parse_identifier() {
         if (
             this.current_token.type == "SYMBOL_XID" ||
             this.current_token.type == "SYMBOL_RAW"
@@ -6080,7 +5596,7 @@ class package_parser_ValkyrieParser {
         return error;
     }
 
-    expectIdentifierIn(context) {
+    parse_identifier_in(context) {
         if (
             this.current_token["type"] == "SYMBOL_XID" ||
             this.current_token["type"] == "SYMBOL_RAW"
@@ -6113,13 +5629,790 @@ class package_parser_ValkyrieParser {
         return error;
     }
 
-    mark_node(node_type) {
-        return new package_parser_Node(
-            node_type,
-            this.current_token.offset,
-            this.current_token.length,
-            this.current_token.line,
-            this.current_token.column
-        );
+    parse_name_path(free_mode) {
+        let first_identifier = this.parse_identifier();
+        if (first_identifier.type == "ParseError") {
+            return first_identifier;
+        }
+        let names = [];
+        let firstNode = this.make_node("Identifier");
+        firstNode.name = first_identifier.value;
+        names.push(firstNode);
+        while (this.current_token.type == "DOUBLE_COLON") {
+            this.advance();
+            if (
+                this.current_token.type != "SYMBOL_XID" &&
+                this.current_token.type != "SYMBOL_RAW"
+            ) {
+                let error = {};
+                error.type = "ParseError";
+                error.message = "Expected identifier after '::'";
+                error.line = this.current_token.line;
+                error.column = this.current_token.column;
+                return error;
+            }
+            let nextName = this.current_token.value;
+            this.advance();
+            let nextIdentifier = this.make_node("Identifier");
+            nextIdentifier.name = nextName;
+            names.push(nextIdentifier);
+        }
+        let namepath = this.make_node("NamePath");
+        namepath.name_path = names;
+        return namepath;
     }
+
+    eat_semicolon() {
+        if (this.current_token.type == "SEMICOLON") {
+            this.advance();
+        }
+    }
+}
+// using ;
+// using ;
+// using ;
+export function package__parser__parseStatement(parser) {
+    if (parser.current_token.type == "EOF") {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Unexpected EOF in statement";
+        error.line = parser.current_token.line;
+        error.column = parser.current_token.column;
+        return error;
+    }
+    if (parser.current_token.type == "NAMESPACE") {
+        return package__parser__parse_namespace_statement(parser);
+    }
+    if (parser.current_token.type == "USING") {
+        return package__parser__parse_using_statement(parser);
+    }
+    if (parser.current_token.type == "ATTRIBUTE") {
+        return package__parser__parseAttributeStatement(parser);
+    }
+    if (parser.current_token.type == "CLASS") {
+        return package__parser__parseClassDeclaration(parser);
+    }
+    if (parser.current_token.type == "SINGLETON") {
+        return package__parser__parseSingletonDeclaration(parser);
+    }
+    if (parser.current_token.type == "TRAIT") {
+        return package__parser__parseTraitDeclaration(parser);
+    }
+    if (parser.current_token.type == "FLAGS") {
+        return package__parser__parseFlagsDeclaration(parser);
+    }
+    if (parser.current_token.type == "EIDOS") {
+        return package__parser__parseEidosDeclaration(parser);
+    }
+    if (parser.current_token.type == "LET") {
+        return package__parser__parseLetStatement(parser);
+    }
+    if (parser.current_token.type == "MICRO") {
+        let nextIndex = parser.position + 1;
+        if (
+            nextIndex < parser.tokens.length &&
+            parser.tokens[nextIndex].type == "SYMBOL_XID"
+        ) {
+            let afterNameIndex = nextIndex + 1;
+            if (
+                afterNameIndex < parser.tokens.length &&
+                parser.tokens[afterNameIndex].type == "LPAREN"
+            ) {
+                return package__parser__parseMicroFunctionDeclaration(parser);
+            }
+        }
+        return package__parser__parse_function_declaration(parser);
+    }
+    if (parser.current_token.type == "IF") {
+        return package__parser__parseIfStatement(parser);
+    }
+    if (parser.current_token.type == "WHILE") {
+        return package__parser__parseWhileStatement(parser);
+    }
+    if (parser.current_token.type == "UNTIL") {
+        return package__parser__parseUntilStatement(parser);
+    }
+    if (parser.current_token.type == "RETURN") {
+        return package__parser__parseReturnStatement(parser);
+    }
+    if (parser.current_token.type == "LBRACE") {
+        return package__parser__parse_function_block(parser);
+    }
+    let expr = package__parser__parseExpression(parser);
+    if (expr && expr.type == "ParseError") {
+        return expr;
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon && semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    let stmt = parser.make_node("ExpressionStatement");
+    stmt.expression = expr;
+    return stmt;
+}
+export function package__parser__parseLetStatement(parser) {
+    parser.advance();
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let assignToken = parser.expect("ASSIGN");
+    if (assignToken && assignToken.type == "ParseError") {
+        return assignToken;
+    }
+    let value = package__parser__parseExpression(parser);
+    if (value && value.type == "ParseError") {
+        return value;
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon && semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    let node = parser.make_node("LetStatement");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+export function package__parser__parse_namespace_statement(parser) {
+    parser.advance();
+    let is_main_namespace = false;
+    if (parser.current_token.type == "BANG") {
+        parser.advance();
+        is_main_namespace = true;
+    }
+    let names = parser.parse_name_path(true);
+    let node = parser.make_node("NamespaceStatement");
+    node.path = names;
+    node.is_main_namespace = is_main_namespace;
+    parser.eat_semicolon();
+    return node;
+}
+export function package__parser__parse_using_statement(parser) {
+    parser.advance();
+    let path = parser.parse_name_path(true);
+    let node = parser.make_node("UsingStatement");
+    node.path = path;
+    parser.eat_semicolon();
+    return node;
+}
+export function package__parser__parseAttributeStatement(parser) {
+    parser.advance();
+    let jsToken = parser.parse_identifier();
+    if (jsToken.type == "ParseError") {
+        return jsToken;
+    }
+    if (jsToken.value != "js") {
+        let error = {};
+        error.type = "ParseError";
+        error.message = "Expected 'js' after ↯";
+        error.line = jsToken.line;
+        error.column = jsToken.column;
+        return error;
+    }
+    let lparen = parser.expect("LPAREN");
+    if (lparen.type == "ParseError") {
+        return lparen;
+    }
+    let modulePath = parser.expect("STRING");
+    if (modulePath.type == "ParseError") {
+        return modulePath;
+    }
+    let comma = parser.expect("COMMA");
+    if (comma.type == "ParseError") {
+        return comma;
+    }
+    let importName = parser.expect("STRING");
+    if (importName.type == "ParseError") {
+        return importName;
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen.type == "ParseError") {
+        return rparen;
+    }
+    let microToken = parser.expect("MICRO");
+    if (microToken.type == "ParseError") {
+        return microToken;
+    }
+    let functionName = parser.parse_identifier();
+    if (functionName.type == "ParseError") {
+        return functionName;
+    }
+    let paramLparen = parser.expect("LPAREN");
+    if (paramLparen.type == "ParseError") {
+        return paramLparen;
+    }
+    let parameters = [];
+    if (parser.current_token.type != "RPAREN") {
+        let param = parser.parse_identifier();
+        if (param.type == "ParseError") {
+            return param;
+        }
+        parameters.push(param.value);
+        while (parser.current_token.type == "COMMA") {
+            parser.advance();
+            param = parser.parse_identifier();
+            if (param.type == "ParseError") {
+                return param;
+            }
+            parameters.push(param.value);
+        }
+    }
+    let paramRparen = parser.expect("RPAREN");
+    if (paramRparen.type == "ParseError") {
+        return paramRparen;
+    }
+    let body = package__parser__parseStatement(parser);
+    if (body.type == "ParseError") {
+        return body;
+    }
+    let node = parser.make_node("JSAttributeStatement");
+    node.modulePath = modulePath.value;
+    node.importName = importName.value;
+    node.functionName = functionName.value;
+    node.parameters = parameters;
+    node.body = body;
+    return node;
+}
+export function package__parser__parseMicroFunctionDeclaration(parser) {
+    parser.advance();
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lparen = parser.expect("LPAREN");
+    if (lparen && lparen.type == "ParseError") {
+        return lparen;
+    }
+    let params = package__parser__parseTermParameters(parser);
+    if (params && params.type == "ParseError") {
+        return params;
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen && rparen.type == "ParseError") {
+        return rparen;
+    }
+    let returnType = null;
+    if (parser.current_token.type == "ARROW") {
+        parser.advance();
+        returnType = package__parser__parseTypeExpression(parser);
+        if (returnType && returnType.type == "ParseError") {
+            return returnType;
+        }
+    }
+    let effectType = null;
+    if (parser.current_token.type == "DIVIDE") {
+        parser.advance();
+        effectType = package__parser__parseTypeExpression(parser);
+        if (effectType && effectType.type == "ParseError") {
+            return effectType;
+        }
+    }
+    let body = package__parser__parse_function_block(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = parser.make_node("MicroDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.returnType = returnType;
+    node.effectType = effectType;
+    node.body = body;
+    return node;
+}
+export function package__parser__parse_keyword(
+    parser,
+    expected_keyword,
+    node_type
+) {
+    parser.advance();
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let node = new package__parser__Node(node_type);
+    node.name = name.value;
+    node.superClass = null;
+    node.members = [];
+    return node;
+}
+export function package__parser__parse_inheritor(parser, node) {
+    if (parser.current_token.type == "EXTENDS") {
+        parser.advance();
+        let superName = parser.parse_identifier();
+        if (superName && superName.type == "ParseError") {
+            return superName;
+        }
+        node.superClass = superName.value;
+    }
+    return node;
+}
+export function package__parser__parse_implements(parser, node) {
+    return node;
+}
+export function package__parser__parse_object_body(parser, node) {
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        if (parser.current_token.type == "SEMICOLON") {
+            parser.advance();
+            continue;
+        }
+        let member = package__parser__parseClassMember(parser);
+        if (member && member.type != "ParseError") {
+            node.members.push(member);
+        } else if (member && member.type == "ParseError") {
+            return member;
+        }
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    return node;
+}
+export function package__parser__parseClassDeclaration(parser) {
+    let node = package__parser__parse_keyword(
+        parser,
+        "class",
+        "ClassDeclaration"
+    );
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_inheritor(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_implements(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_object_body(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    return node;
+}
+export function package__parser__parseSingletonDeclaration(parser) {
+    let node = package__parser__parse_keyword(
+        parser,
+        "singleton",
+        "SingletonDeclaration"
+    );
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_inheritor(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_implements(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_object_body(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    return node;
+}
+export function package__parser__parseTraitDeclaration(parser) {
+    let node = package__parser__parse_keyword(
+        parser,
+        "trait",
+        "TraitDeclaration"
+    );
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_inheritor(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_implements(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    node = package__parser__parse_object_body(parser, node);
+    if (node && node.type == "ParseError") {
+        return node;
+    }
+    return node;
+}
+export function package__parser__parseClassMember(parser) {
+    if (parser.current_token.type == "CONSTRUCTOR") {
+        parser.advance();
+        let lparen = parser.expect("LPAREN");
+        if (lparen && lparen.type == "ParseError") {
+            return lparen;
+        }
+        let params = package__parser__parseTermParameters(parser);
+        if (params && params.type == "ParseError") {
+            return params;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        let body = package__parser__parse_function_block(parser);
+        if (body && body.type == "ParseError") {
+            return body;
+        }
+        let ctorNode = parser.make_node("ConstructorStatement");
+        ctorNode.parameters = params;
+        ctorNode.body = body;
+        return ctorNode;
+    }
+    if (parser.current_token.type == "MICRO") {
+        parser.advance();
+        let name = parser.parse_identifier();
+        if (name && name.type == "ParseError") {
+            return name;
+        }
+        let lparen = parser.expect("LPAREN");
+        if (lparen && lparen.type == "ParseError") {
+            return lparen;
+        }
+        let params = package__parser__parseTermParameters(parser);
+        if (params && params.type == "ParseError") {
+            return params;
+        }
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
+        let returnType = null;
+        if (parser.current_token.type == "ARROW") {
+            parser.advance();
+            returnType = package__parser__parseTypeExpression(parser);
+            if (returnType && returnType.type == "ParseError") {
+                return returnType;
+            }
+        }
+        let effectType = null;
+        if (parser.current_token.type == "DIVIDE") {
+            parser.advance();
+            effectType = package__parser__parseTypeExpression(parser);
+            if (effectType && effectType.type == "ParseError") {
+                return effectType;
+            }
+        }
+        let body = package__parser__parse_function_block(parser);
+        if (body && body.type == "ParseError") {
+            return body;
+        }
+        let isInstanceMethod = false;
+        let i = 0;
+        while (i < params.length) {
+            let param = params[i];
+            let paramName = "";
+            if (param && param.name) {
+                paramName = param.name;
+            } else {
+                paramName = param;
+            }
+            if (paramName == "self") {
+                isInstanceMethod = true;
+                break;
+            }
+            i = i + 1;
+        }
+        let methodNode = parser.make_node("MemberStatement");
+        methodNode.name = name.value;
+        methodNode.parameters = params;
+        methodNode.returnType = returnType;
+        methodNode.effectType = effectType;
+        methodNode.body = body;
+        methodNode.isInstanceMethod = isInstanceMethod;
+        methodNode.isStatic = !isInstanceMethod;
+        return methodNode;
+    }
+    if (parser.current_token.type == "SYMBOL_XID") {
+        let nextIndex = parser.position + 1;
+        if (nextIndex < parser.tokens.length) {
+            let next_token = parser.tokens[nextIndex];
+            if (
+                next_token.type == "COLON" ||
+                next_token.type == "ASSIGN" ||
+                next_token.type == "SEMICOLON"
+            ) {
+                let name = parser.parse_identifier();
+                if (name && name.type == "ParseError") {
+                    return name;
+                }
+                let typeAnnotation = null;
+                if (parser.current_token.type == "COLON") {
+                    parser.advance();
+                    typeAnnotation =
+                        package__parser__parseTypeExpression(parser);
+                    if (typeAnnotation && typeAnnotation.type == "ParseError") {
+                        return typeAnnotation;
+                    }
+                }
+                let initValue = null;
+                if (parser.current_token.type == "ASSIGN") {
+                    parser.advance();
+                    initValue = package__parser__parseExpression(parser);
+                    if (initValue && initValue.type == "ParseError") {
+                        return initValue;
+                    }
+                }
+                let semicolon = parser.expect("SEMICOLON");
+                if (semicolon && semicolon.type == "ParseError") {
+                    return semicolon;
+                }
+                let node = parser.make_node("Property");
+                node.name = name.value;
+                node.typeAnnotation = typeAnnotation;
+                node.initializer = initValue;
+                return node;
+            }
+        }
+    }
+    let error = {};
+    error.type = "ParseError";
+    error.message =
+        "Expected class member (field or method) but got " +
+        parser.current_token.type;
+    error.line = parser.current_token.line;
+    error.column = parser.current_token.column;
+    return error;
+}
+export function package__parser__parse_function_declaration(parser) {
+    parser.advance();
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lparen = parser.expect("LPAREN");
+    if (lparen && lparen.type == "ParseError") {
+        return lparen;
+    }
+    let params = package__parser__parseTermParameters(parser);
+    if (params && params.type == "ParseError") {
+        return params;
+    }
+    let rparen = parser.expect("RPAREN");
+    if (rparen && rparen.type == "ParseError") {
+        return rparen;
+    }
+    let body = package__parser__parse_function_block(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = parser.make_node("MicroDeclaration");
+    node.name = name.value;
+    node.parameters = params;
+    node.body = body;
+    return node;
+}
+export function package__parser__parseIfStatement(parser) {
+    parser.advance();
+    let condition = package__parser__parseInlineExpression(parser);
+    if (condition && condition.type == "ParseError") {
+        return condition;
+    }
+    let thenBranch = package__parser__parseStatement(parser);
+    if (thenBranch && thenBranch.type == "ParseError") {
+        return thenBranch;
+    }
+    let node = parser.make_node("IfStatement");
+    node.condition = condition;
+    node.thenBranch = thenBranch;
+    node.elseBranch = null;
+    if (parser.current_token.type == "ELSE") {
+        parser.advance();
+        let elseBranch = package__parser__parseStatement(parser);
+        if (elseBranch && elseBranch.type == "ParseError") {
+            return elseBranch;
+        }
+        node.elseBranch = elseBranch;
+    }
+    return node;
+}
+export function package__parser__parseWhileStatement(parser) {
+    parser.advance();
+    let condition = package__parser__parseInlineExpression(parser);
+    if (condition && condition.type == "ParseError") {
+        return condition;
+    }
+    let body = package__parser__parse_function_block(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = parser.make_node("WhileStatement");
+    node.condition = condition;
+    node.body = body;
+    return node;
+}
+export function package__parser__parseUntilStatement(parser) {
+    parser.advance();
+    let condition = package__parser__parseInlineExpression(parser);
+    if (condition && condition.type == "ParseError") {
+        return condition;
+    }
+    let body = package__parser__parse_function_block(parser);
+    if (body && body.type == "ParseError") {
+        return body;
+    }
+    let node = parser.make_node("UntilStatement");
+    node.condition = condition;
+    node.body = body;
+    return node;
+}
+export function package__parser__parseReturnStatement(parser) {
+    parser.advance();
+    let node = parser.make_node("ReturnStatement");
+    if (parser.current_token.type == "SEMICOLON") {
+        node.value = null;
+    } else {
+        let value = package__parser__parseExpression(parser);
+        if (value && value.type == "ParseError") {
+            return value;
+        }
+        node.value = value;
+    }
+    let semicolon = parser.expect("SEMICOLON");
+    if (semicolon && semicolon.type == "ParseError") {
+        return semicolon;
+    }
+    return node;
+}
+export function package__parser__parse_function_block(parser) {
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let statements = [];
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let stmt = package__parser__parseStatement(parser);
+        if (stmt && stmt.type == "ParseError") {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = parser.make_node("Block");
+    node.statements = statements;
+    return node;
+}
+export function package__parser__parseFlagsDeclaration(parser) {
+    parser.advance();
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let members = [];
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let member = package__parser__parseFlagsMember(parser);
+        if (member && member.type == "ParseError") {
+            return member;
+        }
+        members.push(member);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = parser.make_node("FlagsDeclaration");
+    node.name = name.value;
+    node.members = members;
+    return node;
+}
+export function package__parser__parseFlagsMember(parser) {
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let assign = parser.expect("ASSIGN");
+    if (assign && assign.type == "ParseError") {
+        return assign;
+    }
+    let value = package__parser__parseExpression(parser);
+    if (value && value.type == "ParseError") {
+        return value;
+    }
+    let node = parser.make_node("FlagsMember");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+export function package__parser__parseEidosDeclaration(parser) {
+    parser.advance();
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let members = [];
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let member = package__parser__parseEidosMember(parser);
+        if (member && member.type == "ParseError") {
+            return member;
+        }
+        members.push(member);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = parser.make_node("EidosDeclaration");
+    node.name = name.value;
+    node.members = members;
+    return node;
+}
+export function package__parser__parseEidosMember(parser) {
+    let name = parser.parse_identifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let assign = parser.expect("ASSIGN");
+    if (assign && assign.type == "ParseError") {
+        return assign;
+    }
+    let value = package__parser__parseExpression(parser);
+    if (value && value.type == "ParseError") {
+        return value;
+    }
+    let node = parser.make_node("EidosMember");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+export function package__parser__parse_program(parser) {
+    let statements = [];
+    while (parser.current_token.type != "EOF") {
+        let stmt = package__parser__parseStatement(parser);
+        if (stmt && stmt.type == "ParseError") {
+            return stmt;
+        }
+        statements.push(stmt);
+    }
+    let node = parser.make_node("Program");
+    node.statements = statements;
+    return node;
 }

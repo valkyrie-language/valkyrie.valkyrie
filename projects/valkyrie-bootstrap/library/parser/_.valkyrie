@@ -16,11 +16,11 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
     }
 
     if parser.current_token.`type` == "NAMESPACE" {
-        return parseNamespaceStatement(parser);
+        return parse_namespace_statement(parser);
     }
 
     if parser.current_token.`type` == "USING" {
-        return parseUsingStatement(parser);
+        return parse_using_statement(parser);
     }
 
     if parser.current_token.`type` == "ATTRIBUTE" {
@@ -97,14 +97,14 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
     }
 
     # 创建ExpressionStatement节点
-    let stmt = parser.mark_node("ExpressionStatement");
+    let stmt = parser.make_node("ExpressionStatement");
     stmt.expression = expr;
     return stmt;
 }
 
 micro parseLetStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'let'
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -124,15 +124,14 @@ micro parseLetStatement(parser: ValkyrieParser) -> Node {
         return semicolon;
     }
 
-    let node = parser.mark_node("LetStatement");
+    let node = parser.make_node("LetStatement");
     node.name = name.value;
     node.value = value;
     return node;
 }
 
-micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
+micro parse_namespace_statement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'namespace'
-    let path = [];
     let is_main_namespace = false;
 
     # 检查是否为主空间（namespace!）
@@ -141,46 +140,20 @@ micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
         is_main_namespace = true;
     }
 
-    let identifier = parser.expectIdentifier();
-    if (identifier.`type` == "ParseError") { return identifier; }
-    path.push(identifier.value);
-
-    while (parser.current_token.`type` == "DOUBLE_COLON") {
-        parser.advance();
-        identifier = parser.expectIdentifier();
-        if (identifier.`type` == "ParseError") { return identifier; }
-        path.push(identifier.value);
-    }
-
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.`type` == "ParseError") { return semicolon; }
-
-    let node = parser.mark_node("NamespaceStatement");
-    node.path = path;
+    let names = parser.parse_name_path(true);
+    let node = parser.make_node("NamespaceStatement");
+    node.path = names;
     node.is_main_namespace = is_main_namespace;
+    parser.eat_semicolon();
     return node;
 }
 
-micro parseUsingStatement(parser: ValkyrieParser) -> Node {
-    parser.advance(); # skip 'using'
-    let path = [];
-
-    let identifier = parser.expectIdentifier();
-    if (identifier.`type` == "ParseError") { return identifier; }
-    path.push(identifier.value);
-
-    while (parser.current_token.`type` == "DOUBLE_COLON") {
-        parser.advance();
-        identifier = parser.expectIdentifier();
-        if (identifier.`type` == "ParseError") { return identifier; }
-        path.push(identifier.value);
-    }
-
-    let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.`type` == "ParseError") { return semicolon; }
-
-    let node = parser.mark_node("UsingStatement");
+micro parse_using_statement(parser: ValkyrieParser) -> Node {
+    parser.advance(); # eat 'using'
+    let path = parser.parse_name_path(true);
+    let node = parser.make_node("UsingStatement");
     node.path = path;
+    parser.eat_semicolon();
     return node;
 }
 
@@ -188,7 +161,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip '↯'
 
     # 期望 js 标识符
-    let jsToken = parser.expectIdentifier();
+    let jsToken = parser.parse_identifier();
     if jsToken.`type` == "ParseError" { return jsToken; }
     if jsToken.value != "js" {
         let error = {};
@@ -224,7 +197,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     if microToken.`type` == "ParseError" { return microToken; }
 
     # 解析函数名
-    let functionName = parser.expectIdentifier();
+    let functionName = parser.parse_identifier();
     if functionName.`type` == "ParseError" { return functionName; }
 
     # 解析参数列表
@@ -233,13 +206,13 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
 
     let parameters = [];
     if parser.current_token.`type` != "RPAREN" {
-        let param = parser.expectIdentifier();
+        let param = parser.parse_identifier();
         if param.`type` == "ParseError" { return param; }
         parameters.push(param.value);
 
         while parser.current_token.`type` == "COMMA" {
             parser.advance(); # skip comma
-            param = parser.expectIdentifier();
+            param = parser.parse_identifier();
             if param.`type` == "ParseError" { return param; }
             parameters.push(param.value);
         }
@@ -252,7 +225,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     let body = parseStatement(parser);
     if body.`type` == "ParseError" { return body; }
 
-    let node = parser.mark_node("JSAttributeStatement");
+    let node = parser.make_node("JSAttributeStatement");
     node.modulePath = modulePath.value;
     node.importName = importName.value;
     node.functionName = functionName.value;
@@ -264,7 +237,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
 # 解析顶级 micro function 语法: micro name(params) { ... }
 micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -309,7 +282,7 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = parser.mark_node("MicroDeclaration");
+    let node = parser.make_node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.returnType = returnType;
@@ -321,7 +294,7 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
 # 解析关键词并返回节点类型
 micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type: String) -> Node {
     parser.advance(); # skip keyword
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -337,7 +310,7 @@ micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type:
 micro parse_inheritor(parser: ValkyrieParser, node: Node) -> Node {
     if parser.current_token.`type` == "EXTENDS" {
         parser.advance(); # skip 'extends'
-        let superName = parser.expectIdentifier();
+        let superName = parser.parse_identifier();
         if superName && superName.`type` == "ParseError" {
             return superName;
         }
@@ -492,7 +465,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             return body;
         }
 
-        let ctorNode = parser.mark_node("ConstructorStatement");
+        let ctorNode = parser.make_node("ConstructorStatement");
         ctorNode.parameters = params;
         ctorNode.body = body;
         return ctorNode;
@@ -501,7 +474,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
     # 检查是否是 micro 方法
     if parser.current_token.`type` == "MICRO" {
         parser.advance(); # skip 'micro'
-        let name = parser.expectIdentifier();
+        let name = parser.parse_identifier();
         if name && name.`type` == "ParseError" {
             return name;
         }
@@ -568,7 +541,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             i = i + 1;
         }
 
-        let methodNode = parser.mark_node("MemberStatement");
+        let methodNode = parser.make_node("MemberStatement");
         methodNode.name = name.value;
         methodNode.parameters = params;
         methodNode.returnType = returnType;
@@ -586,7 +559,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
             let next_token = parser.tokens[nextIndex];
             if next_token.`type` == "COLON" || next_token.`type` == "ASSIGN" || next_token.`type` == "SEMICOLON" {
                 # 这是一个 field
-                let name = parser.expectIdentifier();
+                let name = parser.parse_identifier();
                 if name && name.`type` == "ParseError" {
                     return name;
                 }
@@ -616,7 +589,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
                     return semicolon;
                 }
 
-                let node = parser.mark_node("Property");
+                let node = parser.make_node("Property");
                 node.name = name.value;
                 node.typeAnnotation = typeAnnotation;
                 node.initializer = initValue;
@@ -636,7 +609,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
 
 micro parse_function_declaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -661,7 +634,7 @@ micro parse_function_declaration(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = parser.mark_node("MicroDeclaration");
+    let node = parser.make_node("MicroDeclaration");
     node.name = name.value;
     node.parameters = params;
     node.body = body;
@@ -680,7 +653,7 @@ micro parseIfStatement(parser: ValkyrieParser) -> Node {
         return thenBranch;
     }
 
-    let node = parser.mark_node("IfStatement");
+    let node = parser.make_node("IfStatement");
     node.condition = condition;
     node.thenBranch = thenBranch;
     node.elseBranch = null;
@@ -709,7 +682,7 @@ micro parseWhileStatement(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = parser.mark_node("WhileStatement");
+    let node = parser.make_node("WhileStatement");
     node.condition = condition;
     node.body = body;
     return node;
@@ -727,7 +700,7 @@ micro parseUntilStatement(parser: ValkyrieParser) -> Node {
         return body;
     }
 
-    let node = parser.mark_node("UntilStatement");
+    let node = parser.make_node("UntilStatement");
     node.condition = condition;
     node.body = body;
     return node;
@@ -736,7 +709,7 @@ micro parseUntilStatement(parser: ValkyrieParser) -> Node {
 micro parseReturnStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'return'
 
-    let node = parser.mark_node("ReturnStatement");
+    let node = parser.make_node("ReturnStatement");
 
     if parser.current_token.`type` == "SEMICOLON" {
         node.value = null;
@@ -777,7 +750,7 @@ micro parse_function_block(parser: ValkyrieParser) -> Node {
         return rbrace;
     }
 
-    let node = parser.mark_node("Block");
+    let node = parser.make_node("Block");
     node.statements = statements;
     return node;
 }
@@ -787,7 +760,7 @@ micro parseFlagsDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'flags'
     
     # 解析 flags 名称
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -814,7 +787,7 @@ micro parseFlagsDeclaration(parser: ValkyrieParser) -> Node {
         return rbrace;
     }
     
-    let node = parser.mark_node("FlagsDeclaration");
+    let node = parser.make_node("FlagsDeclaration");
     node.name = name.value;
     node.members = members;
     return node;
@@ -822,7 +795,7 @@ micro parseFlagsDeclaration(parser: ValkyrieParser) -> Node {
 
 # 解析 flags 成员: UPPER_CASE = 1
 micro parseFlagsMember(parser: ValkyrieParser) -> Node {
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -839,7 +812,7 @@ micro parseFlagsMember(parser: ValkyrieParser) -> Node {
         return value;
     }
     
-    let node = parser.mark_node("FlagsMember");
+    let node = parser.make_node("FlagsMember");
     node.name = name.value;
     node.value = value;
     return node;
@@ -850,7 +823,7 @@ micro parseEidosDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'eidos'
     
     # 解析 eidos 名称
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -877,7 +850,7 @@ micro parseEidosDeclaration(parser: ValkyrieParser) -> Node {
         return rbrace;
     }
     
-    let node = parser.mark_node("EidosDeclaration");
+    let node = parser.make_node("EidosDeclaration");
     node.name = name.value;
     node.members = members;
     return node;
@@ -885,7 +858,7 @@ micro parseEidosDeclaration(parser: ValkyrieParser) -> Node {
 
 # 解析 eidos 成员: PascalCase = 1
 micro parseEidosMember(parser: ValkyrieParser) -> Node {
-    let name = parser.expectIdentifier();
+    let name = parser.parse_identifier();
     if name && name.`type` == "ParseError" {
         return name;
     }
@@ -902,13 +875,13 @@ micro parseEidosMember(parser: ValkyrieParser) -> Node {
         return value;
     }
     
-    let node = parser.mark_node("EidosMember");
+    let node = parser.make_node("EidosMember");
     node.name = name.value;
     node.value = value;
     return node;
 }
 
-micro parseProgram(parser: ValkyrieParser) -> Node {
+micro parse_program(parser: ValkyrieParser) -> Node {
     let statements = [];
 
     while parser.current_token.`type` != "EOF" {
@@ -919,12 +892,7 @@ micro parseProgram(parser: ValkyrieParser) -> Node {
         statements.push(stmt);
     }
 
-    let node = parser.mark_node("Program");
+    let node = parser.make_node("Program");
     node.statements = statements;
     return node;
-}
-
-micro parse(tokens: Array<Token>) -> Node {
-    let parser = new ValkyrieParser(tokens);
-    return parseProgram(parser);
 }

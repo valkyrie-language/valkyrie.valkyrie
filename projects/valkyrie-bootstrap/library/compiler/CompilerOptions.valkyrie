@@ -1,26 +1,36 @@
 namespace package::compiler;
 
+# 代码质量检查级别
+eidos LintLevel {
+    ALLOWED = 0
+    WARNING = 1
+    DISABLE = 2
+}
+
+# 诊断级别
+eidos DiagnosticLevel {
+    ERROR   = 0
+    WARNING = 1
+}
+
+# 编译模式
+eidos CompileMode {
+    STANDARD = 0
+    REPL     = 1
+}
+
+# 输出格式
+eidos OutputFormat {
+    JS = 0
+}
 
 class CompilerOptions {
-    constructor(output_format, optimize, debug, mode) {
-        self.output_format = output_format;
-        if output_format == false {
-            self.output_format = "js";
-        }
-        self.optimize = optimize;
-        if optimize == false {
-            self.optimize = false;
-        }
-        self.debug = debug;
-        if debug == false {
-            self.debug = false;
-        }
-        self.implicit_member_call = "warning";
-        self.mode = mode;
-        if mode == false {
-            self.mode = "repl";
-        }
-        self.source_map = true;
-        self.source_map_output_path = "";
+    constructor(output_format: String, enable_source_map: bool, enable_optimization: bool, mode: CompileMode) {
+        self.output_format = output_format || OutputFormat::JS;
+        self.source_map = enable_source_map || false;
+        self.enable_source_map = enable_source_map || false;
+        self.enable_optimization = enable_optimization || false;
+        self.mode = mode || CompileMode::STANDARD;
+        self.implicit_member_call = LintLevel::WARNING;
     }
 }

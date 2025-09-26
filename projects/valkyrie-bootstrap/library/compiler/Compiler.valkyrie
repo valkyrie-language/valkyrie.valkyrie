@@ -1,365 +1,242 @@
 namespace package::compiler;
 
 using package::lexer::ValkyrieLexer;
-using package::parser::parse;
-using package::codegen::JsCodeGeneration;
-using package::parser::Node;
-using package::compiler::DependencyAnalyzer;
-using package::compiler::CompilerOptions;
-using package::compiler::CompilerDiagnostics;
-using package::compiler::NamespaceManager;
-using package::compiler::NamespaceUtils;
-using package::compiler::IdentifierResolver;
-using package::codegen::join_name_path;
+using package::parser::ValkyrieParser;
+using package::generation::JsCodeGeneration;
 
 class Compiler {
     constructor(options: CompilerOptions) {
         self.options = options || new CompilerOptions();
         self.diagnostics = new CompilerDiagnostics();
-        self.namespace_manager = new NamespaceManager();
-        self.dependency_analyzer = new DependencyAnalyzer();
     }
 }
 
-# Main compilation function with multiple diagnostics support
-micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, String>) -> Map<String, String> {
-    # Reset state
+
+# Main compilation function with multiple diagnostics support, map of path, source text
+# returns {success: Boolean, diagnostics: CompilerDiagnostics[], code: String }
+micro compile_with_compiler(compiler: Compiler, files: Map<String, String>) -> Object {
     compiler.diagnostics.clear_diagnostics();
-    compiler.namespace_manager = new NamespaceManager();
-    compiler.dependency_analyzer = new DependencyAnalyzer();
+    # 1.遍历所有文件, 生成 ast
+    let asts = {};
+    let file_paths = Object.keys(files);
+    let ast_index = 0;
+    while ast_index < file_paths.length {
+        let path = file_paths[ast_index];
+        let source_text = files[path];
 
-    # Analyze dependencies - first pass: collect using dependencies
-    let file_names = Object.keys(file_contents);
-    let i = 0;
-    while i < file_names.length {
-        let file_name = file_names[i];
-        let content = file_contents[file_name];
+        # 1.1 词法分析
+        let lexer = new ValkyrieLexer(source_text);
+        let tokens = lexer.tokenize();
 
-        compiler.dependency_analyzer.dependencies[file_name] = [];
+        if compiler.diagnostics.has_errors() {
+            ast_index = ast_index + 1;
+            continue;
+        }
 
-        let lexer_instance = new ValkyrieLexer(content);
-        let tokens = lexer_instance.tokenize();
+        # 1.2 语法分析
+        let parser = new ValkyrieParser(compiler.options);
+        let program = parser.parse(tokens);
+        if program.`type` == "ParseError" {
+            compiler.diagnostics.add_error(path + " "+ program.message, program.line, program.column);
+        }
+        else {
+            asts[path] = program;
+        }
+        ast_index = ast_index + 1;
+    }
+    # 2. 遍历 ast, 根据 namespace 分组
+    let namespace_groups = {};
+    let ast_paths = Object.keys(asts);
+    let path_index = 0;
 
-        if tokens.length > 0 {
-            let ast = parse(tokens);
+    console.log("Total AST files:", ast_paths.length);
 
-            if ast.`type` == "Program" {
-                let j = 0;
-                while j < ast.statements.length {
-                    let stmt = ast.statements[j];
+    while path_index < ast_paths.length {
+        let file_path = ast_paths[path_index];
+        let program = asts[file_path];
+        # 查找文件中的所有 namespace 声明并收集其 body
+        if program && program.statements && program.statements.length > 0 {
+            let current_namespace = [];
+            let current_body = [];
 
-                    if stmt.`type` == "UsingStatement" {
-                        let using_path = join_name_path(stmt.path, "::");
-                        let provider_file = find_namespace_provider(using_path, file_contents);
-                        if provider_file != null && provider_file != file_name {
-                            compiler.dependency_analyzer.dependencies[file_name].push(provider_file);
-                        }
-                    }
+            let stmt_index = 0;
+            while stmt_index < program.statements.length {
+                let statement = program.statements[stmt_index];
 
-                    j = j + 1;
+                # 检查是否是 namespace 声明
+                if statement && statement.`type` == "NamespaceStatement" {
+                    # 如果已经有正在处理的 namespace，先保存它
+                     if current_namespace.length > 0 {
+                         let path_key = make_namespace_key(current_namespace);
+                         let group = namespace_groups[path_key];
+                         if !group {
+                             group = new NamespaceGroup(current_namespace);
+                             namespace_groups[path_key] = group;
+                         }
+
+                         let namespace_node = {};
+                         namespace_node["type"] = "NamespaceStatement";
+                         namespace_node["file"] = file_path;
+                         namespace_node["path"] = current_namespace;
+                         namespace_node["is_main_namespace"] = false;
+                         namespace_node["body"] = current_body;
+
+                         group.add_namespace(namespace_node);
+
+                         # 重置当前 namespace 和 body
+                         current_namespace = [];
+                         current_body = [];
+                     }
+
+                    # 设置新的 namespace
+                     current_namespace = [];
+                     if statement.path && statement.path.name_path && statement.path.name_path.length > 0 {
+                         let name_index = 0;
+                         while name_index < statement.path.name_path.length {
+                             let identifier = statement.path.name_path[name_index];
+                             if identifier && identifier.name {
+                                 current_namespace.push(identifier.name);
+                             }
+                             name_index = name_index + 1;
+                         }
+                     }
+
+                } else {
+                    # 如果不是则添加到 body
+                    current_body.push(statement);
                 }
-            } else {
-                # Add parsing error to diagnostics instead of returning immediately
-                compiler.diagnostics.add_error("Failed to parse " + file_name + ": " + JSON.stringify(ast), 0, 0, file_name);
+
+                stmt_index = stmt_index + 1;
             }
+
+            # 处理文件末尾的 namespace
+             if current_namespace.length > 0 {
+                 let path_key = make_namespace_key(current_namespace);
+                 let group = namespace_groups[path_key];
+                 if !group {
+                     group = new NamespaceGroup(current_namespace);
+                     namespace_groups[path_key] = group;
+                 }
+
+                 let namespace_node = {};
+                 namespace_node["type"] = "NamespaceStatement";
+                 namespace_node["file"] = file_path;
+                 namespace_node["path"] = current_namespace;
+                 namespace_node["is_main_namespace"] = false;
+                 namespace_node["body"] = current_body;
+
+                 group.add_namespace(namespace_node);
+             }
         } else {
-            # Add lexing error to diagnostics instead of returning immediately
-            compiler.diagnostics.add_error("Lexical analysis failed for " + file_name, 0, 0, file_name);
+            console.log("No statements found in program");
         }
 
-
-        i = i + 1;
+        path_index = path_index + 1;
     }
 
-    # Topological sort
-    let sort_result = compiler.dependency_analyzer.topological_sort(file_contents);
-    if sort_result.error != null {
-        compiler.diagnostics.add_error(sort_result.error, 0, 0, "");
-        return create_compilation_result_with_diagnostics(compiler, null);
-    }
+    console.log("Found namespace groups:", Object.keys(namespace_groups));
 
-    let sorted_files = sort_result.sorted;
-
-    # Collect statements by type
-    let js_import_statements = [];
-    let variable_statements = [];
-    let function_statements = [];
-    let class_statements = [];
-    let execution_statements = [];
-
-    # Process files in dependency order - continue even if errors occur
-    let k = 0;
-    while k < sorted_files.length {
-        let file_name = sorted_files[k];
-        let content = file_contents[file_name];
-
-        compiler.namespace_manager.current_file = file_name;
-
-        let lexer_instance = new ValkyrieLexer(content);
-        let tokens = lexer_instance.tokenize();
-
-        if tokens.length == 0 {
-            compiler.diagnostics.add_error("Empty or invalid file", 0, 0, file_name);
-            k = k + 1;
-            continue;
-        }
-
-        let ast = parse(tokens);
-        if ast.`type` != "Program" {
-            compiler.diagnostics.add_error("Failed to parse " + file_name + " at " + JSON.stringify(ast), 0, 0, file_name);
-            k = k + 1;
-            continue;
-        }
-
-        let validation_result = validate_namespace_rules(ast, compiler.options.mode);
-        if !validation_result.success {
-            compiler.diagnostics.add_error(validation_result.error, 0, 0, file_name);
-            # Continue processing instead of returning
-        }
-
-        let current_namespace = "";
-        let l = 0;
-        while l < ast.statements.length {
-            let stmt = ast.statements[l];
-
-            if stmt.`type` == "NamespaceStatement" {
-                current_namespace = join_name_path(stmt.path, "::");
-                if stmt.is_main_namespace {
-                    current_namespace = current_namespace + "!";
-
-                    # In standard mode, check for duplicate main namespaces
-                    if compiler.options.mode == "standard" {
-                        if compiler.namespace_manager.namespaces[current_namespace] != null {
-                            let clean_name = current_namespace.substring(0, current_namespace.length - 1);
-                            compiler.diagnostics.add_error("Duplicate main namespace '" + clean_name + "' found. Each main namespace must have a unique name.", 0, 0, file_name);
-                        }
-                    }
-                }
-                compiler.namespace_manager.current_namespace = current_namespace;
-
-            } else if stmt.`type` == "UsingStatement" {
-                let using_path = join_name_path(stmt.path, "::");
-                let is_global = is_main_namespace(using_path);
-                compiler.namespace_manager.add_using_import(using_path, is_global);
-
-            } else if stmt.`type` == "JSImportStatement" {
-                js_import_statements.push(stmt);
-
-            } else if stmt.`type` == "LetStatement" {
-                stmt.sourceNamespace = current_namespace;
-                variable_statements.push(stmt);
-                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "variable", stmt, file_name);
-
-            } else if stmt.`type` == "MicroDeclaration" {
-                stmt.sourceNamespace = current_namespace;
-                function_statements.push(stmt);
-                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "function", stmt, file_name);
-
-            } else if stmt.`type` == "ClassDeclaration" {
-                stmt.sourceNamespace = current_namespace;
-                class_statements.push(stmt);
-                compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "class", stmt, file_name);
-
-            } else {
-                execution_statements.push(stmt);
+    # 第三阶段, 构建全局符号表
+    let global_symbol_table = {};
+    
+    # 首先收集所有命名空间的符号到全局符号表
+    let namespace_keys = Object.keys(namespace_groups);
+    let key_index = 0;
+    while key_index < namespace_keys.length {
+        let namespace_key = namespace_keys[key_index];
+        let group = namespace_groups[namespace_key];
+        
+        # 收集该组的声明到全局符号表
+        group.collect_declarations();
+        let decl_index = 0;
+        while decl_index < group.declarations.length {
+            let declaration = group.declarations[decl_index];
+            let unique_name = group.generate_unique_name(declaration, group.path);
+            if unique_name != "" {
+                global_symbol_table[unique_name] = declaration;
             }
-
-            l = l + 1;
+            decl_index = decl_index + 1;
         }
-
-        k = k + 1;
-    }
-
-    # Additional duplicate main namespace check (only in standard mode)
-    if compiler.options.mode == "standard" {
-        check_duplicate_main_namespaces_with_compiler(compiler);
-    }
-
-    # Generate unique names
-    generate_unique_names_with_compiler(compiler, function_statements, class_statements, variable_statements);
-
-    # Create integrated AST
-    let integrated_ast = create_integrated_ast_with_compiler(compiler, js_import_statements, variable_statements, function_statements, class_statements, execution_statements);
-
-    return create_compilation_result_with_diagnostics(compiler, integrated_ast);
-}
-
-# Check for duplicate main namespaces
-micro check_duplicate_main_namespaces_with_compiler(compiler: Compiler) {
-    let main_namespaces = [];
-    let main_namespace_names = [];
-    
-    # Collect all main namespaces
-    let namespace_keys = Object.keys(compiler.namespace_manager.namespaces);
-    let ns_index = 0;
-    while ns_index < namespace_keys.length {
-        let ns_name = namespace_keys[ns_index];
-        if ns_name.endsWith("!") {
-            main_namespaces.push(ns_name);
-            # Extract clean namespace name (remove !)
-            let clean_name = ns_name.substring(0, ns_name.length - 1);
-            main_namespace_names.push(clean_name);
-        }
-        ns_index = ns_index + 1;
+        
+        key_index = key_index + 1;
     }
     
-    # Check for duplicate main namespace names
-    let duplicate_index = 0;
-    while duplicate_index < main_namespace_names.length {
-        let current_name = main_namespace_names[duplicate_index];
-        let check_index = duplicate_index + 1;
-        while check_index < main_namespace_names.length {
-            if main_namespace_names[check_index] == current_name {
-                compiler.diagnostics.add_error("Duplicate main namespace '" + current_name + "' found. Each main namespace must have a unique name.", 0, 0, "");
+    # 然后为每个命名空间组设置全局符号表并解析
+    key_index = 0;
+    while key_index < namespace_keys.length {
+        let namespace_key = namespace_keys[key_index];
+        let group = namespace_groups[namespace_key];
+        
+        # 设置全局符号表
+        group.global_symbol_table = global_symbol_table;
+        # 为组中的所有声明生成唯一名称
+        group.resolve();
+
+        key_index = key_index + 1;
+    }
+
+    # 第四阶段, 整合成一个 ast 并使用 js codegen 生成代码
+    console.log("=== 第四阶段: AST整合和代码生成 ===");
+
+    # 整合所有namespace组的声明到一个统一的AST中
+    let combined_ast = {};
+    combined_ast["type"] = "Program";
+    combined_ast.body = [];
+    combined_ast.declarations = [];
+    combined_ast.statements = []; # 为JsCodeGeneration提供兼容的statements字段
+
+    # 收集所有声明到统一的AST中
+    let group_keys = Object.keys(namespace_groups);
+    let group_index = 0;
+    while group_index < group_keys.length {
+        let namespace_key = group_keys[group_index];
+        let group = namespace_groups[namespace_key];
+
+        # 将每个组的声明添加到统一AST中
+        let decl_index = 0;
+        while decl_index < group.declarations.length {
+            let declaration = group.declarations[decl_index];
+            combined_ast.declarations.push(declaration);
+            decl_index = decl_index + 1;
+        }
+
+        # 将每个namespace的body内容添加到统一AST中
+        let ns_index = 0;
+        while ns_index < group.namespaces.length {
+            let `namespace` = group.namespaces[ns_index];
+            let stmt_index = 0;
+            while stmt_index < `namespace`.body.length {
+                let statement = `namespace`.body[stmt_index];
+                combined_ast.body.push(statement);
+                combined_ast.statements.push(statement);
+                stmt_index = stmt_index + 1;
             }
-            check_index = check_index + 1;
+            ns_index = ns_index + 1;
         }
-        duplicate_index = duplicate_index + 1;
-    }
-}
 
-# Generate unique names for statements
-micro generate_unique_names_with_compiler(compiler: Compiler, function_statements: Array<Node>, class_statements: Array<Node>, variable_statements: Array<Node>) {
-    let m = 0;
-    while m < function_statements.length {
-        let func_stmt = function_statements[m];
-        func_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(func_stmt.name, func_stmt.sourceNamespace);
-        m = m + 1;
+        group_index = group_index + 1;
     }
-    
-    let n = 0;
-    while n < class_statements.length {
-        let class_stmt = class_statements[n];
-        class_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(class_stmt.name, class_stmt.sourceNamespace);
-        n = n + 1;
-    }
-    
-    let o = 0;
-    while o < variable_statements.length {
-        let var_stmt = variable_statements[o];
-        var_stmt.uniqueName = compiler.namespace_manager.get_fully_qualified_name(var_stmt.name, var_stmt.sourceNamespace);
-        o = o + 1;
-    }
-}
 
-# Create integrated AST with resolved identifiers
-micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statements: Array<Node>, variable_statements: Array<Node>, function_statements: Array<Node>, class_statements: Array<Node>, execution_statements: Array<Node>) -> Node {
-    let integrated_ast = {
-        "type": "Program",
-        "statements": []
+    # 使用现有的JsCodeGeneration类生成代码
+    let code_generator = new JsCodeGeneration("  ", compiler.options);
+    let generated_code = code_generator.generate(combined_ast);
+
+    console.log("=== 代码生成完成 ===");
+
+    # 返回编译结果
+    return {
+        success: !compiler.diagnostics.has_errors(),
+        diagnostics: compiler.diagnostics.get_all_diagnostics(),
+        # namespace_groups: namespace_groups,
+        # combined_ast: combined_ast,
+        code: generated_code
     };
-    
-    # Add JS imports
-    let p = 0;
-    while p < js_import_statements.length {
-        integrated_ast.statements.push(js_import_statements[p]);
-        p = p + 1;
-    }
-    
-    # Add variables with unique names
-    let q = 0;
-    while q < variable_statements.length {
-        let var_stmt = variable_statements[q];
-        if var_stmt.uniqueName != null && var_stmt.uniqueName != var_stmt.name {
-            let modified_stmt = Object.assign({}, var_stmt);
-            modified_stmt.name = var_stmt.uniqueName;
-            integrated_ast.statements.push(modified_stmt);
-        } else {
-            integrated_ast.statements.push(var_stmt);
-        }
-        q = q + 1;
-    }
-    
-    # Add functions with unique names and resolved identifiers
-    let r = 0;
-    while r < function_statements.length {
-        let func_stmt = function_statements[r];
-        let modified_stmt = Object.assign({}, func_stmt);
-        
-        if func_stmt.uniqueName != null && func_stmt.uniqueName != func_stmt.name {
-            modified_stmt.name = func_stmt.uniqueName;
-        }
-        
-        # Resolve identifiers in function body using IdentifierResolver functions
-        modified_stmt.body = compiler.namespace_manager.resolve_identifiers_in_statement(func_stmt.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
-        integrated_ast.statements.push(modified_stmt);
-        r = r + 1;
-    }
-    
-    # Add classes with unique names and resolved identifiers
-    let s = 0;
-    while s < class_statements.length {
-        let class_stmt = class_statements[s];
-        let modified_stmt = Object.assign({}, class_stmt);
-        
-        if class_stmt.uniqueName != null && class_stmt.uniqueName != class_stmt.name {
-            modified_stmt.name = class_stmt.uniqueName;
-        }
-        
-        # Resolve identifiers in class members
-        if class_stmt.members != null {
-            let resolved_members = [];
-            let m = 0;
-            while m < class_stmt.members.length {
-                let member = class_stmt.members[m];
-                let resolved_member = Object.assign({}, member);
-                # Only resolve for methods and constructors that have bodies
-                if (member.`type` == "MemberStatement" || member.`type` == "ConstructorStatement") && member.body != null {
-                    resolved_member.body = compiler.namespace_manager.resolve_identifiers_in_statement(member.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
-                }
-                resolved_members.push(resolved_member);
-                m = m + 1;
-            }
-            modified_stmt.members = resolved_members;
-        }
-        
-        integrated_ast.statements.push(modified_stmt);
-        s = s + 1;
-    }
-    
-    # Add execution statements with resolved identifiers
-    let t = 0;
-    while t < execution_statements.length {
-        let resolved_stmt = compiler.namespace_manager.resolve_identifiers_in_statement(execution_statements[t], function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
-        integrated_ast.statements.push(resolved_stmt);
-        t = t + 1;
-    }
-    
-    return integrated_ast;
 }
 
-# Create compilation result with diagnostics
-micro create_compilation_result_with_diagnostics(compiler: Compiler, integrated_ast: Node) -> Map<String, String> {
-    if compiler.diagnostics.has_errors() {
-        return {
-            "success": false,
-            "code": null,
-            "diagnostics": compiler.diagnostics.get_all_diagnostics()
-        };
+# 从 namespace 路径数组生成字符串 key
+micro make_namespace_key(namespace_path: Array<String>) -> String {
+    if namespace_path.length == 0 {
+        return "";
     }
-    
-    if integrated_ast != null {
-        let generator = new JsCodeGeneration("    ", compiler.options);
-        let generated = generator.generate(integrated_ast);
-        let source_map = generator.get_source_map();
-        
-        # Convert source map to JSON string if it exists
-        let source_map_json = false;
-        if source_map {
-            source_map_json = source_map.to_json();
-        }
-        
-        return {
-            "success": true,
-            "code": generated,
-            "source_map": source_map_json,
-            "diagnostics": compiler.diagnostics.get_all_diagnostics()
-        };
-    } else {
-        return {
-            "success": false,
-            "code": null,
-            "diagnostics": compiler.diagnostics.get_all_diagnostics()
-        };
-    }
+    return namespace_path.join("__");
 }

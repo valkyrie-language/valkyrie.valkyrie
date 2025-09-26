@@ -32,6 +32,11 @@ class Symbol {
         self.is_mutable = false;
         self.is_exported = false;
         self.references = [];
+        
+        # namepath 相关属性
+        self.namespace_path = [];
+        self.resolved_name = false;
+        self.full_namepath = [];
     }
     
     # 从 Node 创建 Symbol

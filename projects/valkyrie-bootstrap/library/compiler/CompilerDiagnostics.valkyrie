@@ -1,61 +1,62 @@
 namespace package::compiler;
 
+using package::compiler::DiagnosticLevel;
+
 class CompilerDiagnostics {
     constructor() {
-        self.errors = [];
-        self.warnings = [];
+        self.diagnostics = [];
     }
     # Get all diagnostics combined
     micro get_all_diagnostics(self) -> Array<Map<String, String>> {
         let result = [];
         let i = 0;
-        while i < self.errors.length {
-            result.push(self.errors[i]);
+        while i < self.diagnostics.length {
+            result.push(self.diagnostics[i]);
             i = i + 1;
-        }
-        let j = 0;
-        while j < self.warnings.length {
-            result.push(self.warnings[j]);
-            j = j + 1;
         }
         return result;
     }
-    # Add error to diagnostics
-    micro add_error(self, message: String, line: i32, column: i32, file: String) {
-        let error = {
-            "type": "error",
-            "message": message,
-            "line": line || 0,
-            "column": column || 0,
-            "file": file || ""
-        };
-        self.errors.push(error);
+    micro add_error(self, message: String, line: u32, column: u32) {
+        self.diagnostics.push({
+            level: DiagnosticLevel::ERROR,
+            message: message,
+            line: line,
+            column: column
+        });
     }
 
-    # Add warning to diagnostics
-    micro add_warning(self, message: String, line: i32, column: i32, file: String) {
-        let warning = {
-            "type": "warning",
-            "message": message,
-            "line": line || 0,
-            "column": column || 0,
-            "file": file || ""
-        };
-        self.warnings.push(warning);
+    micro add_warning(self, message: String, line: u32, column: u32) {
+        self.diagnostics.push({
+            level: DiagnosticLevel::WARNING,
+            message: message,
+            line: line,
+            column: column
+        });
     }
 
-    # Check if diagnostics has errors
-    micro has_errors(self) -> Bool {
-        return self.errors.length > 0;
+    micro has_errors(self) {
+        let i = 0;
+        while i < self.diagnostics.length {
+            if self.diagnostics[i].level == DiagnosticLevel::ERROR {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
     }
 
-    # Check if diagnostics has warnings
-    micro has_warnings(self) -> Bool {
-        return self.warnings.length > 0;
+    micro has_warnings(self) {
+        let i = 0;
+        while i < self.diagnostics.length {
+            if self.diagnostics[i].level == DiagnosticLevel::WARNING {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
     }
-    # Clear all diagnostics
+
     micro clear_diagnostics(self) {
-        self.errors = [];
-        self.warnings = [];
+        self.diagnostics = [];
     }
 }

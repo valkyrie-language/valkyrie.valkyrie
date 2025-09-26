@@ -106,6 +106,30 @@ class Analyzer {
     micro visit_identifier(self, node: Node) {
         let symbol = Symbol.from_node(node, "identifier");
         
+        # 如果有 namepath，处理命名空间解析
+        if node.namepath && node.namepath.length > 1 {
+            # 检查是否在当前命名空间下
+            let current_namespace = self.symbol_table.get_current_namespace();
+            if current_namespace {
+                # 如果 namepath 以当前命名空间开头，添加命名空间前缀
+                let is_in_namespace = true;
+                let i = 0;
+                while i < current_namespace.length {
+                    if i >= node.namepath.length || node.namepath[i] != current_namespace[i] {
+                        is_in_namespace = false;
+                        break;
+                    }
+                    i = i + 1;
+                }
+                
+                if is_in_namespace {
+                    symbol.namespace_path = current_namespace;
+                    symbol.resolved_name = node.namepath[node.namepath.length - 1];
+                    symbol.full_namepath = node.namepath;
+                }
+            }
+        }
+        
         # 查找是否已存在该符号
         let existing = self.symbol_table.find_symbol(symbol.name);
         if existing {

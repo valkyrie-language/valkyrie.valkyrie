@@ -93,12 +93,12 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             right = parse_pattern_expression(parser);
             
             if isOptional {
-                let node = parser.mark_node("OptionalTypeCheck");
+                let node = parser.make_node("OptionalTypeCheck");
                 node.expression = left;
                 node.pattern = right;
                 left = node;
             } else {
-                let node = parser.mark_node("TypeCheck");
+                let node = parser.make_node("TypeCheck");
                 node.expression = left;
                 node.pattern = right;
                 left = node;
@@ -113,12 +113,12 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             right = parseTypeExpression(parser);
             
             if isOptional {
-                let node = parser.mark_node("OptionalTypeCast");
+                let node = parser.make_node("OptionalTypeCast");
                 node.expression = left;
                 node.targetType = right;
                 left = node;
             } else {
-                let node = parser.mark_node("TypeCast");
+                let node = parser.make_node("TypeCast");
                 node.expression = left;
                 node.targetType = right;
                 left = node;
@@ -131,12 +131,12 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             }
 
             if tokenType == "ASSIGN" {
-                let node = parser.mark_node("Assignment");
+                let node = parser.make_node("Assignment");
                 node.left = left;
                 node.right = right;
                 left = node;
             } else {
-                let node = parser.mark_node("BinaryOp");
+                let node = parser.make_node("BinaryOp");
                 node.left = left;
                 node.operator = op;
                 node.right = right;
@@ -165,25 +165,19 @@ micro parseUnaryExpression(parser: ValkyrieParser, inline: bool) -> Node {
         if operand && operand.`type` == "ParseError" {
             return operand;
         }
-        let node = parser.mark_node("UnaryOp");
+        let node = parser.make_node("UnaryOp");
         node.operator = op;
         node.operand = operand;
         return node;
     }
-
-    if parser.current_token.`type` == "NEW" {
-        return parseNewExpression(parser, inline);
-    }
-
     return parsePostfixExpression(parser, inline);
 }
 
-micro parseNewExpression(parser: ValkyrieParser, inline: bool) -> Node {
+micro parse_new_expression(parser: ValkyrieParser, inline: bool) -> Node {
     parser.advance(); # skip 'new'
 
     # 解析类名
-    let className = parser.expectIdentifier();
-    if className.`type` == "ParseError" { return className; }
+    let className = parser.parse_name_path(true);
 
     # 解析构造函数参数
     let lparen = parser.expect("LPAREN");
@@ -206,14 +200,14 @@ micro parseNewExpression(parser: ValkyrieParser, inline: bool) -> Node {
     let rparen = parser.expect("RPAREN");
     if rparen.`type` == "ParseError" { return rparen; }
 
-    let node = parser.mark_node("NewExpression");
-    node.className = className.value;
+    let node = parser.make_node("NewExpression");
+    node.className = className;
     node.arguments = args;
     return node;
 }
 
 micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
-    let expr = parseAtomicExpression(parser, inline);
+    let expr = parse_term_expression_atomic(parser, inline);
 
     if expr && expr.`type` == "ParseError" {
         return expr;
@@ -261,7 +255,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
                 hasTrailingClosure = true;
             }
 
-            let callNode = parser.mark_node("MicroCall");
+            let callNode = parser.make_node("MicroCall");
             callNode.callee = expr;
             callNode.arguments = args;
             if hasTrailingClosure {
@@ -272,22 +266,22 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
             parser.advance();
             if parser.current_token.`type` == "AWAIT" {
                 parser.advance();
-                let awaitNode = parser.mark_node("AwaitExpression");
+                let awaitNode = parser.make_node("AwaitExpression");
                 awaitNode.argument = expr;
                 expr = awaitNode;
             } else {
-                let property = parser.expectIdentifier();
+                let property = parser.parse_identifier();
                 if property && property.`type` == "ParseError" {
                     return property;
                 }
-                let accessNode = parser.mark_node("PropertyAccess");
+                let accessNode = parser.make_node("PropertyAccess");
                 accessNode.object = expr;
                 accessNode.property = property.value;
                 expr = accessNode;
             }
         } else if parser.current_token.`type` == "DOUBLE_COLON" {
             parser.advance();
-            let methodName = parser.expectIdentifier();
+            let methodName = parser.parse_identifier();
             if methodName && methodName.`type` == "ParseError" {
                 return methodName;
             }
@@ -298,7 +292,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
             
             while parser.current_token.`type` == "DOUBLE_COLON" {
                 parser.advance();
-                let nextName = parser.expectIdentifier();
+                let nextName = parser.parse_identifier();
                 if nextName && nextName.`type` == "ParseError" {
                     return nextName;
                 }
@@ -332,15 +326,15 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
                     return rparen;
                 }
                 
-                let staticCallNode = parser.mark_node("StaticMethodCall");
+                let staticCallNode = parser.make_node("StaticMethodCall");
                 staticCallNode.namespacePath = namespacePath;
                 staticCallNode.methodName = namespacePath[namespacePath.length - 1];
                 staticCallNode.className = namespacePath[namespacePath.length - 2];
                 staticCallNode.arguments = args;
                 expr = staticCallNode;
             } else {
-                # 静态属性访问
-                let staticAccessNode = parser.mark_node("StaticPropertyAccess");
+                # 静态成员访问 (用于 eidos/flags)
+                let staticAccessNode = parser.make_node("StaticPropertyAccess");
                 staticAccessNode.namespacePath = namespacePath;
                 staticAccessNode.property = namespacePath[namespacePath.length - 1];
                 staticAccessNode.className = namespacePath[namespacePath.length - 2];
@@ -356,7 +350,7 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
             if rbracket && rbracket.`type` == "ParseError" {
                 return rbracket;
             }
-            let accessNode = parser.mark_node("ArrayAccess");
+            let accessNode = parser.make_node("ArrayAccess");
             accessNode.object = expr;
             accessNode.index = index;
             expr = accessNode;
@@ -368,11 +362,26 @@ micro parsePostfixExpression(parser: ValkyrieParser, inline: bool) -> Node {
     return expr;
 }
 
-micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
+micro parse_micro_anonymous(parser: ValkyrieParser, name: String) -> Node {
+    let closure = parse_function_block(parser);
+    if closure && closure.`type` == "ParseError" {
+        return closure;
+    }
+    
+    let callNode = parser.make_node("MicroCall");
+    let identifierNode = parser.make_node("Identifier");
+    identifierNode.name = name;
+    callNode.callee = identifierNode;
+    callNode.arguments = [];
+    callNode.closure = closure;
+    return callNode;
+}
+
+micro parse_term_expression_atomic(parser: ValkyrieParser, inline: bool) -> Node {
     if parser.current_token.`type` == "NUMBER" {
         let value = parser.current_token.value;
         parser.advance();
-        let node = parser.mark_node("Number");
+        let node = parser.make_node("Number");
         node.value = value;
         return node;
     }
@@ -380,7 +389,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     if parser.current_token.`type` == "STRING" {
         let value = parser.current_token.value;
         parser.advance();
-        let node = parser.mark_node("String");
+        let node = parser.make_node("String");
         node.value = value;
         return node;
     }
@@ -393,35 +402,14 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     if parser.current_token.`type` == "BOOLEAN" {
         let value = parser.current_token.value;
         parser.advance();
-        let node = parser.mark_node("Boolean");
+        let node = parser.make_node("Boolean");
         node.value = value;
         return node;
     }
 
     # 处理标识符，包括关键词作为标识符的情况
     if parser.current_token.`type` == "SYMBOL_XID" || parser.current_token.`type` == "SYMBOL_RAW" {
-        let name = parser.current_token.value;
-        parser.advance();
-        
-        # 检查是否是尾随闭包调用 f { closure_body }
-        if parser.current_token.`type` == "LBRACE" && !inline {
-            let closure = parse_function_block(parser);
-            if closure && closure.`type` == "ParseError" {
-                return closure;
-            }
-            
-            let callNode = parser.mark_node("MicroCall");
-            let identifierNode = parser.mark_node("Identifier");
-            identifierNode.name = name;
-            callNode.callee = identifierNode;
-            callNode.arguments = [];
-            callNode.closure = closure;
-            return callNode;
-        }
-        
-        let node = parser.mark_node("Identifier");
-        node.name = name;
-        return node;
+        return parser.parse_name_path(false);
     }
 
     # 匿名函数语法 micro(params) { function_block }
@@ -444,7 +432,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
             return body;
         }
         
-        let node = parser.mark_node("AnonymousFunction");
+        let node = parser.make_node("AnonymousFunction");
         node.parameters = params;
         node.body = body;
         return node;
@@ -456,56 +444,19 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
         if nextIndex < parser.tokens.length && parser.tokens[nextIndex].`type` == "DOUBLE_COLON" {
             let name = "Self";  # 使用标准化的Self名称
             parser.advance();
-            let node = parser.mark_node("Identifier");
+            let node = parser.make_node("Identifier");
             node.name = name;
             return node;
         } else {
             # 否则作为this表达式处理
             parser.advance();
-            let node = parser.mark_node("ThisExpression");
+            let node = parser.make_node("ThisExpression");
             return node;
         }
     }
 
     if parser.current_token.`type` == "NEW" {
-        parser.advance();
-        let className = parser.expectIdentifier();
-        if className && className.`type` == "ParseError" {
-            return className;
-        }
-
-        let lparen = parser.expect("LPAREN");
-        if lparen && lparen.`type` == "ParseError" {
-            return lparen;
-        }
-
-        let args = [];
-        if parser.current_token.`type` != "RPAREN" {
-            let arg = parseExpressionWithPrecedence(parser, 0, inline);
-            if arg && arg.`type` == "ParseError" {
-                return arg;
-            }
-            args.push(arg);
-
-            while parser.current_token.`type` == "COMMA" {
-                parser.advance();
-                arg = parseExpressionWithPrecedence(parser, 0, inline);
-                if arg && arg.`type` == "ParseError" {
-                    return arg;
-                }
-                args.push(arg);
-            }
-        }
-
-        let rparen = parser.expect("RPAREN");
-        if rparen && rparen.`type` == "ParseError" {
-            return rparen;
-        }
-
-        let node = parser.mark_node("NewExpression");
-        node.className = className.value;
-        node.arguments = args;
-        return node;
+        return parse_new_expression(parser, true);
     }
 
     if parser.current_token.`type` == "LPAREN" {
@@ -524,7 +475,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     # 支持数组字面量 []
     if parser.current_token.`type` == "LBRACKET" {
         parser.advance();
-        let node = parser.mark_node("ArrayLiteral");
+        let node = parser.make_node("ArrayLiteral");
         node.elements = [];
 
         if parser.current_token.`type` != "RBRACKET" {
@@ -555,7 +506,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     # 支持对象字面量 {} - 只有在非 inline 模式下才解析
     if parser.current_token.`type` == "LBRACE" && !inline {
         parser.advance();
-        let node = parser.mark_node("ObjectLiteral");
+        let node = parser.make_node("ObjectLiteral");
         node.properties = [];
 
         if parser.current_token.`type` != "RBRACE" {
@@ -571,7 +522,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
                     return value;
                 }
 
-                let propertyNode = parser.mark_node("Property");
+                let propertyNode = parser.make_node("Property");
                 propertyNode.key = key;
                 propertyNode.value = value;
                 node.properties.push(propertyNode);
@@ -598,7 +549,7 @@ micro parseAtomicExpression(parser: ValkyrieParser, inline: bool) -> Node {
     error.message = "Expected expression but got " + parser.current_token.`type`;
     error.line = parser.current_token.line;
     error.column = parser.current_token.column;
-    return node;
+    return error;
 }
 
 # 解析 match 表达式
@@ -634,7 +585,7 @@ micro parseMatchExpression(parser: ValkyrieParser, inline: bool) -> Node {
         return rbrace;
     }
     
-    let node = parser.mark_node("MatchExpression");
+    let node = parser.make_node("MatchExpression");
     node.expression = expr;
     node.branches = branches;
     return node;
@@ -684,7 +635,7 @@ micro parseWhenBranch(parser: ValkyrieParser) -> Node {
         return statements;
     }
     
-    let node = parser.mark_node("WhenBranch");
+    let node = parser.make_node("WhenBranch");
     node.condition = condition;
     node.statements = statements;
     return node;
@@ -708,7 +659,7 @@ micro parseCaseBranch(parser: ValkyrieParser) -> Node {
         return statements;
     }
     
-    let node = parser.mark_node("CaseBranch");
+    let node = parser.make_node("CaseBranch");
     node.pattern = pattern;
     node.statements = statements;
     return node;
@@ -719,7 +670,7 @@ micro parseTypeBranch(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'type'
     
     # 解析类型名称，可能是关键词
-    let typeName = parser.expectIdentifierIn("Branches");
+    let typeName = parser.parse_identifier_in("Branches");
     if typeName.`type` == "ParseError" { return typeName; }
     
     let colon = parser.expect("COLON");
@@ -732,7 +683,7 @@ micro parseTypeBranch(parser: ValkyrieParser) -> Node {
         return statements;
     }
     
-    let node = parser.mark_node("TypeBranch");
+    let node = parser.make_node("TypeBranch");
     node.typeName = typeName.value;
     node.statements = statements;
     return node;
@@ -754,7 +705,7 @@ micro parseElseBranch(parser: ValkyrieParser) -> Node {
         return statements;
     }
     
-    let node = parser.mark_node("ElseBranch");
+    let node = parser.make_node("ElseBranch");
     node.statements = statements;
     return node;
 }
@@ -810,18 +761,18 @@ micro parseTermParameters(parser: ValkyrieParser) -> Array<Node> {
 micro parseTypedParameter(parser: ValkyrieParser) -> Node {
     let paramName = null;
     if parser.current_token.`type` == "SYMBOL_XID" {
-        paramName = parser.expectIdentifier();
+        paramName = parser.parse_identifier();
     } else if parser.current_token.`type` == "SELF" {
         paramName = parser.expect("SELF");
     } else {
-        paramName = parser.expectIdentifier();
+        paramName = parser.parse_identifier();
     }
     
     if paramName && paramName.`type` == "ParseError" {
         return paramName;
     }
 
-    let node = parser.mark_node("Parameter");
+    let node = parser.make_node("Parameter");
     node.name = paramName.value;
     node.typeAnnotation = null;
     node.defaultValue = null;
@@ -848,6 +799,3 @@ micro parseTypedParameter(parser: ValkyrieParser) -> Node {
 
     return node;
 }
-
-
-

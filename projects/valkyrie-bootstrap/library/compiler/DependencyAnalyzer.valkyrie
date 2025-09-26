@@ -1,7 +1,7 @@
 namespace package::compiler;
 
 using package::parser::Node;
-using package::compiler::NamespaceManager;
+using package::compiler::ScopeManager;
 using package::compiler::CompilerOptions;
 
 class DependencyAnalyzer {

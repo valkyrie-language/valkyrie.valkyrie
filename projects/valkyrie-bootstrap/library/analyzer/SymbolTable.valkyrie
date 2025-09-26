@@ -83,4 +83,21 @@ class SymbolTable {
     micro get_all_symbols(self) -> Object {
         return self.symbols;
     }
+    
+    # 获取当前命名空间路径
+    micro get_current_namespace(self) -> Array {
+        if !self.current_scope {
+            return [];
+        }
+        
+        # 从作用域栈构建命名空间路径
+        let `namespace` = [];
+        let scope = self.current_scope;
+        while scope && scope.name != "global" {
+            `namespace`.unshift(scope.name);
+            scope = scope.parent;
+        }
+        
+        return `namespace`;
+    }
 }

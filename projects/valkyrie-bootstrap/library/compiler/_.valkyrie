@@ -4,21 +4,21 @@ namespace package::compiler;
 
 using package::lexer::tokenize;
 using package::parser::parse;
-using package::codegen::generate;
+using package::generation::generate;
 using package::lexer::Token;
 using package::compiler::CompilerOptions;
 using package::lexer::ValkyrieLexer;
 using package::parser::parse;
-using package::codegen::JsCodeGeneration;
+using package::generation::JsCodeGeneration;
 using package::parser::Node;
 using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
 using package::compiler::CompilerDiagnostics;
-using package::compiler::NamespaceManager;
+using package::compiler::ScopeManager;
 using package::compiler::NamespaceUtils;
 using package::compiler::IdentifierResolver;
 using package::compiler::Compiler;
-using package::codegen::join_name_path;
+using package::generation::join_name_path;
 
 # 生成单一JS文件的主函数
 micro compile_asts(file_contents: Map<String, String>, mode: String) -> String {
@@ -46,7 +46,7 @@ micro generate_single_js_standard_with_options(file_contents: Map<String, String
 }
 
 # 编译单个源代码文本文件
-micro package_compiler_compile_text(source_text: String) -> String {
+micro compile_text(source_text: String) -> String {
     let file_contents = {
         "main.valkyrie": source_text
     };
@@ -54,7 +54,7 @@ micro package_compiler_compile_text(source_text: String) -> String {
 }
 
 # 带选项的编译单个源代码文本文件
-micro package_compiler_compile_text_with_options(source_text: String, options: CompilerOptions) -> String {
+micro compile_text_with_options(source_text: String, options: CompilerOptions) -> String {
     let file_contents = {
         "main.valkyrie": source_text
     };
@@ -73,57 +73,3 @@ micro compile_asts_with_options(file_contents: Map<String, String>, mode: String
     return compile_with_compiler(compiler, file_contents);
 }
 
-# Resolve multiple namespaces (legacy function, kept for compatibility)
-micro resolve_multiple_namespaces(ast: Node) -> Node {
-    let manager = new NamespaceManager();
-
-    # First pass: collect all namespaces and symbols
-    let i = 0;
-    while i < ast.statements.length {
-        let stmt = ast.statements[i];
-
-        if stmt.`type` == "NamespaceStatement" {
-            let namespace_path = join_name_path(stmt.path, "::");
-            if stmt.is_main_namespace {
-                namespace_path = namespace_path + "!";
-            }
-            manager.current_namespace = namespace_path;
-
-        } else if stmt.`type` == "UsingStatement" {
-            let using_path = join_name_path(stmt.path, "::");
-            let is_global = is_main_namespace(using_path);
-            manager.add_using_import(using_path, is_global);
-
-        } else if stmt.`type` == "MicroDeclaration" {
-            manager.add_symbol_to_namespace(manager.current_namespace, stmt.name, "function", stmt, manager.current_file);
-
-        } else if stmt.`type` == "ClassDeclaration" {
-            manager.add_symbol_to_namespace(manager.current_namespace, stmt.name, "class", stmt, manager.current_file);
-
-        } else if stmt.`type` == "LetStatement" {
-            manager.add_symbol_to_namespace(manager.current_namespace, stmt.name, "variable", stmt, manager.current_file);
-        }
-
-        i = i + 1;
-    }
-
-    # Second pass: resolve symbol references and generate unique names
-    let j = 0;
-    while j < ast.statements.length {
-        let stmt = ast.statements[j];
-
-        if stmt.`type` == "MicroDeclaration" {
-            stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
-
-        } else if stmt.`type` == "ClassDeclaration" {
-            stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
-
-        } else if stmt.`type` == "LetStatement" {
-            stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
-        }
-
-        j = j + 1;
-    }
-
-    return ast;
-}
