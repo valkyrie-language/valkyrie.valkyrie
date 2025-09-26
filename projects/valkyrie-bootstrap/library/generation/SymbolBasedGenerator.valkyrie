@@ -1,0 +1,141 @@
+namespace package::generation;
+
+using package::parser::Node;
+using package::analyzer::Symbol;
+using package::analyzer::SymbolTable;
+using package::analyzer::Analyzer;
+using package::generation::JsCodeGeneration;
+
+# SymbolBasedGenerator 是新架构的适配器
+# 它将 Node 转换为 Symbol，然后基于 Symbol 进行代码生成
+class SymbolBasedGenerator {
+    constructor() {
+        self.analyzer = new Analyzer();
+        self.js_generator = new JsCodeGeneration();
+        self.symbol_table = false;
+    }
+    
+    # 生成代码的主入口
+    micro generate(self, ast: Node, source_file: String) -> String {
+        # 首先进行分析，构建符号表
+        self.symbol_table = self.analyzer.analyze(ast);
+        
+        # 然后基于符号表生成代码
+        return self.generate_from_symbols(ast, source_file);
+    }
+    
+    # 基于符号表生成代码
+    micro generate_from_symbols(self, node: Node, source_file: String) -> String {
+        # 为了兼容现有的 JsCodeGeneration，我们需要创建一个增强的 Node
+        let enhanced_node = self.enhance_node_with_symbol_info(node);
+        
+        # 使用现有的 JS 生成器
+        return self.js_generator.generate(enhanced_node, source_file);
+    }
+    
+    # 用符号信息增强 Node
+    micro enhance_node_with_symbol_info(self, node: Node) -> Node {
+        if !node {
+            return node;
+        }
+        
+        # 创建一个新的增强节点，保持原 Node 不变
+        let enhanced = self.create_enhanced_node(node);
+        
+        # 从符号表中查找对应的符号
+        let symbol = self.find_symbol_for_node(node);
+        if symbol {
+            # 将符号信息附加到增强节点上
+            enhanced.name = symbol.name;
+            enhanced.value = symbol.value;
+            enhanced.symbol_type = symbol.symbol_type;
+        }
+        
+        # 递归处理子节点
+        if node.children {
+            enhanced.children = [];
+            let i = 0;
+            while i < node.children.length {
+                enhanced.children.push(self.enhance_node_with_symbol_info(node.children[i]));
+                i = i + 1;
+            }
+        }
+        
+        return enhanced;
+    }
+    
+    # 创建增强节点
+    micro create_enhanced_node(self, node: Node) -> Object {
+        let enhanced = {};
+        enhanced.type = node.type;
+        enhanced.offset = node.offset;
+        enhanced.length = node.length;
+        enhanced.line = node.line;
+        enhanced.column = node.column;
+        
+        # 复制 Node 的方法
+        enhanced.get_source_position = node.get_source_position;
+        enhanced.has_valid_position = node.has_valid_position;
+        
+        # 复制其他可能存在的属性
+        if node.left {
+            enhanced.left = self.enhance_node_with_symbol_info(node.left);
+        }
+        if node.right {
+            enhanced.right = self.enhance_node_with_symbol_info(node.right);
+        }
+        if node.operator {
+            enhanced.operator = node.operator;
+        }
+        if node.arguments {
+            enhanced.arguments = [];
+            let i = 0;
+            while i < node.arguments.length {
+                enhanced.arguments.push(self.enhance_node_with_symbol_info(node.arguments[i]));
+                i = i + 1;
+            }
+        }
+        if node.body {
+            enhanced.body = self.enhance_node_with_symbol_info(node.body);
+        }
+        if node.className {
+            enhanced.className = node.className;
+        }
+        if node.methodName {
+            enhanced.methodName = node.methodName;
+        }
+        if node.property {
+            enhanced.property = node.property;
+        }
+        if node.object {
+            enhanced.object = self.enhance_node_with_symbol_info(node.object);
+        }
+        if node.index {
+            enhanced.index = self.enhance_node_with_symbol_info(node.index);
+        }
+        if node.properties {
+            enhanced.properties = [];
+            let i = 0;
+            while i < node.properties.length {
+                enhanced.properties.push(node.properties[i]);
+                i = i + 1;
+            }
+        }
+        
+        return enhanced;
+    }
+    
+    # 为节点查找对应的符号
+    micro find_symbol_for_node(self, node: Node) -> Symbol {
+        if !self.symbol_table {
+            return false;
+        }
+        
+        # 根据节点类型和位置信息查找符号
+        let all_symbols = self.symbol_table.get_all_symbols();
+        # 简化实现，直接返回 false，因为对象遍历在当前阶段不支持
+        # TODO: 实现更完善的符号查找机制
+        
+        return false;
+    }
+}

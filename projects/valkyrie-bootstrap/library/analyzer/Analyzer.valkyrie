@@ -1,0 +1,132 @@
+namespace package::analyzer;
+
+using package::parser::Node;
+using package::analyzer::Symbol;
+using package::analyzer::SymbolTable;
+
+# Analyzer 负责将 Parser 的 Node 转换为分析层的 Symbol
+class Analyzer {
+    constructor() {
+        self.symbol_table = new SymbolTable();
+    }
+    
+    # 分析 AST 节点，返回符号表
+    micro analyze(self, ast: Node) -> SymbolTable {
+        self.symbol_table.enter_scope("global");
+        self.visit_node(ast);
+        return self.symbol_table;
+    }
+    
+    # 访问节点并创建对应的符号
+    micro visit_node(self, node: Node) {
+        if !node {
+            return;
+        }
+        
+        # 根据节点类型创建符号
+        if node.type == "ClassStatement" {
+            self.visit_class_statement(node);
+        } else if node.type == "FunctionStatement" {
+            self.visit_function_statement(node);
+        } else if node.type == "LetStatement" {
+            self.visit_let_statement(node);
+        } else if node.type == "Identifier" {
+            self.visit_identifier(node);
+        } else if node.type == "MicroCall" {
+            self.visit_micro_call(node);
+        } else if node.type == "NamespaceStatement" {
+            self.visit_namespace_statement(node);
+        } else if node.type == "UsingStatement" {
+            self.visit_using_statement(node);
+        } else {
+            self.visit_generic_node(node);
+        }
+        
+        # 递归访问子节点
+        if node.children {
+            let i = 0;
+            while i < node.children.length {
+                self.visit_node(node.children[i]);
+                i = i + 1;
+            }
+        }
+    }
+    
+    # 访问类声明
+    micro visit_class_statement(self, node: Node) {
+        let symbol = Symbol.from_node(node, "class");
+        symbol.is_exported = true;
+        self.symbol_table.add_symbol(symbol);
+        
+        # 进入类作用域
+        if symbol.name {
+            self.symbol_table.enter_scope(symbol.name);
+        }
+    }
+    
+    # 访问函数声明
+    micro visit_function_statement(self, node: Node) {
+        let symbol = Symbol.from_node(node, "function");
+        symbol.is_exported = true;
+        self.symbol_table.add_symbol(symbol);
+        
+        # 进入函数作用域
+        if symbol.name {
+            self.symbol_table.enter_scope(symbol.name);
+        }
+    }
+    
+    # 访问变量声明
+    micro visit_let_statement(self, node: Node) {
+        let symbol = Symbol.from_node(node, "variable");
+        symbol.is_mutable = true;
+        self.symbol_table.add_symbol(symbol);
+    }
+    
+    # 访问标识符
+    micro visit_identifier(self, node: Node) {
+        let symbol = Symbol.from_node(node, "identifier");
+        
+        # 查找是否已存在该符号
+        let existing = self.symbol_table.find_symbol(symbol.name);
+        if existing {
+            # 添加引用
+            existing.references.push(symbol);
+        } else {
+            # 创建新符号
+            self.symbol_table.add_symbol(symbol);
+        }
+    }
+    
+    # 访问微函数调用
+    micro visit_micro_call(self, node: Node) {
+        let symbol = Symbol.from_node(node, "micro_call");
+        self.symbol_table.add_symbol(symbol);
+    }
+    
+    # 访问命名空间声明
+    micro visit_namespace_statement(self, node: Node) {
+        let symbol = Symbol.from_node(node, "namespace");
+        self.symbol_table.add_symbol(symbol);
+        
+        # 进入命名空间作用域
+        if symbol.name {
+            self.symbol_table.enter_scope(symbol.name);
+        }
+    }
+    
+    # 访问 using 声明
+    micro visit_using_statement(self, node: Node) {
+        let symbol = Symbol.from_node(node, "using");
+        self.symbol_table.add_symbol(symbol);
+    }
+    
+    # 访问通用节点
+    micro visit_generic_node(self, node: Node) {
+        # 对于其他类型的节点，创建通用符号
+        let symbol = Symbol.from_node(node, "generic");
+        if symbol.name {
+            self.symbol_table.add_symbol(symbol);
+        }
+    }
+}

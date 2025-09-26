@@ -2513,6 +2513,207 @@ export function package_parser_parse(tokens) {
     let parser = new package_parser_ValkyrieParser(tokens);
     return package_parser_parseProgram(parser);
 }
+class package_analyzer_Analyzer {
+    constructor() {
+        this.symbol_table = new package_analyzer_SymbolTable();
+    }
+
+    analyze(ast) {
+        this.symbol_table.enter_scope("global");
+        this.visit_node(ast);
+        return this.symbol_table;
+    }
+
+    visit_node(node) {
+        if (!node) {
+            return;
+        }
+        if (node.type == "ClassStatement") {
+            this.visit_class_statement(node);
+        } else if (node.type == "FunctionStatement") {
+            this.visit_function_statement(node);
+        } else if (node.type == "LetStatement") {
+            this.visit_let_statement(node);
+        } else if (node.type == "Identifier") {
+            this.visit_identifier(node);
+        } else if (node.type == "MicroCall") {
+            this.visit_micro_call(node);
+        } else if (node.type == "NamespaceStatement") {
+            this.visit_namespace_statement(node);
+        } else if (node.type == "UsingStatement") {
+            this.visit_using_statement(node);
+        } else {
+            this.visit_generic_node(node);
+        }
+        if (node.children) {
+            let i = 0;
+            while (i < node.children.length) {
+                this.visit_node(node.children[i]);
+                i = i + 1;
+            }
+        }
+    }
+
+    visit_class_statement(node) {
+        let symbol = Symbol.from_node(node, "class");
+        symbol.is_exported = true;
+        this.symbol_table.add_symbol(symbol);
+        if (symbol.name) {
+            this.symbol_table.enter_scope(symbol.name);
+        }
+    }
+
+    visit_function_statement(node) {
+        let symbol = Symbol.from_node(node, "function");
+        symbol.is_exported = true;
+        this.symbol_table.add_symbol(symbol);
+        if (symbol.name) {
+            this.symbol_table.enter_scope(symbol.name);
+        }
+    }
+
+    visit_let_statement(node) {
+        let symbol = Symbol.from_node(node, "variable");
+        symbol.is_mutable = true;
+        this.symbol_table.add_symbol(symbol);
+    }
+
+    visit_identifier(node) {
+        let symbol = Symbol.from_node(node, "identifier");
+        let existing = this.symbol_table.find_symbol(symbol.name);
+        if (existing) {
+            existing.references.push(symbol);
+        } else {
+            this.symbol_table.add_symbol(symbol);
+        }
+    }
+
+    visit_micro_call(node) {
+        let symbol = Symbol.from_node(node, "micro_call");
+        this.symbol_table.add_symbol(symbol);
+    }
+
+    visit_namespace_statement(node) {
+        let symbol = Symbol.from_node(node, "namespace");
+        this.symbol_table.add_symbol(symbol);
+        if (symbol.name) {
+            this.symbol_table.enter_scope(symbol.name);
+        }
+    }
+
+    visit_using_statement(node) {
+        let symbol = Symbol.from_node(node, "using");
+        this.symbol_table.add_symbol(symbol);
+    }
+
+    visit_generic_node(node) {
+        let symbol = Symbol.from_node(node, "generic");
+        if (symbol.name) {
+            this.symbol_table.add_symbol(symbol);
+        }
+    }
+}
+class package_analyzer_Symbol {
+    constructor(node, symbol_type) {
+        this.node = node;
+        this.symbol_type = symbol_type;
+        this.name = false;
+        this.value = false;
+        this.data_type = false;
+        this.scope = false;
+        this.source_span = false;
+        this.is_mutable = false;
+        this.is_exported = false;
+        this.references = [];
+    }
+
+    static from_node(node, symbol_type) {
+        let symbol = new package_analyzer_Symbol(node, symbol_type);
+        return symbol;
+    }
+
+    create_source_span(file_name) {
+        if (this.node && this.node.has_valid_position()) {
+            let end_line = this.node.line;
+            let end_column = this.node.column + this.node.length;
+            return new package_generation_SourceSpan(
+                file_name,
+                this.node.line,
+                this.node.column,
+                end_line,
+                end_column
+            );
+        }
+        return false;
+    }
+
+    has_valid_source_position() {
+        return this.node && this.node.has_valid_position();
+    }
+}
+class package_analyzer_SymbolTable {
+    constructor() {
+        this.symbols = {};
+        this.scopes = [];
+        this.current_scope = false;
+    }
+
+    enter_scope(scope_name) {
+        let scope = {
+            name: scope_name,
+            symbols: {},
+            parent: this.current_scope,
+        };
+        this.scopes.push(scope);
+        this.current_scope = scope;
+    }
+
+    exit_scope() {
+        if (this.scopes.length > 0) {
+            this.scopes.pop();
+            if (this.scopes.length > 0) {
+                this.current_scope = this.scopes[this.scopes.length - 1];
+            } else {
+                this.current_scope = false;
+            }
+        }
+    }
+
+    add_symbol(symbol) {
+        if (this.current_scope && symbol.name) {
+            this.current_scope.symbols[symbol.name] = symbol;
+            symbol.scope = this.current_scope;
+        }
+        if (symbol.name) {
+            this.symbols[symbol.name] = symbol;
+        }
+    }
+
+    find_symbol(name) {
+        let scope = this.current_scope;
+        while (scope) {
+            if (scope.symbols[name]) {
+                return scope.symbols[name];
+            }
+            scope = scope.parent;
+        }
+        if (this.symbols[name]) {
+            return this.symbols[name];
+        }
+        return false;
+    }
+
+    get_current_scope_symbols() {
+        if (this.current_scope) {
+            return this.current_scope.symbols;
+        }
+        return {};
+    }
+
+    get_all_symbols() {
+        return this.symbols;
+    }
+}
 class package_compiler_Compiler {
     constructor(options) {
         this.options = options || new package_compiler_CompilerOptions();
@@ -4466,6 +4667,112 @@ class package_generation_SourceSpan {
         );
     }
 }
+class package_generation_SymbolBasedGenerator {
+    constructor() {
+        this.analyzer = new package_analyzer_Analyzer();
+        this.js_generator = new package_codegen_JsCodeGeneration();
+        this.symbol_table = false;
+    }
+
+    generate(ast, source_file) {
+        this.symbol_table = this.analyzer.analyze(ast);
+        return this.generate_from_symbols(ast, source_file);
+    }
+
+    generate_from_symbols(node, source_file) {
+        let enhanced_node = this.enhance_node_with_symbol_info(node);
+        return this.js_generator.generate(enhanced_node, source_file);
+    }
+
+    enhance_node_with_symbol_info(node) {
+        if (!node) {
+            return node;
+        }
+        let enhanced = this.create_enhanced_node(node);
+        let symbol = this.find_symbol_for_node(node);
+        if (symbol) {
+            enhanced.name = symbol.name;
+            enhanced.value = symbol.value;
+            enhanced.symbol_type = symbol.symbol_type;
+        }
+        if (node.children) {
+            enhanced.children = [];
+            let i = 0;
+            while (i < node.children.length) {
+                enhanced.children.push(
+                    this.enhance_node_with_symbol_info(node.children[i])
+                );
+                i = i + 1;
+            }
+        }
+        return enhanced;
+    }
+
+    create_enhanced_node(node) {
+        let enhanced = {};
+        enhanced.type = node.type;
+        enhanced.offset = node.offset;
+        enhanced.length = node.length;
+        enhanced.line = node.line;
+        enhanced.column = node.column;
+        enhanced.get_source_position = node.get_source_position;
+        enhanced.has_valid_position = node.has_valid_position;
+        if (node.left) {
+            enhanced.left = this.enhance_node_with_symbol_info(node.left);
+        }
+        if (node.right) {
+            enhanced.right = this.enhance_node_with_symbol_info(node.right);
+        }
+        if (node.operator) {
+            enhanced.operator = node.operator;
+        }
+        if (node.arguments) {
+            enhanced.arguments = [];
+            let i = 0;
+            while (i < node.arguments.length) {
+                enhanced.arguments.push(
+                    this.enhance_node_with_symbol_info(node.arguments[i])
+                );
+                i = i + 1;
+            }
+        }
+        if (node.body) {
+            enhanced.body = this.enhance_node_with_symbol_info(node.body);
+        }
+        if (node.className) {
+            enhanced.className = node.className;
+        }
+        if (node.methodName) {
+            enhanced.methodName = node.methodName;
+        }
+        if (node.property) {
+            enhanced.property = node.property;
+        }
+        if (node.object) {
+            enhanced.object = this.enhance_node_with_symbol_info(node.object);
+        }
+        if (node.index) {
+            enhanced.index = this.enhance_node_with_symbol_info(node.index);
+        }
+        if (node.properties) {
+            enhanced.properties = [];
+            let i = 0;
+            while (i < node.properties.length) {
+                enhanced.properties.push(node.properties[i]);
+                i = i + 1;
+            }
+        }
+        return enhanced;
+    }
+
+    find_symbol_for_node(node) {
+        if (!this.symbol_table) {
+            return false;
+        }
+        let all_symbols = this.symbol_table.get_all_symbols();
+        return false;
+    }
+}
 class package_lexer_Token {
     constructor(type, value, line, column, offset, length) {
         this.type = type;
@@ -4806,6 +5113,78 @@ class package_parser_Node {
             this.line > 0 &&
             this.column > 0
         );
+    }
+}
+class package_parser_NodeMetadata {
+    constructor() {
+        this.node_names = {};
+        this.node_values = {};
+        this.node_properties = {};
+    }
+
+    set_node_name(node, name) {
+        let node_id = this.get_node_id(node);
+        this.node_names[node_id] = name;
+    }
+
+    get_node_name(node) {
+        let node_id = this.get_node_id(node);
+        if (this.node_names[node_id]) {
+            return this.node_names[node_id];
+        }
+        return false;
+    }
+
+    set_node_value(node, value) {
+        let node_id = this.get_node_id(node);
+        this.node_values[node_id] = value;
+    }
+
+    get_node_value(node) {
+        let node_id = this.get_node_id(node);
+        if (this.node_values[node_id]) {
+            return this.node_values[node_id];
+        }
+        return false;
+    }
+
+    set_node_property(node, key, value) {
+        let node_id = this.get_node_id(node);
+        if (!this.node_properties[node_id]) {
+            this.node_properties[node_id] = {};
+        }
+        this.node_properties[node_id][key] = value;
+    }
+
+    get_node_property(node, key) {
+        let node_id = this.get_node_id(node);
+        if (
+            this.node_properties[node_id] &&
+            this.node_properties[node_id][key]
+        ) {
+            return this.node_properties[node_id][key];
+        }
+        return false;
+    }
+
+    get_node_id(node) {
+        return (
+            node.type +
+            "_" +
+            node.offset +
+            "_" +
+            node.length +
+            "_" +
+            node.line +
+            "_" +
+            node.column
+        );
+    }
+
+    clear() {
+        this.node_names = {};
+        this.node_values = {};
+        this.node_properties = {};
     }
 }
 class package_parser_ValkyrieParser {

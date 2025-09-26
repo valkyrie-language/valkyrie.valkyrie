@@ -1,0 +1,62 @@
+namespace package::analyzer;
+
+using package::parser::Node;
+using package::generation::SourceSpan;
+
+# Symbol 表示分析层的符号信息
+# 它是对 Node 的分析结果，包含可变的分析属性
+class Symbol {
+    constructor(node: Node, symbol_type: String) {
+        # 关联的不可变 Node
+        self.node = node;
+        
+        # 符号类型（identifier, function, class, etc.）
+        self.symbol_type = symbol_type;
+        
+        # 符号名称（从 node 中提取或分析得出）
+        self.name = false;
+        
+        # 符号值（用于常量、字面量等）
+        self.value = false;
+        
+        # 类型信息
+        self.data_type = false;
+        
+        # 作用域信息
+        self.scope = false;
+        
+        # 源映射信息（从 node 位置计算得出）
+        self.source_span = false;
+        
+        # 其他分析属性
+        self.is_mutable = false;
+        self.is_exported = false;
+        self.references = [];
+    }
+    
+    # 从 Node 创建 Symbol
+    micro from_node(node: Node, symbol_type: String) -> Symbol {
+        let symbol = new Symbol(node, symbol_type);
+        
+        # 提取基本信息
+        # 暂时简化实现，因为 node.name 和 node.value 在新架构中不存在
+        # TODO: 从 NodeMetadata 或其他方式获取名称和值信息
+        
+        return symbol;
+    }
+    
+    # 创建源映射信息
+    micro create_source_span(self, file_name: String) -> SourceSpan {
+        if self.node && self.node.has_valid_position() {
+            let end_line = self.node.line;
+            let end_column = self.node.column + self.node.length;
+            return new SourceSpan(file_name, self.node.line, self.node.column, end_line, end_column);
+        }
+        return false;
+    }
+    
+    # 检查是否有有效的源位置
+    micro has_valid_source_position(self) -> bool {
+        return self.node && self.node.has_valid_position();
+    }
+}
