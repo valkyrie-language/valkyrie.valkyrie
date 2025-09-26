@@ -1,0 +1,7 @@
+namespace test::simple;
+
+micro callTest() {
+    return "simple call";
+}
+
+let result = callTest();

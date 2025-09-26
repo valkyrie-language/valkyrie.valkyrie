@@ -1,0 +1,112 @@
+namespace test::eidos_match;
+
+# 定义测试用的 eidos
+eidos Status {
+    PENDING = 0
+    RUNNING = 1
+    COMPLETED = 2
+    FAILED = 3
+}
+
+eidos Priority {
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    CRITICAL = 4
+}
+
+# 测试基本的 eidos match
+micro test_basic_eidos_match() {
+    let current_status = Status::RUNNING;
+    
+    match current_status {
+        case Status::PENDING:
+            let message = "Task is pending";
+        case Status::RUNNING:
+            let message = "Task is running";
+        case Status::COMPLETED:
+            let message = "Task completed";
+        case Status::FAILED:
+            let message = "Task failed";
+        else:
+            let message = "Unknown status";
+    };
+}
+
+# 测试混合 eidos 和字面量 match
+micro test_mixed_eidos_match() {
+    let priority = Priority::HIGH;
+    
+    match priority {
+        case Priority::LOW:
+            let urgency = "Can wait";
+        case Priority::MEDIUM:
+            let urgency = "Normal priority";
+        case Priority::HIGH:
+            let urgency = "High priority";
+        case Priority::CRITICAL:
+            let urgency = "Critical!";
+        case 0:
+            let urgency = "Invalid priority";
+        else:
+            let urgency = "Unknown priority";
+    };
+}
+
+# 测试嵌套 eidos match
+micro test_nested_eidos_match() {
+    let status = Status::COMPLETED;
+    let priority = Priority::HIGH;
+    
+    match status {
+        case Status::COMPLETED:
+            match priority {
+                case Priority::HIGH:
+                    let result = "High priority task completed";
+                case Priority::CRITICAL:
+                    let result = "Critical task completed";
+                else:
+                    let result = "Task completed";
+            };
+        case Status::FAILED:
+            let result = "Task failed";
+        else:
+            let result = "Task in progress";
+    };
+}
+
+# 测试在类中使用 eidos match
+class TaskManager {
+    constructor() {
+        self.current_status = Status::PENDING;
+    }
+    
+    micro get_status_message(self) -> String {
+        match self.current_status {
+            case Status::PENDING:
+                return "Waiting to start";
+            case Status::RUNNING:
+                return "Currently executing";
+            case Status::COMPLETED:
+                return "Successfully finished";
+            case Status::FAILED:
+                return "Execution failed";
+            else:
+                return "Status unknown";
+        };
+    }
+    
+    micro set_status(self, new_status: Status) {
+        self.current_status = new_status;
+    }
+}
+
+micro main() {
+    test_basic_eidos_match();
+    test_mixed_eidos_match();
+    test_nested_eidos_match();
+    
+    let manager = new TaskManager();
+    manager.set_status(Status::RUNNING);
+    let message = manager.get_status_message();
+}

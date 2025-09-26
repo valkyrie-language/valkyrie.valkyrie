@@ -1,0 +1,70 @@
+namespace test::flags_eidos;
+
+# 测试 flags 语法
+flags FilePermissions {
+    READ = 1
+    WRITE = 2
+    EXECUTE = 4
+    ALL = 7
+}
+
+# 测试 eidos 语法
+eidos Color {
+    RED = 0
+    GREEN = 1
+    BLUE = 2
+    YELLOW = 3
+}
+
+# 测试 flags 和 eidos 的使用
+micro test_flags_usage() {
+    let read_perm = FilePermissions::READ;
+    let write_perm = FilePermissions::WRITE;
+    let all_perm = FilePermissions::ALL;
+    
+    # 测试组合权限
+    let read_write = FilePermissions::READ | FilePermissions::WRITE;
+    
+    return read_perm;
+}
+
+let primary_color = Color::RED;
+let secondary_color = Color::GREEN;
+
+micro test_eidos_usage() {
+
+    # 测试 eidos 比较
+    if primary_color == Color::RED {
+        return true;
+    }
+    
+    return false;
+}
+
+# 测试在类中使用 flags 和 eidos
+class FileManager {
+    constructor(permissions: FilePermissions) {
+        self.permissions = permissions;
+        self.default_color = Color::BLUE;
+    }
+    
+    micro has_permission(self, perm: FilePermissions) -> bool {
+        return (self.permissions & perm) == perm;
+    }
+    
+    micro get_color(self) -> Color {
+        return self.default_color;
+    }
+}
+
+# 测试函数
+micro main() {
+    let manager = new FileManager(FilePermissions::READ | FilePermissions::WRITE);
+    
+    let can_read = manager.has_permission(FilePermissions::READ);
+    let can_execute = manager.has_permission(FilePermissions::EXECUTE);
+    
+    let file_color = manager.get_color();
+    
+    return can_read && !can_execute;
+}

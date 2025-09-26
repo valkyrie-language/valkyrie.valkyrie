@@ -1,18 +1,8 @@
-namespace compiler;
+namespace test::example;
 
-let lexer = import("./lexer.js").await;
-let parser = import("./parser.js").await;
-let codegen = import("./codegen.js").await;
-
-micro compile(source) {
-    let tokens = lexer.tokenize(source);
-    let ast = parser.parse(tokens);
-    let output = codegen.generate(ast);
-    return output;
+micro testFunction() {
+    return "Hello from testFunction";
 }
 
-micro createCompiler() {
-    let compiler = {};
-    compiler.compile = compile;
-    return compiler;
-}
+let result = testFunction();
+console.log(result);

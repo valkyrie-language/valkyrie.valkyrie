@@ -1,0 +1,32 @@
+class Calculator {
+    field = 0;
+    
+    micro add(n) {
+        # 这应该触发警告：隐式成员调用，建议使用 self.setValue 或 Self::setValue
+        setValue(self.field + n);
+        return self;
+    }
+    
+    micro setValue(v) {
+        self.field = v;
+    }
+    
+    micro getValue() {
+        return self.field;
+    }
+    
+    # 这应该触发警告：隐式成员调用，建议使用 self.helper 或 Self::helper
+    micro multiply(n) {
+        let result = helper(self.field * n);
+        self.field = result;
+        return self;
+    }
+    
+    micro helper(v) {
+        return v;
+    }
+}
+
+# 测试代码
+let calc = new Calculator();
+calc.add(5).multiply(2);

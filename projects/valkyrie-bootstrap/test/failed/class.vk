@@ -1,16 +1,15 @@
-class C {
-    constructor() {
-        self.field = 42;
-    }
 
-    a() {
+class C {
+    field = 42;
+    micro a(){
         return 0;
     }
-
-    b() {
+    micro b(self){
         return 1;
     }
 }
+
 let c = new C();
+
 console.log(c.a());
 console.log(c.b());
