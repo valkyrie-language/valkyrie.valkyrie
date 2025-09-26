@@ -1,6 +1,6 @@
 namespace package::parser;
 
-# 解析模式表达式，目前只支持标识符作为模式
+# 解析模式表达式，支持标识符和字面量作为模式
 micro parsePatternExpression(parser) {
     let token = parser.current_token;
     
@@ -9,10 +9,30 @@ micro parsePatternExpression(parser) {
         let node = parser.mark_node("TypeIdentifier");
         node.name = token.value;
         return node;
+    } else if token.`type` == "STRING" {
+        parser.advance();
+        let node = parser.mark_node("StringLiteral");
+        node.value = token.value;
+        return node;
+    } else if token.`type` == "NUMBER" {
+        parser.advance();
+        let node = parser.mark_node("NumberLiteral");
+        node.value = token.value;
+        return node;
+    } else if token.`type` == "BOOLEAN" {
+        parser.advance();
+        let node = parser.mark_node("BooleanLiteral");
+        node.value = token.value;
+        return node;
+    } else if token.`type` == "KEYWORD" && (token.value == "true" || token.value == "false") {
+        parser.advance();
+        let node = parser.mark_node("BooleanLiteral");
+        node.value = token.value;
+        return node;
     } else {
         let error = {};
         error.`type` = "ParseError";
-        error.message = "Expected identifier in pattern expression but got " + token.`type`;
+        error.message = "Expected identifier or literal in pattern expression but got " + token.`type`;
         error.line = token.line;
         error.column = token.column;
         return error;

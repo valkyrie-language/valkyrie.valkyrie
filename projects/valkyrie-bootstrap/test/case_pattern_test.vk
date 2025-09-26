@@ -1,0 +1,68 @@
+namespace test;
+
+# 测试 case pattern 的字面量匹配功能
+
+micro test_string_pattern() {
+    let value = "hello";
+    
+    match value {
+        case "hello": 
+            let result = "matched hello";
+        case "world":
+            let result = "matched world";
+        else:
+            let result = "no match";
+    };
+}
+
+micro test_number_pattern() {
+    let value = 42;
+    
+    match value {
+        case 42: 
+            let result = "matched 42";
+        case 100:
+            let result = "matched 100";
+        else:
+            let result = "no match";
+    };
+}
+
+micro test_boolean_pattern() {
+    let value = true;
+    
+    match value {
+        case true: 
+            let result = "matched true";
+        case false:
+            let result = "matched false";
+        else:
+            let result = "no match";
+    };
+}
+
+micro test_mixed_patterns() {
+    let value = "test";
+    
+    match value {
+        case "test": 
+            let result = "string match";
+        case 123:
+            let result = "number match";
+        case true:
+            let result = "boolean match";
+        else:
+            let result = "no match";
+    };
+}
+
+micro test_no_else_branch() {
+    let value = "unknown";
+    
+    match value {
+        case "known": 
+            console.log("found known");
+        case "other":
+            console.log("found other");
+    };
+}

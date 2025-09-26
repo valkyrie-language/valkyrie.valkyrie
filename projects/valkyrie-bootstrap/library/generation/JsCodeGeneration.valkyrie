@@ -1083,6 +1083,19 @@ class JsCodeGeneration {
             return pattern_node.name;
         }
 
+        if pattern_node.`type` == "StringLiteral" {
+            # 字符串字面量需要加引号
+            return "\"" + pattern_node.value + "\"";
+        }
+
+        if pattern_node.`type` == "NumberLiteral" {
+            return pattern_node.value;
+        }
+
+        if pattern_node.`type` == "BooleanLiteral" {
+            return pattern_node.value;
+        }
+
         # 对于未知模式，返回 Object
         return "Object";
     }
@@ -1140,43 +1153,49 @@ class JsCodeGeneration {
     
     # 生成 match 表达式
     micro generate_match_expression(self, node: Node) -> String {
-        let matched_expr = self.generate_expression(node.expression);
-        let result = "(function() {\n";
-        result = result + "  let __match_value = " + matched_expr + ";\n";
+        let result = "";
         
         # 处理各种分支
         let i = 0;
-        let has_else = false;
+        let is_first_when = true;
         while i < node.branches.length {
             let branch = node.branches[i];
             
             if branch.`type` == "WhenBranch" {
                 let condition = self.generate_expression(branch.condition);
-                result = result + "  if (" + condition + ") {\n";
+                if is_first_when {
+                    result = result + "if (" + condition + ") {\n";
+                    is_first_when = false;
+                } else {
+                    result = result + " else if (" + condition + ") {\n";
+                }
                 result = result + self.generate_branch_statements(branch.statements);
-                result = result + "  }\n";
+                result = result + "}";
             } else if branch.`type` == "ElseBranch" {
-                has_else = true;
-                result = result + "  {\n";
+                result = result + " else {\n";
                 result = result + self.generate_branch_statements(branch.statements);
-                result = result + "  }\n";
+                result = result + "}";
             } else if branch.`type` == "CaseBranch" {
-                # 暂时跳过 case 分支，第一阶段不实现
-                result = result + "  // TODO: Case branch not implemented yet\n";
+                # 生成 case 分支的字面量匹配
+                let pattern_value = self.generate_pattern_expression(branch.pattern);
+                let match_value = self.generate_expression(node.expression);
+                
+                if is_first_when {
+                    result = result + "if (" + match_value + " === " + pattern_value + ") {\n";
+                    is_first_when = false;
+                } else {
+                    result = result + " else if (" + match_value + " === " + pattern_value + ") {\n";
+                }
+                result = result + self.generate_branch_statements(branch.statements);
+                result = result + "}";
             } else if branch.`type` == "TypeBranch" {
                 # 暂时跳过 type 分支，第一阶段不实现
-                result = result + "  // TODO: Type branch not implemented yet\n";
+                result = result + "// TODO: Type branch not implemented yet\n";
             }
             
             i = i + 1;
         }
         
-        # 如果没有 else 分支，添加默认返回
-        if !has_else {
-            result = result + "  return undefined;\n";
-        }
-        
-        result = result + "})()";
         return result;
     }
     
@@ -1186,7 +1205,7 @@ class JsCodeGeneration {
         let i = 0;
         while i < statements.length {
             let stmt = self.generate_statement(statements[i]);
-            result = result + "    " + stmt + "\n";
+            result = result + stmt + "\n";
             i = i + 1;
         }
         return result;

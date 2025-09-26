@@ -709,8 +709,8 @@ micro parseWhenBranch(parser: ValkyrieParser) -> Node {
 micro parseCaseBranch(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'case'
     
-    # 解析模式，可能是关键词
-    let pattern = parser.expectIdentifierIn("Branches");
+    # 解析模式，支持字面量和标识符
+    let pattern = parsePatternExpression(parser);
     if pattern.`type` == "ParseError" { return pattern; }
     
     let colon = parser.expect("COLON");
@@ -724,7 +724,7 @@ micro parseCaseBranch(parser: ValkyrieParser) -> Node {
     }
     
     let node = parser.mark_node("CaseBranch");
-    node.pattern = pattern.value;
+    node.pattern = pattern;
     node.statements = statements;
     return node;
 }

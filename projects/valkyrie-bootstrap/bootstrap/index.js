@@ -857,11 +857,35 @@ export function package_parser_parsePatternExpression(parser) {
         let node = parser.mark_node("TypeIdentifier");
         node.name = token.value;
         return node;
+    } else if (token.type == "STRING") {
+        parser.advance();
+        let node = parser.mark_node("StringLiteral");
+        node.value = token.value;
+        return node;
+    } else if (token.type == "NUMBER") {
+        parser.advance();
+        let node = parser.mark_node("NumberLiteral");
+        node.value = token.value;
+        return node;
+    } else if (token.type == "BOOLEAN") {
+        parser.advance();
+        let node = parser.mark_node("BooleanLiteral");
+        node.value = token.value;
+        return node;
+    } else if (
+        token.type == "KEYWORD" &&
+        (token.value == "true" || token.value == "false")
+    ) {
+        parser.advance();
+        let node = parser.mark_node("BooleanLiteral");
+        node.value = token.value;
+        return node;
     } else {
         let error = {};
         error.type = "ParseError";
         error.message =
-            "Expected identifier in pattern expression but got " + token.type;
+            "Expected identifier or literal in pattern expression but got " +
+            token.type;
         error.line = token.line;
         error.column = token.column;
         return error;
@@ -1536,7 +1560,7 @@ export function package_parser_parseWhenBranch(parser) {
 }
 export function package_parser_parseCaseBranch(parser) {
     parser.advance();
-    let pattern = parser.expectIdentifierIn("Branches");
+    let pattern = package_parser_parsePatternExpression(parser);
     if (pattern.type == "ParseError") {
         return pattern;
     }
@@ -1549,7 +1573,7 @@ export function package_parser_parseCaseBranch(parser) {
         return statements;
     }
     let node = parser.mark_node("CaseBranch");
-    node.pattern = pattern.value;
+    node.pattern = pattern;
     node.statements = statements;
     return node;
 }
@@ -4800,6 +4824,15 @@ class package_codegen_JsCodeGeneration {
         if (pattern_node.type == "Identifier") {
             return pattern_node.name;
         }
+        if (pattern_node.type == "StringLiteral") {
+            return '"' + pattern_node.value + '"';
+        }
+        if (pattern_node.type == "NumberLiteral") {
+            return pattern_node.value;
+        }
+        if (pattern_node.type == "BooleanLiteral") {
+            return pattern_node.value;
+        }
         return "Object";
     }
 
@@ -4838,38 +4871,58 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_match_expression(node) {
-        let matched_expr = this.generate_expression(node.expression);
-        let result = "(function() {\n";
-        result = result + "  let __match_value = " + matched_expr + ";\n";
+        let result = "";
         let i = 0;
-        let has_else = false;
+        let is_first_when = true;
         while (i < node.branches.length) {
             let branch = node.branches[i];
             if (branch.type == "WhenBranch") {
                 let condition = this.generate_expression(branch.condition);
-                result = result + "  if (" + condition + ") {\n";
+                if (is_first_when) {
+                    result = result + "if (" + condition + ") {\n";
+                    is_first_when = false;
+                } else {
+                    result = result + " else if (" + condition + ") {\n";
+                }
                 result =
                     result + this.generate_branch_statements(branch.statements);
-                result = result + "  }\n";
+                result = result + "}";
             } else if (branch.type == "ElseBranch") {
-                has_else = true;
-                result = result + "  {\n";
+                result = result + " else {\n";
                 result =
                     result + this.generate_branch_statements(branch.statements);
-                result = result + "  }\n";
+                result = result + "}";
             } else if (branch.type == "CaseBranch") {
+                let pattern_value = this.generate_pattern_expression(
+                    branch.pattern
+                );
+                let match_value = this.generate_expression(node.expression);
+                if (is_first_when) {
+                    result =
+                        result +
+                        "if (" +
+                        match_value +
+                        " === " +
+                        pattern_value +
+                        ") {\n";
+                    is_first_when = false;
+                } else {
+                    result =
+                        result +
+                        " else if (" +
+                        match_value +
+                        " === " +
+                        pattern_value +
+                        ") {\n";
+                }
                 result =
-                    result + "  // TODO: Case branch not implemented yet\n";
+                    result + this.generate_branch_statements(branch.statements);
+                result = result + "}";
             } else if (branch.type == "TypeBranch") {
-                result =
-                    result + "  // TODO: Type branch not implemented yet\n";
+                result = result + "// TODO: Type branch not implemented yet\n";
             }
             i = i + 1;
         }
-        if (!has_else) {
-            result = result + "  return undefined;\n";
-        }
-        result = result + "})()";
         return result;
     }
 
@@ -4878,7 +4931,7 @@ class package_codegen_JsCodeGeneration {
         let i = 0;
         while (i < statements.length) {
             let stmt = this.generate_statement(statements[i]);
-            result = result + "    " + stmt + "\n";
+            result = result + stmt + "\n";
             i = i + 1;
         }
         return result;
