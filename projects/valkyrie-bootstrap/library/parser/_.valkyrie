@@ -39,6 +39,14 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
         return parseTraitDeclaration(parser);
     }
 
+    if parser.current_token.`type` == "FLAGS" {
+        return parseFlagsDeclaration(parser);
+    }
+
+    if parser.current_token.`type` == "EIDOS" {
+        return parseEidosDeclaration(parser);
+    }
+
     if parser.current_token.`type` == "LET" {
         return parseLetStatement(parser);
     }
@@ -771,6 +779,132 @@ micro parse_function_block(parser: ValkyrieParser) -> Node {
 
     let node = parser.mark_node("Block");
     node.statements = statements;
+    return node;
+}
+
+# 解析 flags 声明: flags FlagName { UPPER_CASE = 1 }
+micro parseFlagsDeclaration(parser: ValkyrieParser) -> Node {
+    parser.advance(); # skip 'flags'
+    
+    # 解析 flags 名称
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
+        return name;
+    }
+    
+    # 期望左大括号
+    let lbrace = parser.expect("LBRACE");
+    if lbrace && lbrace.`type` == "ParseError" {
+        return lbrace;
+    }
+    
+    # 解析 flags 成员
+    let members = [];
+    while parser.current_token.`type` != "RBRACE" && parser.current_token.`type` != "EOF" {
+        let member = parseFlagsMember(parser);
+        if member && member.`type` == "ParseError" {
+            return member;
+        }
+        members.push(member);
+    }
+    
+    # 期望右大括号
+    let rbrace = parser.expect("RBRACE");
+    if rbrace && rbrace.`type` == "ParseError" {
+        return rbrace;
+    }
+    
+    let node = parser.mark_node("FlagsDeclaration");
+    node.name = name.value;
+    node.members = members;
+    return node;
+}
+
+# 解析 flags 成员: UPPER_CASE = 1
+micro parseFlagsMember(parser: ValkyrieParser) -> Node {
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
+        return name;
+    }
+    
+    # 期望等号
+    let assign = parser.expect("ASSIGN");
+    if assign && assign.`type` == "ParseError" {
+        return assign;
+    }
+    
+    # 解析值表达式
+    let value = parseExpression(parser);
+    if value && value.`type` == "ParseError" {
+        return value;
+    }
+    
+    let node = parser.mark_node("FlagsMember");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+
+# 解析 eidos 声明: eidos EnumName { PascalCase = 1 }
+micro parseEidosDeclaration(parser: ValkyrieParser) -> Node {
+    parser.advance(); # skip 'eidos'
+    
+    # 解析 eidos 名称
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
+        return name;
+    }
+    
+    # 期望左大括号
+    let lbrace = parser.expect("LBRACE");
+    if lbrace && lbrace.`type` == "ParseError" {
+        return lbrace;
+    }
+    
+    # 解析 eidos 成员
+    let members = [];
+    while parser.current_token.`type` != "RBRACE" && parser.current_token.`type` != "EOF" {
+        let member = parseEidosMember(parser);
+        if member && member.`type` == "ParseError" {
+            return member;
+        }
+        members.push(member);
+    }
+    
+    # 期望右大括号
+    let rbrace = parser.expect("RBRACE");
+    if rbrace && rbrace.`type` == "ParseError" {
+        return rbrace;
+    }
+    
+    let node = parser.mark_node("EidosDeclaration");
+    node.name = name.value;
+    node.members = members;
+    return node;
+}
+
+# 解析 eidos 成员: PascalCase = 1
+micro parseEidosMember(parser: ValkyrieParser) -> Node {
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
+        return name;
+    }
+    
+    # 期望等号
+    let assign = parser.expect("ASSIGN");
+    if assign && assign.`type` == "ParseError" {
+        return assign;
+    }
+    
+    # 解析值表达式
+    let value = parseExpression(parser);
+    if value && value.`type` == "ParseError" {
+        return value;
+    }
+    
+    let node = parser.mark_node("EidosMember");
+    node.name = name.value;
+    node.value = value;
     return node;
 }
 

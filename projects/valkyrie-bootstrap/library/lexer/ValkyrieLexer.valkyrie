@@ -308,6 +308,8 @@ micro get_keyword_type(value: String) -> String {
         case "when": return "WHEN";
         case "case": return "CASE";
         case "type": return "TYPE";
+        case "flags": return "FLAGS";
+        case "eidos": return "EIDOS";
         else: return "SYMBOL_XID";
     };
 }

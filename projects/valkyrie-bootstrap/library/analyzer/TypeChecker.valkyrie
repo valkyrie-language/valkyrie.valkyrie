@@ -47,6 +47,12 @@ class TypeChecker {
             self.check_class_type(symbol);
         } else if symbol.symbol_type == "micro_call" {
             self.check_micro_call_type(symbol);
+        } else if symbol.symbol_type == "flags" {
+            self.check_flags_type(symbol);
+        } else if symbol.symbol_type == "eidos" {
+            self.check_eidos_type(symbol);
+        } else if symbol.symbol_type == "static_access" {
+            self.check_static_access_type(symbol);
         }
     }
     
@@ -95,6 +101,80 @@ class TypeChecker {
         if !symbol.data_type {
             symbol.data_type = self.type_factory.get_builtin_type("unknown");
         }
+    }
+    
+    # 检查 flags 类型
+    micro check_flags_type(self, symbol: Symbol) {
+        # 创建 flags 类型
+        let flags_type = self.type_factory.create_flags(symbol.name);
+        
+        # 检查 flags 成员
+        if symbol.members {
+            let i = 0;
+            while i < symbol.members.length {
+                let member = symbol.members[i];
+                # 检查成员值是否为整数
+                if member.value && !self.is_integer_value(member.value) {
+                    self.add_error("Flags member '" + member.name + "' must have integer value");
+                }
+                i = i + 1;
+            }
+        }
+        
+        symbol.data_type = flags_type;
+    }
+    
+    # 检查 eidos 类型
+    micro check_eidos_type(self, symbol: Symbol) {
+        # 创建 eidos 类型
+        let eidos_type = self.type_factory.create_eidos(symbol.name);
+        
+        # 检查 eidos 成员
+        if symbol.members {
+            let i = 0;
+            while i < symbol.members.length {
+                let member = symbol.members[i];
+                # 检查成员值是否为整数
+                if member.value && !self.is_integer_value(member.value) {
+                    self.add_error("Eidos member '" + member.name + "' must have integer value");
+                }
+                i = i + 1;
+            }
+        }
+        
+        symbol.data_type = eidos_type;
+    }
+    
+    # 检查静态访问类型（:: 操作符）
+    micro check_static_access_type(self, symbol: Symbol) {
+        # 获取左侧类型（flags 或 eidos）
+        let left_type = symbol.left_type;
+        let member_name = symbol.member_name;
+        
+        if !left_type {
+            self.add_error("Cannot resolve type for static access");
+            return;
+        }
+        
+        # 检查是否为 flags 或 eidos 类型
+        if left_type.is_flags || left_type.is_eidos {
+            # 检查成员是否存在
+            if !left_type.members || !left_type.members[member_name] {
+                self.add_error("Member '" + member_name + "' not found in " + left_type.name);
+                return;
+            }
+            
+            # 静态访问的结果类型是成员的值类型（通常是整数）
+            symbol.data_type = self.type_factory.get_builtin_type("i32");
+        } else {
+            self.add_error("Static access (::) can only be used with flags or eidos types");
+        }
+    }
+    
+    # 检查是否为整数值
+    micro is_integer_value(self, value: Object) -> bool {
+        # 简化实现：检查是否为数字
+        return typeof(value) == "number" && value % 1 == 0;
     }
     
     # 检查类型兼容性

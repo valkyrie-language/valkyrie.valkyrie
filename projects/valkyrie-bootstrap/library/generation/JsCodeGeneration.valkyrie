@@ -176,7 +176,7 @@ class JsCodeGeneration {
             if i > 0 {
                 result = result + ",\n";
             }
-            result = result + "  " + member.name + ": " + member.value;
+            result = result + "  " + member.name + ": " + self.generate_expression(member.value);
             i = i + 1;
         }
         
@@ -202,7 +202,7 @@ class JsCodeGeneration {
             if i > 0 {
                 result = result + ",\n";
             }
-            result = result + "  " + member.name + ": " + member.value;
+            result = result + "  " + member.name + ": " + self.generate_expression(member.value);
             i = i + 1;
         }
         
@@ -253,6 +253,8 @@ class JsCodeGeneration {
                 return self.generate_static_method_call_expression(node);
             case "StaticPropertyAccess": 
                 return self.generate_static_property_access_expression(node);
+            case "StaticMemberAccess": 
+                return self.generate_static_member_access_expression(node);
             case "ArrayAccess": 
                 return self.generate_array_access_expression(node);
             case "ObjectLiteral": 
@@ -518,6 +520,25 @@ class JsCodeGeneration {
         }
 
         return className + "." + node.property;
+    }
+    
+    # 生成静态成员访问表达式 (用于 eidos/flags)
+    micro generate_static_member_access_expression(self, node: Node) -> String {
+        let className = "";
+        if node.namespacePath {
+            # 使用新的namespacePath支持多级命名空间
+            if node.namespacePath.length >= 2 {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if node.className.`type` {
+            className = self.generate_expression(node.className);
+        } else {
+            className = node.className;
+        }
+
+        return className + "." + node.member;
     }
     
     # 生成数组访问表达式
@@ -1114,6 +1135,11 @@ class JsCodeGeneration {
 
         if pattern_node.`type` == "BooleanLiteral" {
             return pattern_node.value;
+        }
+
+        if pattern_node.`type` == "StaticMemberAccess" {
+            # 生成 eidos/flags 成员访问，如 Status.PENDING
+            return pattern_node.object + "." + pattern_node.member;
         }
 
         # 对于未知模式，返回 Object

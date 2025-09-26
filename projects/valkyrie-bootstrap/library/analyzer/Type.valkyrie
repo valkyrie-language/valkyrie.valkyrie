@@ -8,8 +8,11 @@ class Type {
         self.is_primitive = false;
         self.is_nullable = false;
         self.is_array = false;
+        self.is_flags = false;      # flags 类型标记
+        self.is_eidos = false;      # eidos 类型标记
         self.element_type = false;  # 数组元素类型
         self.properties = {};       # 对象类型的属性
+        self.members = {};          # flags/eidos 成员
     }
     
     # 创建基础类型
@@ -32,6 +35,22 @@ class Type {
         let ty = new Type(base_type.name + "?");
         ty.is_nullable = true;
         ty.element_type = base_type;
+        return ty;
+    }
+    
+    # 创建 flags 类型
+    micro create_flags(type_name: String, members: Object) -> Type {
+        let ty = new Type(type_name);
+        ty.is_flags = true;
+        ty.members = members;
+        return ty;
+    }
+    
+    # 创建 eidos 类型
+    micro create_eidos(type_name: String, members: Object) -> Type {
+        let ty = new Type(type_name);
+        ty.is_eidos = true;
+        ty.members = members;
         return ty;
     }
     

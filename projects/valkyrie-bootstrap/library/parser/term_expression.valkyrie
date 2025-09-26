@@ -3,7 +3,7 @@ namespace package::parser;
 using package::parser::Node;
 using package::parser::ValkyrieParser;
 using package::parser::parseTypeExpression;
-using package::parser::parsePatternExpression;
+using package::parser::parse_pattern_expression;
 
 # 检查是否是可以作为标识符使用的关键词
 
@@ -90,7 +90,7 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
                 isOptional = true;
                 parser.advance();
             }
-            right = parsePatternExpression(parser);
+            right = parse_pattern_expression(parser);
             
             if isOptional {
                 let node = parser.mark_node("OptionalTypeCheck");
@@ -695,7 +695,7 @@ micro parseCaseBranch(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'case'
     
     # 解析模式，支持字面量和标识符
-    let pattern = parsePatternExpression(parser);
+    let pattern = parse_pattern_expression(parser);
     if pattern.`type` == "ParseError" { return pattern; }
     
     let colon = parser.expect("COLON");

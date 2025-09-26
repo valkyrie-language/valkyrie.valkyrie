@@ -818,17 +818,43 @@ export function package_lexer_get_keyword_type(value) {
         return "CASE";
     } else if (value === "type") {
         return "TYPE";
+    } else if (value === "flags") {
+        return "FLAGS";
+    } else if (value === "eidos") {
+        return "EIDOS";
     } else {
         return "SYMBOL_XID";
     }
 }
-export function package_parser_parsePatternExpression(parser) {
+export function package_parser_parse_pattern_expression(parser) {
     let token = parser.current_token;
     if (token.type == "SYMBOL_XID") {
+        let name = token.value;
         parser.advance();
-        let node = parser.mark_node("TypeIdentifier");
-        node.name = token.value;
-        return node;
+        if (parser.current_token.type == "DOUBLE_COLON") {
+            parser.advance();
+            if (parser.current_token.type == "SYMBOL_XID") {
+                let member_name = parser.current_token.value;
+                parser.advance();
+                let node = parser.mark_node("StaticMemberAccess");
+                node.object = name;
+                node.member = member_name;
+                return node;
+            } else {
+                let error = {};
+                error.type = "ParseError";
+                error.message =
+                    "Expected member name after '::' but got " +
+                    parser.current_token.type;
+                error.line = parser.current_token.line;
+                error.column = parser.current_token.column;
+                return error;
+            }
+        } else {
+            let node = parser.mark_node("TypeIdentifier");
+            node.name = name;
+            return node;
+        }
     } else if (token.type == "STRING") {
         parser.advance();
         let node = parser.mark_node("StringLiteral");
@@ -938,7 +964,7 @@ export function package_parser_parseExpressionWithPrecedence(
                 isOptional = true;
                 parser.advance();
             }
-            right = package_parser_parsePatternExpression(parser);
+            right = package_parser_parse_pattern_expression(parser);
             if (isOptional) {
                 let node = parser.mark_node("OptionalTypeCheck");
                 node.expression = left;
@@ -1516,7 +1542,7 @@ export function package_parser_parseWhenBranch(parser) {
 }
 export function package_parser_parseCaseBranch(parser) {
     parser.advance();
-    let pattern = package_parser_parsePatternExpression(parser);
+    let pattern = package_parser_parse_pattern_expression(parser);
     if (pattern.type == "ParseError") {
         return pattern;
     }
@@ -1976,6 +2002,12 @@ export function package_parser_parseStatement(parser) {
     }
     if (parser.current_token.type == "TRAIT") {
         return package_parser_parseTraitDeclaration(parser);
+    }
+    if (parser.current_token.type == "FLAGS") {
+        return package_parser_parseFlagsDeclaration(parser);
+    }
+    if (parser.current_token.type == "EIDOS") {
+        return package_parser_parseEidosDeclaration(parser);
     }
     if (parser.current_token.type == "LET") {
         return package_parser_parseLetStatement(parser);
@@ -2611,6 +2643,102 @@ export function package_parser_parse_function_block(parser) {
     node.statements = statements;
     return node;
 }
+export function package_parser_parseFlagsDeclaration(parser) {
+    parser.advance();
+    let name = parser.expectIdentifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let members = [];
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let member = package_parser_parseFlagsMember(parser);
+        if (member && member.type == "ParseError") {
+            return member;
+        }
+        members.push(member);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = parser.mark_node("FlagsDeclaration");
+    node.name = name.value;
+    node.members = members;
+    return node;
+}
+export function package_parser_parseFlagsMember(parser) {
+    let name = parser.expectIdentifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let assign = parser.expect("ASSIGN");
+    if (assign && assign.type == "ParseError") {
+        return assign;
+    }
+    let value = package_parser_parseExpression(parser);
+    if (value && value.type == "ParseError") {
+        return value;
+    }
+    let node = parser.mark_node("FlagsMember");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
+export function package_parser_parseEidosDeclaration(parser) {
+    parser.advance();
+    let name = parser.expectIdentifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let lbrace = parser.expect("LBRACE");
+    if (lbrace && lbrace.type == "ParseError") {
+        return lbrace;
+    }
+    let members = [];
+    while (
+        parser.current_token.type != "RBRACE" &&
+        parser.current_token.type != "EOF"
+    ) {
+        let member = package_parser_parseEidosMember(parser);
+        if (member && member.type == "ParseError") {
+            return member;
+        }
+        members.push(member);
+    }
+    let rbrace = parser.expect("RBRACE");
+    if (rbrace && rbrace.type == "ParseError") {
+        return rbrace;
+    }
+    let node = parser.mark_node("EidosDeclaration");
+    node.name = name.value;
+    node.members = members;
+    return node;
+}
+export function package_parser_parseEidosMember(parser) {
+    let name = parser.expectIdentifier();
+    if (name && name.type == "ParseError") {
+        return name;
+    }
+    let assign = parser.expect("ASSIGN");
+    if (assign && assign.type == "ParseError") {
+        return assign;
+    }
+    let value = package_parser_parseExpression(parser);
+    if (value && value.type == "ParseError") {
+        return value;
+    }
+    let node = parser.mark_node("EidosMember");
+    node.name = name.value;
+    node.value = value;
+    return node;
+}
 export function package_parser_parseProgram(parser) {
     let statements = [];
     while (parser.current_token.type != "EOF") {
@@ -2849,8 +2977,11 @@ class package_analyzer_Type {
         this.is_primitive = false;
         this.is_nullable = false;
         this.is_array = false;
+        this.is_flags = false;
+        this.is_eidos = false;
         this.element_type = false;
         this.properties = {};
+        this.members = {};
     }
 
     static create_primitive(type_name) {
@@ -2870,6 +3001,20 @@ class package_analyzer_Type {
         let ty = new package_analyzer_Type(base_type.name + "?");
         ty.is_nullable = true;
         ty.element_type = base_type;
+        return ty;
+    }
+
+    static create_flags(type_name, members) {
+        let ty = new package_analyzer_Type(type_name);
+        ty.is_flags = true;
+        ty.members = members;
+        return ty;
+    }
+
+    static create_eidos(type_name, members) {
+        let ty = new package_analyzer_Type(type_name);
+        ty.is_eidos = true;
+        ty.members = members;
         return ty;
     }
 
@@ -2978,6 +3123,12 @@ class package_analyzer_TypeChecker {
             this.check_class_type(symbol);
         } else if (symbol.symbol_type == "micro_call") {
             this.check_micro_call_type(symbol);
+        } else if (symbol.symbol_type == "flags") {
+            this.check_flags_type(symbol);
+        } else if (symbol.symbol_type == "eidos") {
+            this.check_eidos_type(symbol);
+        } else if (symbol.symbol_type == "static_access") {
+            this.check_static_access_type(symbol);
         }
     }
 
@@ -3010,6 +3161,73 @@ class package_analyzer_TypeChecker {
         if (!symbol.data_type) {
             symbol.data_type = this.type_factory.get_builtin_type("unknown");
         }
+    }
+
+    check_flags_type(symbol) {
+        let flags_type = this.type_factory.create_flags(symbol.name);
+        if (symbol.members) {
+            let i = 0;
+            while (i < symbol.members.length) {
+                let member = symbol.members[i];
+                if (member.value && !this.is_integer_value(member.value)) {
+                    this.add_error(
+                        "Flags member '" +
+                            member.name +
+                            "' must have integer value"
+                    );
+                }
+                i = i + 1;
+            }
+        }
+        symbol.data_type = flags_type;
+    }
+
+    check_eidos_type(symbol) {
+        let eidos_type = this.type_factory.create_eidos(symbol.name);
+        if (symbol.members) {
+            let i = 0;
+            while (i < symbol.members.length) {
+                let member = symbol.members[i];
+                if (member.value && !this.is_integer_value(member.value)) {
+                    this.add_error(
+                        "Eidos member '" +
+                            member.name +
+                            "' must have integer value"
+                    );
+                }
+                i = i + 1;
+            }
+        }
+        symbol.data_type = eidos_type;
+    }
+
+    check_static_access_type(symbol) {
+        let left_type = symbol.left_type;
+        let member_name = symbol.member_name;
+        if (!left_type) {
+            this.add_error("Cannot resolve type for static access");
+            return;
+        }
+        if (left_type.is_flags || left_type.is_eidos) {
+            if (!left_type.members || !left_type.members[member_name]) {
+                this.add_error(
+                    "Member '" +
+                        member_name +
+                        "' not found in " +
+                        left_type.name
+                );
+                return;
+            }
+            symbol.data_type = this.type_factory.get_builtin_type("i32");
+        } else {
+            this.add_error(
+                "Static access (::) can only be used with flags or eidos types"
+            );
+        }
+    }
+
+    is_integer_value(value) {
+        return typeof value == "number" && value % 1 == 0;
     }
 
     check_type_compatibility(expected, actual, context) {
@@ -3909,6 +4127,52 @@ class package_codegen_JsCodeGeneration {
         return result;
     }
 
+    generate_flags_declaration(node) {
+        let flagsName = node.name;
+        let members = node.members;
+        let result = "const " + flagsName + " = {\n";
+        let i = 0;
+        while (i < members.length) {
+            let member = members[i];
+            if (i > 0) {
+                result = result + ",\n";
+            }
+            result =
+                result +
+                "  " +
+                member.name +
+                ": " +
+                this.generate_expression(member.value);
+            i = i + 1;
+        }
+        result = result + "\n};\n";
+        result = result + "Object.freeze(" + flagsName + ");";
+        return result;
+    }
+
+    generate_eidos_declaration(node) {
+        let eidosName = node.name;
+        let members = node.members;
+        let result = "const " + eidosName + " = {\n";
+        let i = 0;
+        while (i < members.length) {
+            let member = members[i];
+            if (i > 0) {
+                result = result + ",\n";
+            }
+            result =
+                result +
+                "  " +
+                member.name +
+                ": " +
+                this.generate_expression(member.value);
+            i = i + 1;
+        }
+        result = result + "\n};\n";
+        result = result + "Object.freeze(" + eidosName + ");";
+        return result;
+    }
+
     generate_expression(node) {
         if (node.type === "Number") {
             return this.generate_number_expression(node);
@@ -3944,6 +4208,8 @@ class package_codegen_JsCodeGeneration {
             return this.generate_static_method_call_expression(node);
         } else if (node.type === "StaticPropertyAccess") {
             return this.generate_static_property_access_expression(node);
+        } else if (node.type === "StaticMemberAccess") {
+            return this.generate_static_member_access_expression(node);
         } else if (node.type === "ArrayAccess") {
             return this.generate_array_access_expression(node);
         } else if (node.type === "ObjectLiteral") {
@@ -4175,6 +4441,22 @@ class package_codegen_JsCodeGeneration {
         return className + "." + node.property;
     }
 
+    generate_static_member_access_expression(node) {
+        let className = "";
+        if (node.namespacePath) {
+            if (node.namespacePath.length >= 2) {
+                className = node.namespacePath[node.namespacePath.length - 2];
+            } else {
+                className = node.namespacePath[0];
+            }
+        } else if (node.className.type) {
+            className = this.generate_expression(node.className);
+        } else {
+            className = node.className;
+        }
+        return className + "." + node.member;
+    }
+
     generate_array_access_expression(node) {
         let obj = "";
         if (node.object.type) {
@@ -4259,6 +4541,10 @@ class package_codegen_JsCodeGeneration {
             return this.generate_trait_declaration(node);
         } else if (node.type === "SingletonDeclaration") {
             return this.generate_singleton_declaration(node);
+        } else if (node.type === "FlagsDeclaration") {
+            return this.generate_flags_declaration(node);
+        } else if (node.type === "EidosDeclaration") {
+            return this.generate_eidos_declaration(node);
         } else {
             return "/* Unknown statement: " + node.type + " */";
         }
@@ -4753,6 +5039,9 @@ class package_codegen_JsCodeGeneration {
         if (pattern_node.type == "BooleanLiteral") {
             return pattern_node.value;
         }
+        if (pattern_node.type == "StaticMemberAccess") {
+            return pattern_node.object + "." + pattern_node.member;
+        }
         return "Object";
     }
 
@@ -4760,34 +5049,27 @@ class package_codegen_JsCodeGeneration {
         if (!type_node) {
             return "Object";
         }
-        if (type_node.type == "TypeIdentifier") {
+        if (type_node.type === "TypeIdentifier") {
             return type_node.name;
-        }
-        if (type_node.type == "Identifier") {
+        } else if (type_node.type === "Identifier") {
             return type_node.name;
-        }
-        if (type_node.type == "ArrayType") {
+        } else if (type_node.type === "ArrayType") {
             return "Array";
-        }
-        if (type_node.type == "FunctionType") {
+        } else if (type_node.type === "FunctionType") {
             return "Function";
-        }
-        if (type_node.type == "GenericType") {
+        } else if (type_node.type === "GenericType") {
             return this.generate_type_expression(type_node.base);
-        }
-        if (type_node.type == "TupleType") {
+        } else if (type_node.type === "TupleType") {
             return "Array";
-        }
-        if (type_node.type == "ObjectType") {
+        } else if (type_node.type === "ObjectType") {
+            return "Object";
+        } else if (type_node.type === "UnionType") {
+            return "Object";
+        } else if (type_node.type === "IntersectionType") {
+            return "Object";
+        } else {
             return "Object";
         }
-        if (type_node.type == "UnionType") {
-            return "Object";
-        }
-        if (type_node.type == "IntersectionType") {
-            return "Object";
-        }
-        return "Object";
     }
 
     generate_match_expression(node) {
