@@ -7,13 +7,12 @@ using package::compiler::CompilerOptions;
 class DependencyAnalyzer {
     constructor() {
         self.dependencies = {};
-        self.reverseDependencies = {};
+        self.reverse_dependencies = {};
     }
 }
 
-
-# 拓扑排序 (简化版，不检测循环依赖)
-micro topological_sort(analyzer: DependencyAnalyzer, file_contents: Map<String, String>) -> Array<String> {
+# Topological sort (simplified version, no cycle detection)
+micro topological_sort_with_analyzer(analyzer: DependencyAnalyzer, file_contents: Map<String, String>) -> Map<String, String> {
     let file_names = Object.keys(file_contents);
     let visited = {};
     let sorted = [];
@@ -26,7 +25,7 @@ micro topological_sort(analyzer: DependencyAnalyzer, file_contents: Map<String, 
 
     let j = 0;
     while j < file_names.length {
-        simple_dfs_visit(analyzer, file_names[j], visited, sorted);
+        simple_dfs_visit_with_analyzer(analyzer, file_names[j], visited, sorted);
         j = j + 1;
     }
 
@@ -36,8 +35,8 @@ micro topological_sort(analyzer: DependencyAnalyzer, file_contents: Map<String, 
     };
 }
 
-# 简单深度优先搜索访问
-micro simple_dfs_visit(analyzer: DependencyAnalyzer, file_path: String, visited: Map<String, Bool>, sorted: Array<String>) {
+# Simple depth-first search visit
+micro simple_dfs_visit_with_analyzer(analyzer: DependencyAnalyzer, file_path: String, visited: Map<String, Bool>, sorted: Array<String>) {
     if visited[file_path] {
         return;
     }
@@ -48,7 +47,7 @@ micro simple_dfs_visit(analyzer: DependencyAnalyzer, file_path: String, visited:
     if dependencies != null {
         let i = 0;
         while i < dependencies.length {
-            simple_dfs_visit(analyzer, dependencies[i], visited, sorted);
+            simple_dfs_visit_with_analyzer(analyzer, dependencies[i], visited, sorted);
             i = i + 1;
         }
     }

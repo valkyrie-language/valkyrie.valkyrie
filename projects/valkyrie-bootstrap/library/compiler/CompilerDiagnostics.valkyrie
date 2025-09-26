@@ -1,0 +1,64 @@
+namespace package::compiler;
+
+class CompilerDiagnostics {
+    constructor() {
+        self.errors = [];
+        self.warnings = [];
+    }
+}
+
+# Add error to diagnostics
+micro add_error_to_diagnostics(diagnostics: CompilerDiagnostics, message: String, line: i32, column: i32, file: String) {
+    let error = {
+        "type": "error",
+        "message": message,
+        "line": line || 0,
+        "column": column || 0,
+        "file": file || ""
+    };
+    diagnostics.errors.push(error);
+}
+
+# Add warning to diagnostics
+micro add_warning_to_diagnostics(diagnostics: CompilerDiagnostics, message: String, line: i32, column: i32, file: String) {
+    let warning = {
+        "type": "warning", 
+        "message": message,
+        "line": line || 0,
+        "column": column || 0,
+        "file": file || ""
+    };
+    diagnostics.warnings.push(warning);
+}
+
+# Check if diagnostics has errors
+micro diagnostics_has_errors(diagnostics: CompilerDiagnostics) -> Bool {
+    return diagnostics.errors.length > 0;
+}
+
+# Check if diagnostics has warnings
+micro diagnostics_has_warnings(diagnostics: CompilerDiagnostics) -> Bool {
+    return diagnostics.warnings.length > 0;
+}
+
+# Get all diagnostics combined
+micro get_all_diagnostics(diagnostics: CompilerDiagnostics) -> Array<Map<String, String>> {
+    let result = [];
+    let i = 0;
+    while i < diagnostics.errors.length {
+        result.push(diagnostics.errors[i]);
+        i = i + 1;
+    }
+    let j = 0;
+    while j < diagnostics.warnings.length {
+        result.push(diagnostics.warnings[j]);
+        j = j + 1;
+    }
+    return result;
+}
+
+# Clear all diagnostics
+micro clear_diagnostics(diagnostics: CompilerDiagnostics) {
+    diagnostics.errors = [];
+    diagnostics.warnings = [];
+}

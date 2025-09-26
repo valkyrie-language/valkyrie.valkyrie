@@ -1,0 +1,221 @@
+namespace package::compiler;
+
+using package::parser::Node;
+using package::compiler::NamespaceManager;
+using package::compiler::CompilerOptions;
+using package::compiler::CompilerDiagnostics;
+
+class IdentifierResolver {
+    # Resolve identifiers in expression with options and diagnostics
+    static resolve_identifiers_in_expression(expr: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions, diagnostics: CompilerDiagnostics) -> Node {
+        if expr == null {
+            return expr;
+        }
+
+        if expr.type == "Identifier" {
+            # Check if it's a function call
+            let i = 0;
+            while i < function_statements.length {
+                let func_stmt = function_statements[i];
+                if func_stmt.name == expr.name && func_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = func_stmt.uniqueName;
+                    return resolved_expr;
+                }
+                i = i + 1;
+            }
+
+            # Check if it's a variable
+            let j = 0;
+            while j < variable_statements.length {
+                let var_stmt = variable_statements[j];
+                if var_stmt.name == expr.name && var_stmt.uniqueName != null {
+                    let resolved_expr = Object.assign({}, expr);
+                    resolved_expr.name = var_stmt.uniqueName;
+                    return resolved_expr;
+                }
+                j = j + 1;
+            }
+
+            return expr;
+        }
+
+        if expr.type == "MicroCall" {
+            let resolved_expr = Object.assign({}, expr);
+
+            # Special handling for function name namespace resolution
+            if expr.callee.type == "Identifier" {
+                let function_name = expr.callee.name;
+                let found_function = false;
+                let i = 0;
+                while i < function_statements.length {
+                    let func_stmt = function_statements[i];
+                    if func_stmt.name == function_name && func_stmt.uniqueName != null {
+                        let resolved_callee = Object.assign({}, expr.callee);
+                        resolved_callee.name = func_stmt.uniqueName;
+                        resolved_expr.callee = resolved_callee;
+                        found_function = true;
+                        break;
+                    }
+                    i = i + 1;
+                }
+
+                # Check implicit_member_call
+                if !found_function && options != null && options.implicit_member_call == "warning" {
+                    # Check if it might be a static method call or instance method call
+                    let k = 0;
+                    while k < class_statements.length {
+                        let class_stmt = class_statements[k];
+                        if class_stmt.members != null {
+                            let m = 0;
+                            while m < class_stmt.members.length {
+                                let member = class_stmt.members[m];
+                                if member.type == "MemberStatement" && member.name == function_name {
+                                    # Issue warning: suggest using explicit Self:: or self. syntax
+                                    add_warning_to_diagnostics(diagnostics,
+                                        "Implicit member call detected for '" + function_name + "'. Consider using 'Self::" + function_name + "()' for static methods or 'self." + function_name + "()' for instance methods.",
+                                        expr.line || 0,
+                                        expr.column || 0,
+                                        ""
+                                    );
+                                    break;
+                                }
+                                m = m + 1;
+                            }
+                        }
+                        k = k + 1;
+                    }
+                }
+
+                if !found_function {
+                    resolved_expr.callee = IdentifierResolver.resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+                }
+            } else {
+                resolved_expr.callee = IdentifierResolver.resolve_identifiers_in_expression(expr.callee, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+
+            let resolved_args = [];
+            let k = 0;
+            while k < expr.arguments.length {
+                resolved_args.push(IdentifierResolver.resolve_identifiers_in_expression(expr.arguments[k], manager, function_statements, variable_statements, class_statements, options, diagnostics));
+                k = k + 1;
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        if expr.type == "BinaryOp" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = IdentifierResolver.resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.right = IdentifierResolver.resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.type == "Assignment" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.left = IdentifierResolver.resolve_identifiers_in_expression(expr.left, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_expr.right = IdentifierResolver.resolve_identifiers_in_expression(expr.right, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.type == "PropertyAccess" {
+            let resolved_expr = Object.assign({}, expr);
+            resolved_expr.object = IdentifierResolver.resolve_identifiers_in_expression(expr.object, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_expr;
+        }
+
+        if expr.type == "NewExpression" {
+            let resolved_expr = Object.assign({}, expr);
+
+            # Resolve className, check if namespace prefix needs to be added
+            let m = 0;
+            while m < class_statements.length {
+                let class_stmt = class_statements[m];
+                if class_stmt.name == expr.className && class_stmt.uniqueName != null {
+                    resolved_expr.className = class_stmt.uniqueName;
+                    break;
+                }
+                m = m + 1;
+            }
+
+            # Resolve arguments
+            let resolved_args = [];
+            if expr.arguments != null {
+                let n = 0;
+                while n < expr.arguments.length {
+                    resolved_args.push(IdentifierResolver.resolve_identifiers_in_expression(expr.arguments[n], manager, function_statements, variable_statements, class_statements, options, diagnostics));
+                    n = n + 1;
+                }
+            }
+            resolved_expr.arguments = resolved_args;
+            return resolved_expr;
+        }
+
+        return expr;
+    }
+
+    # Resolve identifiers in statement with options and diagnostics
+    static resolve_identifiers_in_statement(stmt: Node, manager: NamespaceManager, function_statements: Array<Node>, variable_statements: Array<Node>, class_statements: Array<Node>, options: CompilerOptions, diagnostics: CompilerDiagnostics) -> Node {
+        if stmt == null {
+            return stmt;
+        }
+
+        if stmt.type == "LetStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.value = IdentifierResolver.resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "ExpressionStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.expression = IdentifierResolver.resolve_identifiers_in_expression(stmt.expression, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "ReturnStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            if stmt.value != null {
+                resolved_stmt.value = IdentifierResolver.resolve_identifiers_in_expression(stmt.value, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+            return resolved_stmt;
+        }
+
+        if stmt.type == "IfStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = IdentifierResolver.resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_stmt.thenBranch = IdentifierResolver.resolve_identifiers_in_statement(stmt.thenBranch, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            if stmt.elseBranch != null {
+                resolved_stmt.elseBranch = IdentifierResolver.resolve_identifiers_in_statement(stmt.elseBranch, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            }
+            return resolved_stmt;
+        }
+
+        if stmt.type == "WhileStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = IdentifierResolver.resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_stmt.body = IdentifierResolver.resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "UntilStatement" {
+            let resolved_stmt = Object.assign({}, stmt);
+            resolved_stmt.condition = IdentifierResolver.resolve_identifiers_in_expression(stmt.condition, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            resolved_stmt.body = IdentifierResolver.resolve_identifiers_in_statement(stmt.body, manager, function_statements, variable_statements, class_statements, options, diagnostics);
+            return resolved_stmt;
+        }
+
+        if stmt.type == "Block" {
+            let resolved_stmt = Object.assign({}, stmt);
+            let resolved_statements = [];
+            let i = 0;
+            while i < stmt.statements.length {
+                resolved_statements.push(IdentifierResolver.resolve_identifiers_in_statement(stmt.statements[i], manager, function_statements, variable_statements, class_statements, options, diagnostics));
+                i = i + 1;
+            }
+            resolved_stmt.statements = resolved_statements;
+            return resolved_stmt;
+        }
+
+        return stmt;
+    }
+}
