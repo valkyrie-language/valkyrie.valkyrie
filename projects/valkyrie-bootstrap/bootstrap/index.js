@@ -3999,6 +3999,9 @@ class package_codegen_JsCodeGeneration {
         if (node.type == "DefaultValue") {
             return this.generate_default_value_expression(node);
         }
+        if (node.type == "MatchExpression") {
+            return this.generate_match_expression(node);
+        }
         return "/* Unknown expression: " + node.type + " */";
     }
 
@@ -4832,6 +4835,53 @@ class package_codegen_JsCodeGeneration {
             return "Object";
         }
         return "Object";
+    }
+
+    generate_match_expression(node) {
+        let matched_expr = this.generate_expression(node.expression);
+        let result = "(function() {\n";
+        result = result + "  let __match_value = " + matched_expr + ";\n";
+        let i = 0;
+        let has_else = false;
+        while (i < node.branches.length) {
+            let branch = node.branches[i];
+            if (branch.type == "WhenBranch") {
+                let condition = this.generate_expression(branch.condition);
+                result = result + "  if (" + condition + ") {\n";
+                result =
+                    result + this.generate_branch_statements(branch.statements);
+                result = result + "  }\n";
+            } else if (branch.type == "ElseBranch") {
+                has_else = true;
+                result = result + "  {\n";
+                result =
+                    result + this.generate_branch_statements(branch.statements);
+                result = result + "  }\n";
+            } else if (branch.type == "CaseBranch") {
+                result =
+                    result + "  // TODO: Case branch not implemented yet\n";
+            } else if (branch.type == "TypeBranch") {
+                result =
+                    result + "  // TODO: Type branch not implemented yet\n";
+            }
+            i = i + 1;
+        }
+        if (!has_else) {
+            result = result + "  return undefined;\n";
+        }
+        result = result + "})()";
+        return result;
+    }
+
+    generate_branch_statements(statements) {
+        let result = "";
+        let i = 0;
+        while (i < statements.length) {
+            let stmt = this.generate_statement(statements[i]);
+            result = result + "    " + stmt + "\n";
+            i = i + 1;
+        }
+        return result;
     }
 }
 class package_generation_JsSourceMapping {

@@ -235,6 +235,9 @@ class JsCodeGeneration {
         if node.`type` == "DefaultValue" {
             return self.generate_default_value_expression(node);
         }
+        if node.`type` == "MatchExpression" {
+            return self.generate_match_expression(node);
+        }
         
         return "/* Unknown expression: " + node.`type` + " */";
     }
@@ -951,7 +954,7 @@ class JsCodeGeneration {
             }
             result = result + fieldInits;
             let ctorBody = self.generate_statement(explicitConstructor.body);
-            # 移除外层的大括号，只保留内容
+            # 移格外层的大括号，只保留内容
             if ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}") {
                 ctorBody = ctorBody.substring(2, ctorBody.length - 2);
                 # 调整缩进
@@ -1133,6 +1136,60 @@ class JsCodeGeneration {
 
         # 默认返回 Object
         return "Object";
+    }
+    
+    # 生成 match 表达式
+    micro generate_match_expression(self, node: Node) -> String {
+        let matched_expr = self.generate_expression(node.expression);
+        let result = "(function() {\n";
+        result = result + "  let __match_value = " + matched_expr + ";\n";
+        
+        # 处理各种分支
+        let i = 0;
+        let has_else = false;
+        while i < node.branches.length {
+            let branch = node.branches[i];
+            
+            if branch.`type` == "WhenBranch" {
+                let condition = self.generate_expression(branch.condition);
+                result = result + "  if (" + condition + ") {\n";
+                result = result + self.generate_branch_statements(branch.statements);
+                result = result + "  }\n";
+            } else if branch.`type` == "ElseBranch" {
+                has_else = true;
+                result = result + "  {\n";
+                result = result + self.generate_branch_statements(branch.statements);
+                result = result + "  }\n";
+            } else if branch.`type` == "CaseBranch" {
+                # 暂时跳过 case 分支，第一阶段不实现
+                result = result + "  // TODO: Case branch not implemented yet\n";
+            } else if branch.`type` == "TypeBranch" {
+                # 暂时跳过 type 分支，第一阶段不实现
+                result = result + "  // TODO: Type branch not implemented yet\n";
+            }
+            
+            i = i + 1;
+        }
+        
+        # 如果没有 else 分支，添加默认返回
+        if !has_else {
+            result = result + "  return undefined;\n";
+        }
+        
+        result = result + "})()";
+        return result;
+    }
+    
+    # 生成分支语句
+    micro generate_branch_statements(self, statements: Array<Node>) -> String {
+        let result = "";
+        let i = 0;
+        while i < statements.length {
+            let stmt = self.generate_statement(statements[i]);
+            result = result + "    " + stmt + "\n";
+            i = i + 1;
+        }
+        return result;
     }
 }
 
