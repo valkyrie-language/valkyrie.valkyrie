@@ -156,6 +156,34 @@ class JsCodeGeneration {
             return left + " = " + right;
         }
 
+        if node.type == "TypeCheck" {
+            let expr = self.generate_expression(node.expression);
+            let pattern = self.generate_pattern_expression(node.pattern);
+            # 生成 instanceof 检查或类型检查函数调用
+            return "(" + expr + " instanceof " + pattern + ")";
+        }
+
+        if node.type == "OptionalTypeCheck" {
+            let expr = self.generate_expression(node.expression);
+            let pattern = self.generate_pattern_expression(node.pattern);
+            # 生成可选的类型检查，如果检查失败返回 false 而不是抛出异常
+            return "(function() { try { return " + expr + " instanceof " + pattern + "; } catch(e) { return false; } })()";
+        }
+
+        if node.type == "TypeCast" {
+            let expr = self.generate_expression(node.expression);
+            let targetType = self.generate_type_expression(node.targetType);
+            # 生成类型转换，这里简化处理，实际应该根据类型生成相应的转换代码
+            return "(" + expr + ")";
+        }
+
+        if node.type == "OptionalTypeCast" {
+            let expr = self.generate_expression(node.expression);
+            let targetType = self.generate_type_expression(node.targetType);
+            # 生成可选的类型转换，如果转换失败返回 null 而不是抛出异常
+            return "(function() { try { return (" + expr + "); } catch(e) { return null; } })()";
+        }
+
         if node.type == "MicroCall" {
             let callee = self.generate_expression(node.callee);
             let args = "";
@@ -662,6 +690,67 @@ class JsCodeGeneration {
 
         return self.generate_statement(ast);
     }
+
+    # Generate JavaScript code for pattern expressions
+    micro generate_pattern_expression(self, pattern_node) -> String {
+        if !pattern_node {
+            return "Object";
+        }
+
+        if pattern_node.type == "Identifier" {
+            return pattern_node.name;
+        }
+
+        # 对于未知模式，返回 Object
+        return "Object";
+    }
+
+    # Generate JavaScript code for type expressions
+    micro generate_type_expression(self, type_node) -> String {
+        if !type_node {
+            return "Object";
+        }
+
+        if type_node.type == "Identifier" {
+            return type_node.name;
+        }
+
+        if type_node.type == "ArrayType" {
+            return "Array";
+        }
+
+        if type_node.type == "FunctionType" {
+            return "Function";
+        }
+
+        if type_node.type == "GenericType" {
+            # 泛型类型在 JavaScript 中无法直接表示，这里简化处理
+            return self.generate_type_expression(type_node.base);
+        }
+
+        if type_node.type == "TupleType" {
+            # 元组类型在 JavaScript 中无法直接表示，这里简化处理
+            return "Array";
+        }
+
+        if type_node.type == "ObjectType" {
+            # 对象类型在 JavaScript 中无法直接表示，这里简化处理
+            return "Object";
+        }
+
+        if type_node.type == "UnionType" {
+            # 联合类型在 JavaScript 中无法直接表示，这里简化处理
+            return "Object";
+        }
+
+        if type_node.type == "IntersectionType" {
+            # 交集类型在 JavaScript 中无法直接表示，这里简化处理
+            return "Object";
+        }
+
+        # 默认返回 Object
+        return "Object";
+    }
 }
 
 # 工具方法：连接名称路径
@@ -678,48 +767,48 @@ micro join_name_path(names: Array<String>, separator: String) -> String {
     return result;
 }
 
-    # Add source file for source mapping
-    micro add_source_file(self, file_name: String, content: String) -> Number {
-        if (self.source_map_builder) {
-            if (!self.source_files[file_name]) {
-                self.source_files[file_name] = self.source_map_builder.add_source(file_name, content);
-            }
-            return self.source_files[file_name];
+# Add source file for source mapping
+micro add_source_file(self, file_name: String, content: String) -> Number {
+    if (self.source_map_builder) {
+        if (!self.source_files[file_name]) {
+            self.source_files[file_name] = self.source_map_builder.add_source(file_name, content);
         }
-        return 0;
+        return self.source_files[file_name];
     }
-    
-    # Write with source mapping
-    micro write_with_mapping(self, text: String, source_span, source_index) {
-        if (self.js_mapping && source_span) {
-            self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
-        } else {
-            self.buffer = self.buffer + text;
-        }
+    return 0;
+}
+
+# Write with source mapping
+micro write_with_mapping(self, text: String, source_span, source_index) {
+    if (self.js_mapping && source_span) {
+        self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
+    } else {
+        self.buffer = self.buffer + text;
     }
-    
-    # Write line with source mapping
-    micro write_line_with_mapping(self, text: String, source_span, source_index) {
-        let current_indent = "";
-        let i = 0;
-        while i < self.indent_level {
-            current_indent = current_indent + self.indent_text;
-            i = i + 1;
-        }
-        
-        if (self.js_mapping && source_span) {
-            self.buffer = self.buffer + current_indent;
-            self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
-            self.buffer = self.buffer + self.js_mapping.generate_newline();
-        } else {
-            self.buffer = self.buffer + current_indent + text + "\n";
-        }
+}
+
+# Write line with source mapping
+micro write_line_with_mapping(self, text: String, source_span, source_index) {
+    let current_indent = "";
+    let i = 0;
+    while i < self.indent_level {
+        current_indent = current_indent + self.indent_text;
+        i = i + 1;
     }
-    
-    # Get the generated source map
-    micro get_source_map(self) {
-        if (self.source_map_builder) {
-            return self.source_map_builder.build();
-        }
-        return false;
+
+    if (self.js_mapping && source_span) {
+        self.buffer = self.buffer + current_indent;
+        self.buffer = self.buffer + self.js_mapping.generate_with_mapping(text, source_span, source_index);
+        self.buffer = self.buffer + self.js_mapping.generate_newline();
+    } else {
+        self.buffer = self.buffer + current_indent + text + "\n";
     }
+}
+
+# Get the generated source map
+micro get_source_map(self) {
+    if (self.source_map_builder) {
+        return self.source_map_builder.build();
+    }
+    return false;
+}

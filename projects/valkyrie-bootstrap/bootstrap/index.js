@@ -411,11 +411,20 @@ export function package_compiler_create_compilation_result_with_diagnostics(
         };
     }
     if (integrated_ast != null) {
-        let generator = new package_codegen_JsCodeGeneration("    ");
+        let generator = new package_codegen_JsCodeGeneration(
+            "    ",
+            compiler.options
+        );
         let generated = generator.generate(integrated_ast);
+        let source_map = generator.get_source_map();
+        let source_map_json = false;
+        if (source_map) {
+            source_map_json = source_map.to_json();
+        }
         return {
             success: true,
             code: generated,
+            source_map: source_map_json,
             diagnostics: compiler.diagnostics.get_all_diagnostics(),
         };
     } else {
@@ -724,6 +733,68 @@ export function package_codegen_join_name_path(names, separator) {
     }
     return result;
 }
+export function package_codegen_add_source_file(self, file_name, content) {
+    if (this.source_map_builder) {
+        if (!this.source_files[file_name]) {
+            this.source_files[file_name] = this.source_map_builder.add_source(
+                file_name,
+                content
+            );
+        }
+        return this.source_files[file_name];
+    }
+    return 0;
+}
+export function package_codegen_write_with_mapping(
+    self,
+    text,
+    source_span,
+    source_index
+) {
+    if (this.js_mapping && source_span) {
+        this.buffer =
+            this.buffer +
+            this.js_mapping.generate_with_mapping(
+                text,
+                source_span,
+                source_index
+            );
+    } else {
+        this.buffer = this.buffer + text;
+    }
+}
+export function package_codegen_write_line_with_mapping(
+    self,
+    text,
+    source_span,
+    source_index
+) {
+    let current_indent = "";
+    let i = 0;
+    while (i < this.indent_level) {
+        current_indent = current_indent + this.indent_text;
+        i = i + 1;
+    }
+    if (this.js_mapping && source_span) {
+        this.buffer = this.buffer + current_indent;
+        this.buffer =
+            this.buffer +
+            this.js_mapping.generate_with_mapping(
+                text,
+                source_span,
+                source_index
+            );
+        this.buffer = this.buffer + this.js_mapping.generate_newline();
+    } else {
+        this.buffer = this.buffer + current_indent + text + "\n";
+    }
+}
+export function package_codegen_get_source_map(self) {
+    if (this.source_map_builder) {
+        return this.source_map_builder.build();
+    }
+    return false;
+}
 export function package_lexer_is_whitespace(ch) {
     return ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
 }
@@ -797,7 +868,28 @@ export function package_lexer_get_keyword_type(value) {
     if (value == "await") {
         return "AWAIT";
     }
+    if (value == "is") {
+        return "IS";
+    }
+    if (value == "as") {
+        return "AS";
+    }
     return "IDENTIFIER";
+}
+export function package_parser_parsePatternExpression(parser) {
+    let token = parser.current_token;
+    if (token.type == "IDENTIFIER") {
+        parser.advance();
+        return new package_parser_Node("Identifier", token.value);
+    } else {
+        let error = {};
+        error.type = "ParseError";
+        error.message =
+            "Expected identifier in pattern expression but got " + token.type;
+        error.line = token.line;
+        error.column = token.column;
+        return error;
+    }
 }
 export function package_parser_getOperatorPrecedence(tokenType) {
     if (tokenType == "ASSIGN") {
@@ -825,6 +917,12 @@ export function package_parser_getOperatorPrecedence(tokenType) {
         return 5;
     }
     if (tokenType == "LTE") {
+        return 5;
+    }
+    if (tokenType == "IS") {
+        return 5;
+    }
+    if (tokenType == "AS") {
         return 5;
     }
     if (tokenType == "PIPE") {
@@ -877,11 +975,50 @@ export function package_parser_parseExpressionWithPrecedence(
         } else {
             nextMinPrecedence = precedence + 1;
         }
-        let right = package_parser_parseExpressionWithPrecedence(
-            parser,
-            nextMinPrecedence,
-            inline
-        );
+        let right = {};
+        if (tokenType == "IS") {
+            let isOptional = false;
+            if (parser.current_token.type == "QUESTION") {
+                isOptional = true;
+                parser.advance();
+            }
+            right = package_parser_parsePatternExpression(parser);
+            if (isOptional) {
+                let node = new package_parser_Node("OptionalTypeCheck");
+                node.expression = left;
+                node.pattern = right;
+                left = node;
+            } else {
+                let node = new package_parser_Node("TypeCheck");
+                node.expression = left;
+                node.pattern = right;
+                left = node;
+            }
+        } else if (tokenType == "AS") {
+            let isOptional = false;
+            if (parser.current_token.type == "QUESTION") {
+                isOptional = true;
+                parser.advance();
+            }
+            right = package_parser_parseTypeExpression(parser);
+            if (isOptional) {
+                let node = new package_parser_Node("OptionalTypeCast");
+                node.expression = left;
+                node.targetType = right;
+                left = node;
+            } else {
+                let node = new package_parser_Node("TypeCast");
+                node.expression = left;
+                node.targetType = right;
+                left = node;
+            }
+        } else {
+            right = package_parser_parseExpressionWithPrecedence(
+                parser,
+                nextMinPrecedence,
+                inline
+            );
+        }
         if (right && right.type == "ParseError") {
             return right;
         }
@@ -2374,12 +2511,25 @@ class package_compiler_CompilerDiagnostics {
 }
 class package_compiler_CompilerOptions {
     constructor(output_format, optimize, debug, mode) {
-        this.output_format = output_format || "js";
-        this.optimize = optimize || false;
-        this.debug = debug || false;
+        this.output_format = output_format;
+        if (output_format == false) {
+            this.output_format = "js";
+        }
+        this.optimize = optimize;
+        if (optimize == false) {
+            this.optimize = false;
+        }
+        this.debug = debug;
+        if (debug == false) {
+            this.debug = false;
+        }
         this.implicit_member_call = "warning";
-        this.mode = mode || "repl";
+        this.mode = mode;
+        if (mode == false) {
+            this.mode = "repl";
+        }
         this.source_map = true;
+        this.source_map_output_path = "";
     }
 }
 class package_compiler_CompilerStatistics {
@@ -2918,10 +3068,30 @@ class package_compiler_NamespaceManager {
     }
 }
 class package_codegen_JsCodeGeneration {
-    constructor(indent_text) {
+    constructor(indent_text, options) {
         this.buffer = "";
         this.indent_level = 0;
-        this.indent_text = indent_text || "    ";
+        this.indent_text = indent_text;
+        if (indent_text == false) {
+            this.indent_text = "    ";
+        }
+        this.options = options;
+        if (options) {
+            if (options.source_map) {
+                this.source_map_builder =
+                    new package_generation_SourceMapBuilder();
+                this.js_mapping = new package_generation_JsSourceMapping(
+                    this.source_map_builder
+                );
+            } else {
+                this.source_map_builder = false;
+                this.js_mapping = false;
+            }
+        } else {
+            this.source_map_builder = false;
+            this.js_mapping = false;
+        }
+        this.source_files = {};
     }
 
     indent() {
@@ -2936,6 +3106,9 @@ class package_codegen_JsCodeGeneration {
 
     write(text) {
         this.buffer = this.buffer + text;
+        if (this.js_mapping) {
+            this.js_mapping.generate_with_mapping(text, false, 0);
+        }
     }
 
     write_line(text) {
@@ -2945,11 +3118,33 @@ class package_codegen_JsCodeGeneration {
             current_indent = current_indent + this.indent_text;
             i = i + 1;
         }
-        this.buffer = this.buffer + current_indent + text + "\n";
+        let full_line = current_indent + text + "\n";
+        this.buffer = this.buffer + full_line;
+        if (this.js_mapping) {
+            this.js_mapping.generate_with_mapping(full_line, false, 0);
+        }
+    }
+
+    write_with_mapping(text, source_span) {
+        this.buffer = this.buffer + text;
+        if (this.js_mapping) {
+            if (source_span) {
+                this.js_mapping.generate_with_mapping(text, source_span, 0);
+            } else {
+                this.js_mapping.generate_with_mapping(text, false, 0);
+            }
+        }
     }
 
     to_string() {
         return this.buffer;
+    }
+
+    get_source_map() {
+        if (this.source_map_builder) {
+            return this.source_map_builder.build();
+        }
+        return false;
     }
 
     replace_all(str, search, replace) {
@@ -3003,6 +3198,36 @@ class package_codegen_JsCodeGeneration {
             let right = this.generate_expression(node.right);
             return left + " = " + right;
         }
+        if (node.type == "TypeCheck") {
+            let expr = this.generate_expression(node.expression);
+            let pattern = this.generate_pattern_expression(node.pattern);
+            return "(" + expr + " instanceof " + pattern + ")";
+        }
+        if (node.type == "OptionalTypeCheck") {
+            let expr = this.generate_expression(node.expression);
+            let pattern = this.generate_pattern_expression(node.pattern);
+            return (
+                "(function() { try { return " +
+                expr +
+                " instanceof " +
+                pattern +
+                "; } catch(e) { return false; } })()"
+            );
+        }
+        if (node.type == "TypeCast") {
+            let expr = this.generate_expression(node.expression);
+            let targetType = this.generate_type_expression(node.targetType);
+            return "(" + expr + ")";
+        }
+        if (node.type == "OptionalTypeCast") {
+            let expr = this.generate_expression(node.expression);
+            let targetType = this.generate_type_expression(node.targetType);
+            return (
+                "(function() { try { return (" +
+                expr +
+                "); } catch(e) { return null; } })()"
+            );
+        }
         if (node.type == "MicroCall") {
             let callee = this.generate_expression(node.callee);
             let args = "";
@@ -3035,10 +3260,14 @@ class package_codegen_JsCodeGeneration {
                     params = params + ", ";
                 }
                 let param = node.parameters[i];
-                if (param && param.name) {
-                    params = params + param.name;
+                if (param) {
+                    if (param.name) {
+                        params = params + param.name;
+                    } else {
+                        params = params + "param" + i;
+                    }
                 } else {
-                    params = params + param;
+                    params = params + "param" + i;
                 }
                 i = i + 1;
             }
@@ -3476,6 +3705,254 @@ class package_codegen_JsCodeGeneration {
         }
         return this.generate_statement(ast);
     }
+
+    generate_pattern_expression(pattern_node) {
+        if (!pattern_node) {
+            return "Object";
+        }
+        if (pattern_node.type == "Identifier") {
+            return pattern_node.name;
+        }
+        return "Object";
+    }
+
+    generate_type_expression(type_node) {
+        if (!type_node) {
+            return "Object";
+        }
+        if (type_node.type == "Identifier") {
+            return type_node.name;
+        }
+        if (type_node.type == "ArrayType") {
+            return "Array";
+        }
+        if (type_node.type == "FunctionType") {
+            return "Function";
+        }
+        if (type_node.type == "GenericType") {
+            return this.generate_type_expression(type_node.base);
+        }
+        if (type_node.type == "TupleType") {
+            return "Array";
+        }
+        if (type_node.type == "ObjectType") {
+            return "Object";
+        }
+        if (type_node.type == "UnionType") {
+            return "Object";
+        }
+        if (type_node.type == "IntersectionType") {
+            return "Object";
+        }
+        return "Object";
+    }
+}
+class package_generation_JsSourceMapping {
+    constructor(source_map_builder) {
+        this.builder = source_map_builder;
+        this.current_line = 1;
+        this.current_column = 0;
+    }
+
+    update_position(line, column) {
+        this.current_line = line;
+        this.current_column = column;
+    }
+
+    map_segment(source_span, source_index) {
+        if (source_span) {
+            if (source_span.is_valid()) {
+                this.builder.add_span_mapping(
+                    this.current_line,
+                    this.current_column,
+                    source_span,
+                    source_index
+                );
+            }
+        }
+    }
+
+    generate_with_mapping(code, source_span, source_index) {
+        this.map_segment(source_span, source_index);
+        let i = 0;
+        let newline_count = 0;
+        while (i < code.length) {
+            if (code[i] == "\n") {
+                newline_count = newline_count + 1;
+            }
+            i = i + 1;
+        }
+        if (newline_count > 0) {
+            this.current_line = this.current_line + newline_count;
+            this.current_column = 0;
+        } else {
+            this.current_column = this.current_column + code.length;
+        }
+        return code;
+    }
+
+    generate_newline() {
+        this.current_line = this.current_line + 1;
+        this.current_column = 0;
+        return "\n";
+    }
+
+    generate_indent(level) {
+        let indent = "";
+        let i = 0;
+        while (i < level) {
+            indent = indent + "    ";
+            i = i + 1;
+        }
+        this.current_column = this.current_column + indent.length;
+        return indent;
+    }
+}
+class package_generation_SourceMap {
+    constructor() {
+        this.version = 3;
+        this.sources = [];
+        this.sources_content = [];
+        this.names = [];
+        this.mappings = "";
+        this.file = "";
+    }
+
+    add_source(file_name, content) {
+        return 0;
+    }
+
+    add_name(name) {
+        return 0;
+    }
+
+    set_file(file_name) {
+        this.file = file_name;
+    }
+
+    set_mappings(mappings) {
+        this.mappings = mappings;
+    }
+
+    to_json() {
+        return (
+            '{"version":' +
+            this.version +
+            ',"sources":[],"sourcesContent":[],"names":[],"mappings":"' +
+            this.mappings +
+            '","file":"' +
+            this.file +
+            '"}'
+        );
+    }
+}
+class package_generation_SourceMapBuilder {
+    constructor() {
+        this.source_map = new package_generation_SourceMap();
+        this.mappings = [];
+        this.current_generated_line = 1;
+        this.current_generated_column = 0;
+    }
+
+    add_source(file_name, content) {
+        return this.source_map.add_source(file_name, content);
+    }
+
+    add_name(name) {
+        return this.source_map.add_name(name);
+    }
+
+    set_file(file_name) {
+        this.source_map.set_file(file_name);
+    }
+
+    add_mapping(
+        generated_line,
+        generated_column,
+        source_index,
+        original_line,
+        original_column,
+        name_index
+    ) {}
+
+    add_span_mapping(
+        generated_line,
+        generated_column,
+        source_span,
+        source_index
+    ) {
+        this.add_mapping(
+            generated_line,
+            generated_column,
+            source_index,
+            source_span.start_line,
+            source_span.start_column,
+            false
+        );
+    }
+
+    build() {
+        let mappings_str = this.encode_mappings();
+        this.source_map.set_mappings(mappings_str);
+        return this.source_map;
+    }
+
+    encode_mappings() {
+        return "";
+    }
+}
+class package_generation_SourceSpan {
+    constructor(file_name, start_line, start_column, end_line, end_column) {
+        this.file_name = file_name;
+        if (file_name == false) {
+            this.file_name = "";
+        }
+        this.start_line = start_line;
+        if (start_line == false) {
+            this.start_line = 1;
+        }
+        this.start_column = start_column;
+        if (start_column == false) {
+            this.start_column = 1;
+        }
+        this.end_line = end_line;
+        if (end_line == false) {
+            this.end_line = 1;
+        }
+        this.end_column = end_column;
+        if (end_column == false) {
+            this.end_column = 1;
+        }
+    }
+
+    is_valid() {
+        if (this.start_line > 0) {
+            if (this.start_column > 0) {
+                if (this.end_line >= this.start_line) {
+                    if (this.end_line > this.start_line) {
+                        return true;
+                    } else {
+                        return this.end_column >= this.start_column;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    to_string() {
+        return (
+            this.file_name +
+            ":" +
+            this.start_line +
+            ":" +
+            this.start_column +
+            "-" +
+            this.end_line +
+            ":" +
+            this.end_column
+        );
+    }
 }
 class package_lexer_Token {
     constructor(type, value, line, column) {
@@ -3736,6 +4213,9 @@ class package_lexer_ValkyrieLexer {
                     return new package_lexer_Token("NE", "!=", line, column);
                 }
                 return new package_lexer_Token("BANG", ch, line, column);
+            }
+            if (ch == "?") {
+                return new package_lexer_Token("QUESTION", ch, line, column);
             }
             if (ch == ".") {
                 return new package_lexer_Token("DOT", ch, line, column);

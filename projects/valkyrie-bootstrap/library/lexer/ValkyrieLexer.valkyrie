@@ -215,6 +215,7 @@ class ValkyrieLexer {
                 }
                 return new Token("BANG", ch, line, column);
             }
+            if ch == "?" { return new Token("QUESTION", ch, line, column); }
             if ch == "." { return new Token("DOT", ch, line, column); }
             if ch == "↯" { return new Token("ATTRIBUTE", ch, line, column); }
 
@@ -278,5 +279,7 @@ micro get_keyword_type(value: String) -> String {
     if value == "new" { return "NEW"; }
     if value == "default" { return "DEFAULT"; }
     if value == "await" { return "AWAIT"; }
+    if value == "is" { return "IS"; }
+    if value == "as" { return "AS"; }
     return "IDENTIFIER";
 }

@@ -2,6 +2,8 @@ namespace package::parser;
 
 using package::parser::Node;
 using package::parser::ValkyrieParser;
+using package::parser::parseTypeExpression;
+using package::parser::parsePatternExpression;
 
 # Pratt 解析器优先级表
 micro getOperatorPrecedence(tokenType: String) -> i32 {
@@ -30,6 +32,12 @@ micro getOperatorPrecedence(tokenType: String) -> i32 {
         return 5;
     }
     if tokenType == "LTE" {
+        return 5;
+    }
+    if tokenType == "IS" {
+        return 5;
+    }
+    if tokenType == "AS" {
         return 5;
     }
     if tokenType == "PIPE" {
@@ -86,7 +94,52 @@ micro parseExpressionWithPrecedence(parser: ValkyrieParser, minPrecedence: i32, 
             nextMinPrecedence = precedence + 1;
         }
 
-        let right = parseExpressionWithPrecedence(parser, nextMinPrecedence, inline);
+        # 对于 is 和 as 操作符，需要检查是否有 ? 后缀，并且右操作数是 pattern_expression 或 type_expression
+        let right = {};
+        if tokenType == "IS" {
+            # 检查是否有 ? 后缀
+            let isOptional = false;
+            if parser.current_token.type == "QUESTION" {
+                isOptional = true;
+                parser.advance();
+            }
+            right = parsePatternExpression(parser);
+            
+            if isOptional {
+                let node = new Node("OptionalTypeCheck");
+                node.expression = left;
+                node.pattern = right;
+                left = node;
+            } else {
+                let node = new Node("TypeCheck");
+                node.expression = left;
+                node.pattern = right;
+                left = node;
+            }
+        } else if tokenType == "AS" {
+            # 检查是否有 ? 后缀
+            let isOptional = false;
+            if parser.current_token.type == "QUESTION" {
+                isOptional = true;
+                parser.advance();
+            }
+            right = parseTypeExpression(parser);
+            
+            if isOptional {
+                let node = new Node("OptionalTypeCast");
+                node.expression = left;
+                node.targetType = right;
+                left = node;
+            } else {
+                let node = new Node("TypeCast");
+                node.expression = left;
+                node.targetType = right;
+                left = node;
+            }
+        } else {
+            right = parseExpressionWithPrecedence(parser, nextMinPrecedence, inline);
+        }
+        
         if right && right.type == "ParseError" {
             return right;
         }
