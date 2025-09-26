@@ -6,72 +6,72 @@ using package::lexer::Token;
 
 micro parseStatement(parser: ValkyrieParser) -> Node {
     # 检查 EOF
-    if parser.current_token.type == "EOF" {
+    if parser.current_token.`type` == "EOF" {
         let error = {};
-        error.type = "ParseError";
+        error.`type` = "ParseError";
         error.message = "Unexpected EOF in statement";
         error.line = parser.current_token.line;
         error.column = parser.current_token.column;
         return error;
     }
 
-    if parser.current_token.type == "NAMESPACE" {
+    if parser.current_token.`type` == "NAMESPACE" {
         return parseNamespaceStatement(parser);
     }
 
-    if parser.current_token.type == "USING" {
+    if parser.current_token.`type` == "USING" {
         return parseUsingStatement(parser);
     }
 
-    if parser.current_token.type == "ATTRIBUTE" {
+    if parser.current_token.`type` == "ATTRIBUTE" {
         return parseAttributeStatement(parser);
     }
 
-    if parser.current_token.type == "CLASS" {
+    if parser.current_token.`type` == "CLASS" {
         return parseClassDeclaration(parser);
     }
 
-    if parser.current_token.type == "SINGLETON" {
+    if parser.current_token.`type` == "SINGLETON" {
         return parseSingletonDeclaration(parser);
     }
 
-    if parser.current_token.type == "TRAIT" {
+    if parser.current_token.`type` == "TRAIT" {
         return parseTraitDeclaration(parser);
     }
 
-    if parser.current_token.type == "LET" {
+    if parser.current_token.`type` == "LET" {
         return parseLetStatement(parser);
     }
 
-    if parser.current_token.type == "MICRO" {
+    if parser.current_token.`type` == "MICRO" {
         # 检查是否是顶级 micro function
         let nextIndex = parser.position + 1;
-        if nextIndex < parser.tokens.length && parser.tokens[nextIndex].type == "SYMBOL_XID" {
+        if nextIndex < parser.tokens.length && parser.tokens[nextIndex].`type` == "SYMBOL_XID" {
             let afterNameIndex = nextIndex + 1;
-            if afterNameIndex < parser.tokens.length && parser.tokens[afterNameIndex].type == "LPAREN" {
+            if afterNameIndex < parser.tokens.length && parser.tokens[afterNameIndex].`type` == "LPAREN" {
                 return parseMicroFunctionDeclaration(parser);
             }
         }
         return parse_function_declaration(parser);
     }
 
-    if parser.current_token.type == "IF" {
+    if parser.current_token.`type` == "IF" {
         return parseIfStatement(parser);
     }
 
-    if parser.current_token.type == "WHILE" {
+    if parser.current_token.`type` == "WHILE" {
         return parseWhileStatement(parser);
     }
 
-    if parser.current_token.type == "UNTIL" {
+    if parser.current_token.`type` == "UNTIL" {
         return parseUntilStatement(parser);
     }
 
-    if parser.current_token.type == "RETURN" {
+    if parser.current_token.`type` == "RETURN" {
         return parseReturnStatement(parser);
     }
 
-    if parser.current_token.type == "LBRACE" {
+    if parser.current_token.`type` == "LBRACE" {
         return parse_function_block(parser);
     }
 
@@ -79,12 +79,12 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
     let expr = parseExpression(parser);
 
     # 检查表达式是否有错误
-    if expr && expr.type == "ParseError" {
+    if expr && expr.`type` == "ParseError" {
         return expr;
     }
 
     let semicolon = parser.expect("SEMICOLON");
-    if semicolon && semicolon.type == "ParseError" {
+    if semicolon && semicolon.`type` == "ParseError" {
         return semicolon;
     }
 
@@ -96,23 +96,23 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
 
 micro parseLetStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'let'
-    let name = parser.expect("SYMBOL_XID");
-    if name && name.type == "ParseError" {
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
         return name;
     }
 
     let assignToken = parser.expect("ASSIGN");
-    if assignToken && assignToken.type == "ParseError" {
+    if assignToken && assignToken.`type` == "ParseError" {
         return assignToken;
     }
 
     let value = parseExpression(parser);
-    if value && value.type == "ParseError" {
+    if value && value.`type` == "ParseError" {
         return value;
     }
 
     let semicolon = parser.expect("SEMICOLON");
-    if semicolon && semicolon.type == "ParseError" {
+    if semicolon && semicolon.`type` == "ParseError" {
         return semicolon;
     }
 
@@ -128,24 +128,24 @@ micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
     let isMainNamespace = false;
 
     # 检查是否为主空间（namespace!）
-    if (parser.current_token.type == "BANG") {
+    if (parser.current_token.`type` == "BANG") {
         parser.advance(); # skip '!'
         isMainNamespace = true;
     }
 
-    let identifier = parser.expect("SYMBOL_XID");
-    if (identifier.type == "ParseError") { return identifier; }
+    let identifier = parser.expectIdentifier();
+    if (identifier.`type` == "ParseError") { return identifier; }
     path.push(identifier.value);
 
-    while (parser.current_token.type == "DOUBLE_COLON") {
+    while (parser.current_token.`type` == "DOUBLE_COLON") {
         parser.advance();
-        identifier = parser.expect("SYMBOL_XID");
-        if (identifier.type == "ParseError") { return identifier; }
+        identifier = parser.expectIdentifier();
+        if (identifier.`type` == "ParseError") { return identifier; }
         path.push(identifier.value);
     }
 
     let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.type == "ParseError") { return semicolon; }
+    if (semicolon.`type` == "ParseError") { return semicolon; }
 
     let node = parser.mark_node("NamespaceStatement");
     node.path = path;
@@ -157,19 +157,19 @@ micro parseUsingStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'using'
     let path = [];
 
-    let identifier = parser.expect("SYMBOL_XID");
-    if (identifier.type == "ParseError") { return identifier; }
+    let identifier = parser.expectIdentifier();
+    if (identifier.`type` == "ParseError") { return identifier; }
     path.push(identifier.value);
 
-    while (parser.current_token.type == "DOUBLE_COLON") {
+    while (parser.current_token.`type` == "DOUBLE_COLON") {
         parser.advance();
-        identifier = parser.expect("SYMBOL_XID");
-        if (identifier.type == "ParseError") { return identifier; }
+        identifier = parser.expectIdentifier();
+        if (identifier.`type` == "ParseError") { return identifier; }
         path.push(identifier.value);
     }
 
     let semicolon = parser.expect("SEMICOLON");
-    if (semicolon.type == "ParseError") { return semicolon; }
+    if (semicolon.`type` == "ParseError") { return semicolon; }
 
     let node = parser.mark_node("UsingStatement");
     node.path = path;
@@ -180,11 +180,11 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip '↯'
 
     # 期望 js 标识符
-    let jsToken = parser.expect("SYMBOL_XID");
-    if jsToken.type == "ParseError" { return jsToken; }
+    let jsToken = parser.expectIdentifier();
+    if jsToken.`type` == "ParseError" { return jsToken; }
     if jsToken.value != "js" {
         let error = {};
-        error.type = "ParseError";
+        error.`type` = "ParseError";
         error.message = "Expected 'js' after ↯";
         error.line = jsToken.line;
         error.column = jsToken.column;
@@ -193,56 +193,56 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
 
     # 期望左括号
     let lparen = parser.expect("LPAREN");
-    if lparen.type == "ParseError" { return lparen; }
+    if lparen.`type` == "ParseError" { return lparen; }
 
     # 期望模块路径字符串
     let modulePath = parser.expect("STRING");
-    if modulePath.type == "ParseError" { return modulePath; }
+    if modulePath.`type` == "ParseError" { return modulePath; }
 
     # 期望逗号
     let comma = parser.expect("COMMA");
-    if comma.type == "ParseError" { return comma; }
+    if comma.`type` == "ParseError" { return comma; }
 
     # 期望导入名称字符串
     let importName = parser.expect("STRING");
-    if importName.type == "ParseError" { return importName; }
+    if importName.`type` == "ParseError" { return importName; }
 
     # 期望右括号
     let rparen = parser.expect("RPAREN");
-    if rparen.type == "ParseError" { return rparen; }
+    if rparen.`type` == "ParseError" { return rparen; }
 
     # 期望 micro 函数声明
     let microToken = parser.expect("MICRO");
-    if microToken.type == "ParseError" { return microToken; }
+    if microToken.`type` == "ParseError" { return microToken; }
 
     # 解析函数名
-    let functionName = parser.expect("SYMBOL_XID");
-    if functionName.type == "ParseError" { return functionName; }
+    let functionName = parser.expectIdentifier();
+    if functionName.`type` == "ParseError" { return functionName; }
 
     # 解析参数列表
     let paramLparen = parser.expect("LPAREN");
-    if paramLparen.type == "ParseError" { return paramLparen; }
+    if paramLparen.`type` == "ParseError" { return paramLparen; }
 
     let parameters = [];
-    if parser.current_token.type != "RPAREN" {
-        let param = parser.expect("SYMBOL_XID");
-        if param.type == "ParseError" { return param; }
+    if parser.current_token.`type` != "RPAREN" {
+        let param = parser.expectIdentifier();
+        if param.`type` == "ParseError" { return param; }
         parameters.push(param.value);
 
-        while parser.current_token.type == "COMMA" {
+        while parser.current_token.`type` == "COMMA" {
             parser.advance(); # skip comma
-            param = parser.expect("SYMBOL_XID");
-            if param.type == "ParseError" { return param; }
+            param = parser.expectIdentifier();
+            if param.`type` == "ParseError" { return param; }
             parameters.push(param.value);
         }
     }
 
     let paramRparen = parser.expect("RPAREN");
-    if paramRparen.type == "ParseError" { return paramRparen; }
+    if paramRparen.`type` == "ParseError" { return paramRparen; }
 
     # 解析函数体
     let body = parseStatement(parser);
-    if body.type == "ParseError" { return body; }
+    if body.`type` == "ParseError" { return body; }
 
     let node = parser.mark_node("JSAttributeStatement");
     node.modulePath = modulePath.value;
@@ -256,48 +256,48 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
 # 解析顶级 micro function 语法: micro name(params) { ... }
 micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
-    let name = parser.expect("SYMBOL_XID");
-    if name && name.type == "ParseError" {
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
         return name;
     }
 
     let lparen = parser.expect("LPAREN");
-    if lparen && lparen.type == "ParseError" {
+    if lparen && lparen.`type` == "ParseError" {
         return lparen;
     }
 
     let params = parseTermParameters(parser);
-    if params && params.type == "ParseError" {
+    if params && params.`type` == "ParseError" {
         return params;
     }
 
     let rparen = parser.expect("RPAREN");
-    if rparen && rparen.type == "ParseError" {
+    if rparen && rparen.`type` == "ParseError" {
         return rparen;
     }
 
     # Parse optional return type: -> Type
     let returnType = null;
-    if parser.current_token.type == "ARROW" {
+    if parser.current_token.`type` == "ARROW" {
         parser.advance(); # skip '->'
         returnType = parseTypeExpression(parser);
-        if returnType && returnType.type == "ParseError" {
+        if returnType && returnType.`type` == "ParseError" {
             return returnType;
         }
     }
 
     # Parse optional effect type: / Type
     let effectType = null;
-    if parser.current_token.type == "DIVIDE" {
+    if parser.current_token.`type` == "DIVIDE" {
         parser.advance(); # skip '/'
         effectType = parseTypeExpression(parser);
-        if effectType && effectType.type == "ParseError" {
+        if effectType && effectType.`type` == "ParseError" {
             return effectType;
         }
     }
 
     let body = parse_function_block(parser);
-    if body && body.type == "ParseError" {
+    if body && body.`type` == "ParseError" {
         return body;
     }
 
@@ -313,8 +313,8 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
 # 解析关键词并返回节点类型
 micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type: String) -> Node {
     parser.advance(); # skip keyword
-    let name = parser.expect("SYMBOL_XID");
-    if name && name.type == "ParseError" {
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
         return name;
     }
 
@@ -327,10 +327,10 @@ micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type:
 
 # 解析继承关系 (extends)
 micro parse_inheritor(parser: ValkyrieParser, node: Node) -> Node {
-    if parser.current_token.type == "EXTENDS" {
+    if parser.current_token.`type` == "EXTENDS" {
         parser.advance(); # skip 'extends'
-        let superName = parser.expect("SYMBOL_XID");
-        if superName && superName.type == "ParseError" {
+        let superName = parser.expectIdentifier();
+        if superName && superName.`type` == "ParseError" {
             return superName;
         }
         node.superClass = superName.value;
@@ -347,28 +347,28 @@ micro parse_implements(parser: ValkyrieParser, node: Node) -> Node {
 # 解析对象体（成员列表）
 micro parse_object_body(parser: ValkyrieParser, node: Node) -> Node {
     let lbrace = parser.expect("LBRACE");
-    if lbrace && lbrace.type == "ParseError" {
+    if lbrace && lbrace.`type` == "ParseError" {
         return lbrace;
     }
 
     # 解析成员
-    while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+    while parser.current_token.`type` != "RBRACE" && parser.current_token.`type` != "EOF" {
         # 跳过空的分号
-        if parser.current_token.type == "SEMICOLON" {
+        if parser.current_token.`type` == "SEMICOLON" {
             parser.advance();
             continue;
         }
         
         let member = parseClassMember(parser);
-        if member && member.type != "ParseError" {
+        if member && member.`type` != "ParseError" {
             node.members.push(member);
-        } else if member && member.type == "ParseError" {
+        } else if member && member.`type` == "ParseError" {
             return member;
         }
     }
 
     let rbrace = parser.expect("RBRACE");
-    if rbrace && rbrace.type == "ParseError" {
+    if rbrace && rbrace.`type` == "ParseError" {
         return rbrace;
     }
 
@@ -378,25 +378,25 @@ micro parse_object_body(parser: ValkyrieParser, node: Node) -> Node {
 micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
     # 使用重构后的函数
     let node = parse_keyword(parser, "class", "ClassDeclaration");
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析继承
     node = parse_inheritor(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析实现（暂时不需要）
     node = parse_implements(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析对象体
     node = parse_object_body(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
@@ -406,25 +406,25 @@ micro parseClassDeclaration(parser: ValkyrieParser) -> Node {
 micro parseSingletonDeclaration(parser: ValkyrieParser) -> Node {
     # 使用重构后的函数，复用 class 的解析逻辑
     let node = parse_keyword(parser, "singleton", "SingletonDeclaration");
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析继承
     node = parse_inheritor(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析实现（暂时不需要）
     node = parse_implements(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析对象体
     node = parse_object_body(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
@@ -434,25 +434,25 @@ micro parseSingletonDeclaration(parser: ValkyrieParser) -> Node {
 micro parseTraitDeclaration(parser: ValkyrieParser) -> Node {
     # 使用重构后的函数，复用 class 的解析逻辑
     let node = parse_keyword(parser, "trait", "TraitDeclaration");
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析继承（trait 可以继承其他 trait）
     node = parse_inheritor(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析实现（暂时不需要）
     node = parse_implements(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
     # 解析对象体
     node = parse_object_body(parser, node);
-    if node && node.type == "ParseError" {
+    if node && node.`type` == "ParseError" {
         return node;
     }
 
@@ -461,26 +461,26 @@ micro parseTraitDeclaration(parser: ValkyrieParser) -> Node {
 
 micro parseClassMember(parser: ValkyrieParser) -> Node {
     # 检查是否是构造函数
-    if parser.current_token.type == "CONSTRUCTOR" {
+    if parser.current_token.`type` == "CONSTRUCTOR" {
         parser.advance(); # skip 'constructor'
 
         let lparen = parser.expect("LPAREN");
-        if lparen && lparen.type == "ParseError" {
+        if lparen && lparen.`type` == "ParseError" {
             return lparen;
         }
 
         let params = parseTermParameters(parser);
-        if params && params.type == "ParseError" {
+        if params && params.`type` == "ParseError" {
             return params;
         }
 
         let rparen = parser.expect("RPAREN");
-        if rparen && rparen.type == "ParseError" {
+        if rparen && rparen.`type` == "ParseError" {
             return rparen;
         }
 
         let body = parse_function_block(parser);
-        if body && body.type == "ParseError" {
+        if body && body.`type` == "ParseError" {
             return body;
         }
 
@@ -491,50 +491,50 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
     }
 
     # 检查是否是 micro 方法
-    if parser.current_token.type == "MICRO" {
+    if parser.current_token.`type` == "MICRO" {
         parser.advance(); # skip 'micro'
-        let name = parser.expect("SYMBOL_XID");
-        if name && name.type == "ParseError" {
+        let name = parser.expectIdentifier();
+        if name && name.`type` == "ParseError" {
             return name;
         }
 
         let lparen = parser.expect("LPAREN");
-        if lparen && lparen.type == "ParseError" {
+        if lparen && lparen.`type` == "ParseError" {
             return lparen;
         }
 
         let params = parseTermParameters(parser);
-        if params && params.type == "ParseError" {
+        if params && params.`type` == "ParseError" {
             return params;
         }
 
         let rparen = parser.expect("RPAREN");
-        if rparen && rparen.type == "ParseError" {
+        if rparen && rparen.`type` == "ParseError" {
             return rparen;
         }
 
         # Parse optional return type: -> Type
         let returnType = null;
-        if parser.current_token.type == "ARROW" {
+        if parser.current_token.`type` == "ARROW" {
             parser.advance(); # skip '->'
             returnType = parseTypeExpression(parser);
-            if returnType && returnType.type == "ParseError" {
+            if returnType && returnType.`type` == "ParseError" {
                 return returnType;
             }
         }
 
         # Parse optional effect type: / Type
         let effectType = null;
-        if parser.current_token.type == "DIVIDE" {
+        if parser.current_token.`type` == "DIVIDE" {
             parser.advance(); # skip '/'
             effectType = parseTypeExpression(parser);
-            if effectType && effectType.type == "ParseError" {
+            if effectType && effectType.`type` == "ParseError" {
                 return effectType;
             }
         }
 
         let body = parse_function_block(parser);
-        if body && body.type == "ParseError" {
+        if body && body.`type` == "ParseError" {
             return body;
         }
 
@@ -572,39 +572,39 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
     }
 
     # 检查是否是 field（标识符后面可能跟 : 类型, = 值, 或 ;）
-    if parser.current_token.type == "SYMBOL_XID" {
+    if parser.current_token.`type` == "SYMBOL_XID" {
         let nextIndex = parser.position + 1;
         if nextIndex < parser.tokens.length {
             let next_token = parser.tokens[nextIndex];
-            if next_token.type == "COLON" || next_token.type == "ASSIGN" || next_token.type == "SEMICOLON" {
+            if next_token.`type` == "COLON" || next_token.`type` == "ASSIGN" || next_token.`type` == "SEMICOLON" {
                 # 这是一个 field
-                let name = parser.expect("SYMBOL_XID");
-                if name && name.type == "ParseError" {
+                let name = parser.expectIdentifier();
+                if name && name.`type` == "ParseError" {
                     return name;
                 }
 
                 # Parse optional type annotation: : Type
                 let typeAnnotation = null;
-                if parser.current_token.type == "COLON" {
+                if parser.current_token.`type` == "COLON" {
                     parser.advance(); # skip ':'
                     typeAnnotation = parseTypeExpression(parser);
-                    if typeAnnotation && typeAnnotation.type == "ParseError" {
+                    if typeAnnotation && typeAnnotation.`type` == "ParseError" {
                         return typeAnnotation;
                     }
                 }
 
                 # Parse optional default value: = value
                 let initValue = null;
-                if parser.current_token.type == "ASSIGN" {
+                if parser.current_token.`type` == "ASSIGN" {
                     parser.advance(); # skip '='
                     initValue = parseExpression(parser);
-                    if initValue && initValue.type == "ParseError" {
+                    if initValue && initValue.`type` == "ParseError" {
                         return initValue;
                     }
                 }
 
                 let semicolon = parser.expect("SEMICOLON");
-                if semicolon && semicolon.type == "ParseError" {
+                if semicolon && semicolon.`type` == "ParseError" {
                     return semicolon;
                 }
 
@@ -619,8 +619,8 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
 
     # 如果都不匹配，返回错误
     let error = {};
-    error.type = "ParseError";
-    error.message = "Expected class member (field or method) but got " + parser.current_token.type;
+    error.`type` = "ParseError";
+    error.message = "Expected class member (field or method) but got " + parser.current_token.`type`;
     error.line = parser.current_token.line;
     error.column = parser.current_token.column;
     return error;
@@ -628,28 +628,28 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
 
 micro parse_function_declaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
-    let name = parser.expect("SYMBOL_XID");
-    if name && name.type == "ParseError" {
+    let name = parser.expectIdentifier();
+    if name && name.`type` == "ParseError" {
         return name;
     }
 
     let lparen = parser.expect("LPAREN");
-    if lparen && lparen.type == "ParseError" {
+    if lparen && lparen.`type` == "ParseError" {
         return lparen;
     }
 
     let params = parseTermParameters(parser);
-    if params && params.type == "ParseError" {
+    if params && params.`type` == "ParseError" {
         return params;
     }
 
     let rparen = parser.expect("RPAREN");
-    if rparen && rparen.type == "ParseError" {
+    if rparen && rparen.`type` == "ParseError" {
         return rparen;
     }
 
     let body = parse_function_block(parser);
-    if body && body.type == "ParseError" {
+    if body && body.`type` == "ParseError" {
         return body;
     }
 
@@ -663,12 +663,12 @@ micro parse_function_declaration(parser: ValkyrieParser) -> Node {
 micro parseIfStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'if'
     let condition = parseInlineExpression(parser);
-    if condition && condition.type == "ParseError" {
+    if condition && condition.`type` == "ParseError" {
         return condition;
     }
 
     let thenBranch = parseStatement(parser);
-    if thenBranch && thenBranch.type == "ParseError" {
+    if thenBranch && thenBranch.`type` == "ParseError" {
         return thenBranch;
     }
 
@@ -677,10 +677,10 @@ micro parseIfStatement(parser: ValkyrieParser) -> Node {
     node.thenBranch = thenBranch;
     node.elseBranch = null;
 
-    if parser.current_token.type == "ELSE" {
+    if parser.current_token.`type` == "ELSE" {
         parser.advance();
         let elseBranch = parseStatement(parser);
-        if elseBranch && elseBranch.type == "ParseError" {
+        if elseBranch && elseBranch.`type` == "ParseError" {
             return elseBranch;
         }
         node.elseBranch = elseBranch;
@@ -692,12 +692,12 @@ micro parseIfStatement(parser: ValkyrieParser) -> Node {
 micro parseWhileStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'while'
     let condition = parseInlineExpression(parser);
-    if condition && condition.type == "ParseError" {
+    if condition && condition.`type` == "ParseError" {
         return condition;
     }
 
     let body = parse_function_block(parser);
-    if body && body.type == "ParseError" {
+    if body && body.`type` == "ParseError" {
         return body;
     }
 
@@ -710,12 +710,12 @@ micro parseWhileStatement(parser: ValkyrieParser) -> Node {
 micro parseUntilStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'until'
     let condition = parseInlineExpression(parser);
-    if condition && condition.type == "ParseError" {
+    if condition && condition.`type` == "ParseError" {
         return condition;
     }
 
     let body = parse_function_block(parser);
-    if body && body.type == "ParseError" {
+    if body && body.`type` == "ParseError" {
         return body;
     }
 
@@ -730,18 +730,18 @@ micro parseReturnStatement(parser: ValkyrieParser) -> Node {
 
     let node = parser.mark_node("ReturnStatement");
 
-    if parser.current_token.type == "SEMICOLON" {
+    if parser.current_token.`type` == "SEMICOLON" {
         node.value = null;
     } else {
         let value = parseExpression(parser);
-        if value && value.type == "ParseError" {
+        if value && value.`type` == "ParseError" {
             return value;
         }
         node.value = value;
     }
 
     let semicolon = parser.expect("SEMICOLON");
-    if semicolon && semicolon.type == "ParseError" {
+    if semicolon && semicolon.`type` == "ParseError" {
         return semicolon;
     }
 
@@ -750,22 +750,22 @@ micro parseReturnStatement(parser: ValkyrieParser) -> Node {
 
 micro parse_function_block(parser: ValkyrieParser) -> Node {
     let lbrace = parser.expect("LBRACE");
-    if lbrace && lbrace.type == "ParseError" {
+    if lbrace && lbrace.`type` == "ParseError" {
         return lbrace;
     }
 
     let statements = [];
 
-    while parser.current_token.type != "RBRACE" && parser.current_token.type != "EOF" {
+    while parser.current_token.`type` != "RBRACE" && parser.current_token.`type` != "EOF" {
         let stmt = parseStatement(parser);
-        if stmt && stmt.type == "ParseError" {
+        if stmt && stmt.`type` == "ParseError" {
             return stmt;
         }
         statements.push(stmt);
     }
 
     let rbrace = parser.expect("RBRACE");
-    if rbrace && rbrace.type == "ParseError" {
+    if rbrace && rbrace.`type` == "ParseError" {
         return rbrace;
     }
 
@@ -777,9 +777,9 @@ micro parse_function_block(parser: ValkyrieParser) -> Node {
 micro parseProgram(parser: ValkyrieParser) -> Node {
     let statements = [];
 
-    while parser.current_token.type != "EOF" {
+    while parser.current_token.`type` != "EOF" {
         let stmt = parseStatement(parser);
-        if stmt && stmt.type == "ParseError" {
+        if stmt && stmt.`type` == "ParseError" {
             return stmt;
         }
         statements.push(stmt);

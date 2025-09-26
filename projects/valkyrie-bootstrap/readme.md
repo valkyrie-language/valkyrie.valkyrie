@@ -76,26 +76,42 @@ if (stage0Content === stage1Content) {
 
 #### 核心模块
 
-1. **词法分析器 (Lexer)**
-   - `library/lexer/ValkyrieLexer.valkyrie` - 主词法分析器
-   - `library/lexer/Token.valkyrie` - 词法单元定义
-   - 支持 Unicode 标识符和现代语法特性
+Valkyrie 编译器现在采用五层架构，确保了模块化和可扩展性：
 
-2. **语法分析器 (Parser)**
-   - `library/parser/ValkyrieParser.valkyrie` - 主语法分析器
-   - `library/parser/Node.valkyrie` - AST 节点定义
-   - 支持递归下降解析和错误恢复
+1.  **词法分析器 (Lexer)**
+    -   `library/lexer/ValkyrieLexer.valkyrie` - 主词法分析器
+    -   `library/lexer/Token.valkyrie` - 词法单元定义
+    -   负责将源代码分解为一系列词法单元（Token）。
 
-3. **代码生成器 (Code Generation)**
-   - `library/generation/JsCodeGeneration.valkyrie` - JavaScript 代码生成
-   - 支持 ES6+ 语法和现代 JavaScript 特性
+2.  **语法分析器 (Parser)**
+    -   `library/parser/ValkyrieParser.valkyrie` - 主语法分析器
+    -   `library/parser/Node.valkyrie` - AST 节点定义
+    -   负责将词法单元流转换为抽象语法树（AST）。
 
-4. **编译器核心 (Compiler Core)**
-   - `library/compiler/Compiler.valkyrie` - 主编译器类
-   - `library/compiler/CompilerOptions.valkyrie` - 编译选项
-   - `library/compiler/CompilerDiagnostics.valkyrie` - 诊断系统
-   - `library/compiler/DependencyAnalyzer.valkyrie` - 依赖分析
-   - `library/compiler/NamespaceManager.valkyrie` - 命名空间管理
+3.  **语义分析器 (Analyzer)**
+    -   `library/analyzer/Analyzer.valkyrie` - 主语义分析器
+    -   `library/analyzer/Symbol.valkyrie` - 符号定义
+    -   `library/analyzer/SymbolTable.valkyrie` - 符号表管理
+    -   `library/analyzer/Type.valkyrie` - 类型系统定义
+    -   `library/analyzer/TypeChecker.valkyrie` - 类型检查器
+    -   负责构建符号表、执行作用域分析和类型检查，确保代码的语义正确性。
+
+4.  **优化器 (Optimizer)**
+    -   `library/optimizer/Optimizer.valkyrie` - 主优化器
+    -   `library/optimizer/Transform.valkyrie` - 优化转换基类
+    -   负责对 AST 进行各种优化，提高生成代码的效率。
+
+5.  **代码生成器 (Generator)**
+    -   `library/generation/JsCodeGeneration.valkyrie` - JavaScript 代码生成
+    -   负责将优化后的 AST 转换为目标语言（目前是 JavaScript）代码。
+
+#### 编译器核心
+
+-   `library/compiler/Compiler.valkyrie` - 主编译器类
+-   `library/compiler/CompilerOptions.valkyrie` - 编译选项
+-   `library/compiler/CompilerDiagnostics.valkyrie` - 诊断系统
+-   `library/compiler/DependencyAnalyzer.valkyrie` - 依赖分析
+-   `library/compiler/NamespaceManager.valkyrie` - 命名空间管理
 
 ## 🛠️ 使用方式
 
@@ -195,6 +211,7 @@ node bootstrap.js help
 - JavaScript 代码生成
 - 自举编译流程
 - 完整的测试套件
+- **基本类型检查**: 在 Analyzer 阶段集成，提供基础类型安全
 
 ### 🔄 开发中功能
 - 类型系统增强

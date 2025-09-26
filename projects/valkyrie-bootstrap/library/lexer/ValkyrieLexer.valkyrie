@@ -58,6 +58,22 @@ class ValkyrieLexer {
         return result;
     }
 
+    micro read_raw_identifier(self) {
+        let result = "";
+        self.advance(); # skip opening backtick
+
+        while self.current_char != "" && self.current_char != "`" {
+            result = result + self.current_char;
+            self.advance();
+        }
+
+        if self.current_char == "`" {
+            self.advance(); # skip closing backtick
+        }
+
+        return result;
+    }
+
     micro read_string(self) {
         let result = "";
         self.advance(); # skip opening quote
@@ -134,6 +150,11 @@ class ValkyrieLexer {
             if self.current_char == "\"" {
                 let value = self.read_string();
                 return new Token("STRING", value, line, column);
+            }
+
+            if self.current_char == "`" {
+                let value = self.read_raw_identifier();
+                return new Token("SYMBOL_RAW", value, line, column);
             }
 
             # Single character tokens
@@ -233,7 +254,7 @@ class ValkyrieLexer {
             let token = self.next_token();
             tokens.push(token);
 
-            if token.type == "EOF" {
+            if token.`type` == "EOF" {
                 break;
             }
         }
@@ -283,5 +304,9 @@ micro get_keyword_type(value: String) -> String {
     if value == "await" { return "AWAIT"; }
     if value == "is" { return "IS"; }
     if value == "as" { return "AS"; }
+    if value == "match" { return "MATCH"; }
+    if value == "when" { return "WHEN"; }
+    if value == "case" { return "CASE"; }
+    if value == "type" { return "TYPE"; }
     return "SYMBOL_XID";
 }

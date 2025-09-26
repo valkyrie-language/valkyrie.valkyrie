@@ -43,12 +43,12 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
         if tokens.length > 0 {
             let ast = parse(tokens);
 
-            if ast.type == "Program" {
+            if ast.`type` == "Program" {
                 let j = 0;
                 while j < ast.statements.length {
                     let stmt = ast.statements[j];
 
-                    if stmt.type == "UsingStatement" {
+                    if stmt.`type` == "UsingStatement" {
                         let using_path = join_name_path(stmt.path, "::");
                         let provider_file = find_namespace_provider(using_path, file_contents);
                         if provider_file != null && provider_file != file_name {
@@ -105,7 +105,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
         }
 
         let ast = parse(tokens);
-        if ast.type != "Program" {
+        if ast.`type` != "Program" {
             compiler.diagnostics.add_error("Failed to parse " + file_name + " at " + JSON.stringify(ast), 0, 0, file_name);
             k = k + 1;
             continue;
@@ -122,7 +122,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
         while l < ast.statements.length {
             let stmt = ast.statements[l];
 
-            if stmt.type == "NamespaceStatement" {
+            if stmt.`type` == "NamespaceStatement" {
                 current_namespace = join_name_path(stmt.path, "::");
                 if stmt.isMainNamespace {
                     current_namespace = current_namespace + "!";
@@ -137,25 +137,25 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
                 }
                 compiler.namespace_manager.current_namespace = current_namespace;
 
-            } else if stmt.type == "UsingStatement" {
+            } else if stmt.`type` == "UsingStatement" {
                 let using_path = join_name_path(stmt.path, "::");
                 let is_global = is_main_namespace(using_path);
                 compiler.namespace_manager.add_using_import(using_path, is_global);
 
-            } else if stmt.type == "JSImportStatement" {
+            } else if stmt.`type` == "JSImportStatement" {
                 js_import_statements.push(stmt);
 
-            } else if stmt.type == "LetStatement" {
+            } else if stmt.`type` == "LetStatement" {
                 stmt.sourceNamespace = current_namespace;
                 variable_statements.push(stmt);
                 compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "variable", stmt, file_name);
 
-            } else if stmt.type == "MicroDeclaration" {
+            } else if stmt.`type` == "MicroDeclaration" {
                 stmt.sourceNamespace = current_namespace;
                 function_statements.push(stmt);
                 compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "function", stmt, file_name);
 
-            } else if stmt.type == "ClassDeclaration" {
+            } else if stmt.`type` == "ClassDeclaration" {
                 stmt.sourceNamespace = current_namespace;
                 class_statements.push(stmt);
                 compiler.namespace_manager.add_symbol_to_namespace(current_namespace, stmt.name, "class", stmt, file_name);
@@ -304,7 +304,7 @@ micro create_integrated_ast_with_compiler(compiler: Compiler, js_import_statemen
                 let member = class_stmt.members[m];
                 let resolved_member = Object.assign({}, member);
                 # Only resolve for methods and constructors that have bodies
-                if (member.type == "MemberStatement" || member.type == "ConstructorStatement") && member.body != null {
+                if (member.`type` == "MemberStatement" || member.`type` == "ConstructorStatement") && member.body != null {
                     resolved_member.body = compiler.namespace_manager.resolve_identifiers_in_statement(member.body, function_statements, variable_statements, class_statements, compiler.options, compiler.diagnostics);
                 }
                 resolved_members.push(resolved_member);

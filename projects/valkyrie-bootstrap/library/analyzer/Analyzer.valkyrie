@@ -45,19 +45,19 @@ class Analyzer {
         }
         
         # 根据节点类型创建符号
-        if node.type == "ClassStatement" {
+        if node.`type` == "ClassStatement" {
             self.visit_class_statement(node);
-        } else if node.type == "FunctionStatement" {
+        } else if node.`type` == "FunctionStatement" {
             self.visit_function_statement(node);
-        } else if node.type == "LetStatement" {
+        } else if node.`type` == "LetStatement" {
             self.visit_let_statement(node);
-        } else if node.type == "Identifier" {
+        } else if node.`type` == "Identifier" {
             self.visit_identifier(node);
-        } else if node.type == "MicroCall" {
+        } else if node.`type` == "MicroCall" {
             self.visit_micro_call(node);
-        } else if node.type == "NamespaceStatement" {
+        } else if node.`type` == "NamespaceStatement" {
             self.visit_namespace_statement(node);
-        } else if node.type == "UsingStatement" {
+        } else if node.`type` == "UsingStatement" {
             self.visit_using_statement(node);
         } else {
             self.visit_generic_node(node);

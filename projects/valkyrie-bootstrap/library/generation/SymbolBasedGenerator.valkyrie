@@ -67,7 +67,7 @@ class SymbolBasedGenerator {
     # 创建增强节点
     micro create_enhanced_node(self, node: Node) -> Object {
         let enhanced = {};
-        enhanced.type = node.type;
+        enhanced.`type` = node.`type`;
         enhanced.offset = node.offset;
         enhanced.length = node.length;
         enhanced.line = node.line;

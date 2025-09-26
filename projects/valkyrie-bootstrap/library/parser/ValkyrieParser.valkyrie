@@ -15,15 +15,15 @@ class ValkyrieParser {
         }
         else {
             self.current_token = {};
-            self.current_token.type = "EOF";
+            self.current_token.`type` = "EOF";
         }
     }
     
     micro expect(self, tokenType) {
-        if self.current_token.type != tokenType {
+        if self.current_token.`type` != tokenType {
             let error = {};
-            error.type = "ParseError";
-            error.message = "Expected " + tokenType + " but got " + self.current_token.type;
+            error.`type` = "ParseError";
+            error.message = "Expected " + tokenType + " but got " + self.current_token.`type`;
             error.line = self.current_token.line;
             error.column = self.current_token.column;
             return error;
@@ -33,6 +33,43 @@ class ValkyrieParser {
         return token;
     }
     
+    micro expectIdentifier(self) {
+        if self.current_token.`type` == "SYMBOL_XID" || self.current_token.`type` == "SYMBOL_RAW" {
+            let token = self.current_token;
+            self.advance();
+            return token;
+        }
+        let error = {};
+        error.`type` = "ParseError";
+        error.message = "Expected identifier but got " + self.current_token.`type`;
+        error.line = self.current_token.line;
+        error.column = self.current_token.column;
+        return error;
+    }
+    
+    micro expectIdentifierIn(self, context: String) {
+        if self.current_token["type"] == "SYMBOL_XID" || self.current_token["type"] == "SYMBOL_RAW" {
+            let token = self.current_token;
+            self.advance();
+            return token;
+        }
+
+        if context == "Branches" {
+            if self.current_token["type"] == "TYPE" || self.current_token["type"] == "CASE" || self.current_token["type"] == "WHEN" || self.current_token["type"] == "ELSE" {
+                let token = self.current_token;
+                self.advance();
+                return token;
+            }
+        }
+
+        let error = {};
+        error["type"] = "ParseError";
+        error.message = "Expected identifier in context " + context + " but got " + self.current_token["type"];
+        error.line = self.current_token.line;
+        error.column = self.current_token.column;
+        return error;
+    }
+
     micro mark_node(self, node_type: String) {
         return new Node(node_type, self.current_token.offset, self.current_token.length, self.current_token.line, self.current_token.column);
     }

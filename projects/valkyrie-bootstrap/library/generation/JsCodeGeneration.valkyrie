@@ -166,77 +166,77 @@ class JsCodeGeneration {
     
     # 生成表达式代码 - 主入口方法
     micro generate_expression(self, node: Node) -> String {
-        if node.type == "Number" {
+        if node.`type` == "Number" {
             return self.generate_number_expression(node);
         }
-        if node.type == "String" {
+        if node.`type` == "String" {
             return self.generate_string_expression(node);
         }
-        if node.type == "Boolean" {
+        if node.`type` == "Boolean" {
             return self.generate_boolean_expression(node);
         }
-        if node.type == "Identifier" {
+        if node.`type` == "Identifier" {
             return self.generate_identifier_expression(node);
         }
-        if node.type == "BinaryOp" {
+        if node.`type` == "BinaryOp" {
             return self.generate_binary_op_expression(node);
         }
-        if node.type == "Assignment" {
+        if node.`type` == "Assignment" {
             return self.generate_assignment_expression(node);
         }
-        if node.type == "TypeCheck" {
+        if node.`type` == "TypeCheck" {
             return self.generate_type_check_expression(node);
         }
-        if node.type == "OptionalTypeCheck" {
+        if node.`type` == "OptionalTypeCheck" {
             return self.generate_optional_type_check_expression(node);
         }
-        if node.type == "TypeCast" {
+        if node.`type` == "TypeCast" {
             return self.generate_type_cast_expression(node);
         }
-        if node.type == "OptionalTypeCast" {
+        if node.`type` == "OptionalTypeCast" {
             return self.generate_optional_type_cast_expression(node);
         }
-        if node.type == "MicroCall" {
+        if node.`type` == "MicroCall" {
             return self.generate_micro_call_expression(node);
         }
-        if node.type == "AnonymousFunction" {
+        if node.`type` == "AnonymousFunction" {
             return self.generate_anonymous_function_expression(node);
         }
-        if node.type == "NewExpression" {
+        if node.`type` == "NewExpression" {
             return self.generate_new_expression(node);
         }
-        if node.type == "AwaitExpression" {
+        if node.`type` == "AwaitExpression" {
             return self.generate_await_expression(node);
         }
-        if node.type == "PropertyAccess" {
+        if node.`type` == "PropertyAccess" {
             return self.generate_property_access_expression(node);
         }
-        if node.type == "StaticMethodCall" {
+        if node.`type` == "StaticMethodCall" {
             return self.generate_static_method_call_expression(node);
         }
-        if node.type == "StaticPropertyAccess" {
+        if node.`type` == "StaticPropertyAccess" {
             return self.generate_static_property_access_expression(node);
         }
-        if node.type == "ArrayAccess" {
+        if node.`type` == "ArrayAccess" {
             return self.generate_array_access_expression(node);
         }
-        if node.type == "ObjectLiteral" {
+        if node.`type` == "ObjectLiteral" {
             return self.generate_object_literal_expression(node);
         }
-        if node.type == "ArrayLiteral" {
+        if node.`type` == "ArrayLiteral" {
             return self.generate_array_literal_expression(node);
         }
-        if node.type == "UnaryOp" {
+        if node.`type` == "UnaryOp" {
             return self.generate_unary_op_expression(node);
         }
-        if node.type == "ThisExpression" {
+        if node.`type` == "ThisExpression" {
             return self.generate_this_expression(node);
         }
-        if node.type == "DefaultValue" {
+        if node.`type` == "DefaultValue" {
             return self.generate_default_value_expression(node);
         }
         
-        return "/* Unknown expression: " + node.type + " */";
+        return "/* Unknown expression: " + node.`type` + " */";
     }
     
     # 生成数字表达式
@@ -269,7 +269,6 @@ class JsCodeGeneration {
     # 生成标识符表达式
     micro generate_identifier_expression(self, node: Node) -> String {
         # 检查 node 是否有 has_valid_position 方法
-        console.log(JSON.stringify(node));
         if self.js_mapping {
             if node && node.has_valid_position {
                 if node.has_valid_position() {
@@ -432,7 +431,7 @@ class JsCodeGeneration {
     
     # 生成属性访问表达式
     micro generate_property_access_expression(self, node: Node) -> String {
-        if node.object.type {
+        if node.object.`type` {
             let obj = self.generate_expression(node.object);
             return obj + "." + node.property;
         } else {
@@ -450,7 +449,7 @@ class JsCodeGeneration {
             } else {
                 className = node.namespacePath[0];
             }
-        } else if node.className.type {
+        } else if node.className.`type` {
             className = self.generate_expression(node.className);
         } else {
             className = node.className;
@@ -479,7 +478,7 @@ class JsCodeGeneration {
             } else {
                 className = node.namespacePath[0];
             }
-        } else if node.className.type {
+        } else if node.className.`type` {
             className = self.generate_expression(node.className);
         } else {
             className = node.className;
@@ -491,7 +490,7 @@ class JsCodeGeneration {
     # 生成数组访问表达式
     micro generate_array_access_expression(self, node: Node) -> String {
         let obj = "";
-        if node.object.type {
+        if node.object.`type` {
             obj = self.generate_expression(node.object);
         } else {
             obj = node.object;
@@ -542,56 +541,56 @@ class JsCodeGeneration {
     
     # 生成语句代码 - 主入口方法
     micro generate_statement(self, node: Node) -> String {
-        if node.type == "LetStatement" {
+        if node.`type` == "LetStatement" {
             return self.generate_let_statement(node);
         }
-        if node.type == "NamespaceStatement" {
+        if node.`type` == "NamespaceStatement" {
             return self.generate_namespace_statement(node);
         }
-        if node.type == "UsingStatement" {
+        if node.`type` == "UsingStatement" {
             return self.generate_using_statement(node);
         }
-        if node.type == "JSAttributeStatement" {
+        if node.`type` == "JSAttributeStatement" {
             return self.generate_js_attribute_statement(node);
         }
-        if node.type == "ImportJsStatement" {
+        if node.`type` == "ImportJsStatement" {
             return self.generate_import_js_statement(node);
         }
-        if node.type == "MicroDeclaration" {
+        if node.`type` == "MicroDeclaration" {
             return self.generate_micro_declaration(node);
         }
-        if node.type == "MemberStatement" {
+        if node.`type` == "MemberStatement" {
             return self.generate_member_statement(node);
         }
-        if node.type == "IfStatement" {
+        if node.`type` == "IfStatement" {
             return self.generate_if_statement(node);
         }
-        if node.type == "WhileStatement" {
+        if node.`type` == "WhileStatement" {
             return self.generate_while_statement(node);
         }
-        if node.type == "UntilStatement" {
+        if node.`type` == "UntilStatement" {
             return self.generate_until_statement(node);
         }
-        if node.type == "ReturnStatement" {
+        if node.`type` == "ReturnStatement" {
             return self.generate_return_statement(node);
         }
-        if node.type == "Block" {
+        if node.`type` == "Block" {
             return self.generate_block_statement(node);
         }
-        if node.type == "ExpressionStatement" {
+        if node.`type` == "ExpressionStatement" {
             return self.generate_expression_statement(node);
         }
-        if node.type == "ClassDeclaration" {
+        if node.`type` == "ClassDeclaration" {
             return self.generate_class_declaration(node);
         }
-        if node.type == "TraitDeclaration" {
+        if node.`type` == "TraitDeclaration" {
             return self.generate_trait_declaration(node);
         }
-        if node.type == "SingletonDeclaration" {
+        if node.`type` == "SingletonDeclaration" {
             return self.generate_singleton_declaration(node);
         }
         
-        return "/* Unknown statement: " + node.type + " */";
+        return "/* Unknown statement: " + node.`type` + " */";
     }
     
     # 生成 let 语句
@@ -704,7 +703,7 @@ class JsCodeGeneration {
         let thenBranch = self.generate_statement(node.thenBranch);
         let result = "if (" + condition + ") " + thenBranch;
 
-        if node.elseBranch && node.elseBranch.type {
+        if node.elseBranch && node.elseBranch.`type` {
             let elseBranch = self.generate_statement(node.elseBranch);
             result = result + " else " + elseBranch;
         }
@@ -728,7 +727,7 @@ class JsCodeGeneration {
     
     # 生成 return 语句
     micro generate_return_statement(self, node: Node) -> String {
-        if node.value && node.value.type {
+        if node.value && node.value.`type` {
             let value = self.generate_expression(node.value);
             return "return " + value + ";";
         } else {
@@ -779,11 +778,11 @@ class JsCodeGeneration {
         let i = 0;
         while i < members.length {
             let member = members[i];
-            if member.type == "ConstructorStatement" {
+            if member.`type` == "ConstructorStatement" {
                 hasExplicitConstructor = true;
                 explicitConstructor = member;
-            } else if member.type == "Property" {
-                if member.initializer && member.initializer.type {
+            } else if member.`type` == "Property" {
+                if member.initializer && member.initializer.`type` {
                     let initValue = self.generate_expression(member.initializer);
                     fieldInits = fieldInits + "    self." + member.name + " = " + initValue + ";\n";
                 } else {
@@ -838,7 +837,7 @@ class JsCodeGeneration {
         i = 0;
         while i < members.length {
             let member = members[i];
-            if member.type == "MemberStatement" {
+            if member.`type` == "MemberStatement" {
                 let methodName = member.name;
                 let params = "";
                 let j = 0;
@@ -913,11 +912,11 @@ class JsCodeGeneration {
         let i = 0;
         while i < members.length {
             let member = members[i];
-            if member.type == "ConstructorStatement" {
+            if member.`type` == "ConstructorStatement" {
                 hasExplicitConstructor = true;
                 explicitConstructor = member;
-            } else if member.type == "Property" {
-                if member.initializer && member.initializer.type {
+            } else if member.`type` == "Property" {
+                if member.initializer && member.initializer.`type` {
                     let initValue = self.generate_expression(member.initializer);
                     fieldInits = fieldInits + "      this." + member.name + " = " + initValue + ";\n";
                 } else {
@@ -974,7 +973,7 @@ class JsCodeGeneration {
         i = 0;
         while i < members.length {
             let member = members[i];
-            if member.type == "MemberStatement" {
+            if member.`type` == "MemberStatement" {
                 let methodName = member.name;
                 let params = "";
                 let j = 0;
@@ -1027,7 +1026,7 @@ class JsCodeGeneration {
     
     # 生成完整代码
     micro generate(self, ast: Node) -> String {
-        if ast.type == "Program" {
+        if ast.`type` == "Program" {
             let i = 0;
             while i < ast.statements.length {
                 let stmt = ast.statements[i];
@@ -1060,7 +1059,7 @@ class JsCodeGeneration {
             return self.to_string();
         }
 
-        if ast.type == "ParseError" {
+        if ast.`type` == "ParseError" {
             return "// Parse Error: " + ast.message + " at line " + ast.line + ", column " + ast.column;
         }
 
@@ -1073,11 +1072,11 @@ class JsCodeGeneration {
             return "Object";
         }
 
-        if pattern_node.type == "TypeIdentifier" {
+        if pattern_node.`type` == "TypeIdentifier" {
             return pattern_node.name;
         }
 
-        if pattern_node.type == "Identifier" {
+        if pattern_node.`type` == "Identifier" {
             return pattern_node.name;
         }
 
@@ -1091,43 +1090,43 @@ class JsCodeGeneration {
             return "Object";
         }
 
-        if type_node.type == "TypeIdentifier" {
+        if type_node.`type` == "TypeIdentifier" {
             return type_node.name;
         }
 
-        if type_node.type == "Identifier" {
+        if type_node.`type` == "Identifier" {
             return type_node.name;
         }
 
-        if type_node.type == "ArrayType" {
+        if type_node.`type` == "ArrayType" {
             return "Array";
         }
 
-        if type_node.type == "FunctionType" {
+        if type_node.`type` == "FunctionType" {
             return "Function";
         }
 
-        if type_node.type == "GenericType" {
+        if type_node.`type` == "GenericType" {
             # 泛型类型在 JavaScript 中无法直接表示，这里简化处理
             return self.generate_type_expression(type_node.base);
         }
 
-        if type_node.type == "TupleType" {
+        if type_node.`type` == "TupleType" {
             # 元组类型在 JavaScript 中无法直接表示，这里简化处理
             return "Array";
         }
 
-        if type_node.type == "ObjectType" {
+        if type_node.`type` == "ObjectType" {
             # 对象类型在 JavaScript 中无法直接表示，这里简化处理
             return "Object";
         }
 
-        if type_node.type == "UnionType" {
+        if type_node.`type` == "UnionType" {
             # 联合类型在 JavaScript 中无法直接表示，这里简化处理
             return "Object";
         }
 
-        if type_node.type == "IntersectionType" {
+        if type_node.`type` == "IntersectionType" {
             # 交集类型在 JavaScript 中无法直接表示，这里简化处理
             return "Object";
         }

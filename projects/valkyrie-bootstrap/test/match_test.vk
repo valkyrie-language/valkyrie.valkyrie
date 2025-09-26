@@ -1,0 +1,49 @@
+namespace test;
+
+# 测试基本的 match 语法解析
+micro test_basic_match() {
+    let x = 5;
+    
+    match x {
+        when x > 0: 
+            let result = "positive";
+        when x < 0:
+            let result = "negative";
+        else:
+            let result = "zero";
+    };
+}
+
+# 测试 match 表达式与不同分支类型
+micro test_match_branches() {
+    let value = "hello";
+    
+    match value {
+        type String:
+            let msg = "It's a string";
+        case pattern:
+            let msg = "Pattern matched";
+        when value.length > 0:
+            let msg = "Non-empty";
+        else:
+            let msg = "Default case";
+    };
+}
+
+# 测试嵌套 match 表达式
+micro test_nested_match() {
+    let a = 10;
+    let b = 20;
+    
+    match a {
+        when a > 5:
+            match b {
+                when b > 15:
+                    let result = "both conditions met";
+                else:
+                    let result = "only first condition met";
+            };
+        else:
+            let result = "first condition not met";
+    };
+}

@@ -27,16 +27,6 @@ micro create_warning(message: String, line: i32, column: i32) -> Map<String, Str
     };
 }
 
-# Report compiler error
-micro report_error(error: Map<String, String>) {
-    console.log("Compiler Error: " + error.message + " at line " + error.line + ", column " + error.column);
-}
-
-# Report compiler warning
-micro report_warning(warning: Map<String, String>) {
-    console.log("Compiler Warning: " + warning.message + " at line " + warning.line + ", column " + warning.column);
-}
-
 # Count AST nodes
 micro count_ast_nodes(node: Node) -> i32 {
     if node == null {
@@ -97,7 +87,7 @@ micro validate_syntax(source: String) -> Map<String, String> {
     }
     
     let ast = parse(tokens);
-    if ast.type == "" || ast.type == "ParseError" {
+    if ast.`type` == "" || ast.`type` == "ParseError" {
         return {
             "valid": false,
             "error": "Syntax analysis failed"

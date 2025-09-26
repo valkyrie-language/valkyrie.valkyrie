@@ -67,7 +67,7 @@ class NodeMetadata {
     # 生成节点的唯一标识符
     micro get_node_id(self, node: Node) -> String {
         # 使用节点的位置信息作为唯一标识符
-        return node.type + "_" + node.offset + "_" + node.length + "_" + node.line + "_" + node.column;
+        return node.`type` + "_" + node.offset + "_" + node.length + "_" + node.line + "_" + node.column;
     }
     
     # 清空所有元数据

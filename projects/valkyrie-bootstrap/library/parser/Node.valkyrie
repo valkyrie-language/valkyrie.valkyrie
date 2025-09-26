@@ -1,8 +1,8 @@
 namespace package::parser;
 
 class Node {
-    constructor(type: String, offset: u32, length: u32, line: u32, column: u32) {
-        self.type = type;
+    constructor(typing: String, offset: u32, length: u32, line: u32, column: u32) {
+        self.`type` = typing;
         # 位置信息 - 用于源映射生成
         self.offset = offset;      # 在源文件中的起始偏移量（字节）
         self.length = length;      # 节点在源文件中的长度（字节）

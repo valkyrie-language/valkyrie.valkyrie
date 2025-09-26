@@ -14,25 +14,25 @@ class Type {
     
     # 创建基础类型
     micro create_primitive(type_name: String) -> Type {
-        let type = new Type(type_name);
-        type.is_primitive = true;
-        return type;
+        let ty = new Type(type_name);
+        ty.is_primitive = true;
+        return ty;
     }
     
     # 创建数组类型
     micro create_array(element_type: Type) -> Type {
-        let type = new Type(element_type.name + "[]");
-        type.is_array = true;
-        type.element_type = element_type;
-        return type;
+        let ty = new Type(element_type.name + "[]");
+        ty.is_array = true;
+        ty.element_type = element_type;
+        return ty;
     }
     
     # 创建可空类型
     micro create_nullable(base_type: Type) -> Type {
-        let type = new Type(base_type.name + "?");
-        type.is_nullable = true;
-        type.element_type = base_type;
-        return type;
+        let ty = new Type(base_type.name + "?");
+        ty.is_nullable = true;
+        ty.element_type = base_type;
+        return ty;
     }
     
     # 检查类型兼容性

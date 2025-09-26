@@ -21,7 +21,7 @@ class NamespaceManager {
             return expr;
         }
 
-        if expr.type == "Identifier" {
+        if expr.`type` == "Identifier" {
             # Check if it's a function call
             let i = 0;
             while i < function_statements.length {
@@ -76,11 +76,11 @@ class NamespaceManager {
             return expr;
         }
 
-        if expr.type == "MicroCall" {
+        if expr.`type` == "MicroCall" {
             let resolved_expr = Object.assign({}, expr);
 
             # Special handling for function name namespace resolution
-            if expr.callee.type == "Identifier" {
+            if expr.callee.`type` == "Identifier" {
                 let function_name = expr.callee.name;
                 let found_function = false;
                 let i = 0;
@@ -106,7 +106,7 @@ class NamespaceManager {
                             let m = 0;
                             while m < class_stmt.members.length {
                                 let member = class_stmt.members[m];
-                                if member.type == "MemberStatement" && member.name == function_name {
+                                if member.`type` == "MemberStatement" && member.name == function_name {
                                     # Issue warning: suggest using explicit Self:: or self. syntax
                                     diagnostics.add_warning(
                                         "Implicit member call detected for '" + function_name + "'. Consider using 'Self::" + function_name + "()' for static methods or 'self." + function_name + "()' for instance methods.",
@@ -140,27 +140,27 @@ class NamespaceManager {
             return resolved_expr;
         }
 
-        if expr.type == "BinaryOp" {
+        if expr.`type` == "BinaryOp" {
             let resolved_expr = Object.assign({}, expr);
             resolved_expr.left = self.resolve_identifiers_in_expression(expr.left, function_statements, variable_statements, class_statements, options, diagnostics);
             resolved_expr.right = self.resolve_identifiers_in_expression(expr.right, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_expr;
         }
 
-        if expr.type == "Assignment" {
+        if expr.`type` == "Assignment" {
             let resolved_expr = Object.assign({}, expr);
             resolved_expr.left = self.resolve_identifiers_in_expression(expr.left, function_statements, variable_statements, class_statements, options, diagnostics);
             resolved_expr.right = self.resolve_identifiers_in_expression(expr.right, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_expr;
         }
 
-        if expr.type == "PropertyAccess" {
+        if expr.`type` == "PropertyAccess" {
             let resolved_expr = Object.assign({}, expr);
             resolved_expr.object = self.resolve_identifiers_in_expression(expr.object, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_expr;
         }
 
-        if expr.type == "NewExpression" {
+        if expr.`type` == "NewExpression" {
             let resolved_expr = Object.assign({}, expr);
 
             # Resolve className, check if namespace prefix needs to be added
@@ -196,19 +196,19 @@ class NamespaceManager {
             return stmt;
         }
 
-        if stmt.type == "LetStatement" {
+        if stmt.`type` == "LetStatement" {
             let resolved_stmt = Object.assign({}, stmt);
             resolved_stmt.value = self.resolve_identifiers_in_expression(stmt.value, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_stmt;
         }
 
-        if stmt.type == "ExpressionStatement" {
+        if stmt.`type` == "ExpressionStatement" {
             let resolved_stmt = Object.assign({}, stmt);
             resolved_stmt.expression = self.resolve_identifiers_in_expression(stmt.expression, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_stmt;
         }
 
-        if stmt.type == "ReturnStatement" {
+        if stmt.`type` == "ReturnStatement" {
             let resolved_stmt = Object.assign({}, stmt);
             if stmt.value != null {
                 resolved_stmt.value = self.resolve_identifiers_in_expression(stmt.value, function_statements, variable_statements, class_statements, options, diagnostics);
@@ -216,7 +216,7 @@ class NamespaceManager {
             return resolved_stmt;
         }
 
-        if stmt.type == "IfStatement" {
+        if stmt.`type` == "IfStatement" {
             let resolved_stmt = Object.assign({}, stmt);
             resolved_stmt.condition = self.resolve_identifiers_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
             resolved_stmt.thenBranch = self.resolve_identifiers_in_statement(stmt.thenBranch, function_statements, variable_statements, class_statements, options, diagnostics);
@@ -226,21 +226,21 @@ class NamespaceManager {
             return resolved_stmt;
         }
 
-        if stmt.type == "WhileStatement" {
+        if stmt.`type` == "WhileStatement" {
             let resolved_stmt = Object.assign({}, stmt);
             resolved_stmt.condition = self.resolve_identifiers_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
             resolved_stmt.body = self.resolve_identifiers_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_stmt;
         }
 
-        if stmt.type == "UntilStatement" {
+        if stmt.`type` == "UntilStatement" {
             let resolved_stmt = Object.assign({}, stmt);
             resolved_stmt.condition = self.resolve_identifiers_in_expression(stmt.condition, function_statements, variable_statements, class_statements, options, diagnostics);
             resolved_stmt.body = self.resolve_identifiers_in_statement(stmt.body, function_statements, variable_statements, class_statements, options, diagnostics);
             return resolved_stmt;
         }
 
-        if stmt.type == "Block" {
+        if stmt.`type` == "Block" {
             let resolved_stmt = Object.assign({}, stmt);
             let resolved_statements = [];
             let i = 0;
@@ -322,7 +322,7 @@ class NamespaceManager {
             let namespace_data = self.namespaces[namespace_name];
             if namespace_data != null && namespace_data.symbols != null {
                 let symbol = namespace_data.symbols[symbol_name];
-                if symbol != null && symbol.type == symbol_type {
+                if symbol != null && symbol.`type` == symbol_type {
                     return namespace_name;
                 }
             }
@@ -485,7 +485,7 @@ micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
     while i < ast.statements.length {
         let stmt = ast.statements[i];
 
-        if stmt.type == "NamespaceStatement" {
+        if stmt.`type` == "NamespaceStatement" {
             has_namespace = true;
             if stmt.isMainNamespace {
                 has_main_namespace = true;

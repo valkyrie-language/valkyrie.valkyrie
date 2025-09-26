@@ -82,25 +82,25 @@ micro resolve_multiple_namespaces(ast: Node) -> Node {
     while i < ast.statements.length {
         let stmt = ast.statements[i];
 
-        if stmt.type == "NamespaceStatement" {
+        if stmt.`type` == "NamespaceStatement" {
             let namespace_path = join_name_path(stmt.path, "::");
             if stmt.isMainNamespace {
                 namespace_path = namespace_path + "!";
             }
             manager.current_namespace = namespace_path;
 
-        } else if stmt.type == "UsingStatement" {
+        } else if stmt.`type` == "UsingStatement" {
             let using_path = join_name_path(stmt.path, "::");
             let is_global = is_main_namespace(using_path);
             manager.add_using_import(using_path, is_global);
 
-        } else if stmt.type == "MicroDeclaration" {
+        } else if stmt.`type` == "MicroDeclaration" {
             manager.add_symbol_to_namespace(manager.current_namespace, stmt.name, "function", stmt, manager.current_file);
 
-        } else if stmt.type == "ClassDeclaration" {
+        } else if stmt.`type` == "ClassDeclaration" {
             manager.add_symbol_to_namespace(manager.current_namespace, stmt.name, "class", stmt, manager.current_file);
 
-        } else if stmt.type == "LetStatement" {
+        } else if stmt.`type` == "LetStatement" {
             manager.add_symbol_to_namespace(manager.current_namespace, stmt.name, "variable", stmt, manager.current_file);
         }
 
@@ -112,13 +112,13 @@ micro resolve_multiple_namespaces(ast: Node) -> Node {
     while j < ast.statements.length {
         let stmt = ast.statements[j];
 
-        if stmt.type == "MicroDeclaration" {
+        if stmt.`type` == "MicroDeclaration" {
             stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
 
-        } else if stmt.type == "ClassDeclaration" {
+        } else if stmt.`type` == "ClassDeclaration" {
             stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
 
-        } else if stmt.type == "LetStatement" {
+        } else if stmt.`type` == "LetStatement" {
             stmt.uniqueName = manager.get_fully_qualified_name(stmt.name, manager.current_namespace);
         }
 
