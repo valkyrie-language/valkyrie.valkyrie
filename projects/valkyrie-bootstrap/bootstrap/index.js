@@ -856,11 +856,11 @@ export function package_lexer_get_keyword_type(value) {
     if (value == "as") {
         return "AS";
     }
-    return "IDENTIFIER";
+    return "SYMBOL_XID";
 }
 export function package_parser_parsePatternExpression(parser) {
     let token = parser.current_token;
-    if (token.type == "IDENTIFIER") {
+    if (token.type == "SYMBOL_XID") {
         parser.advance();
         let node = parser.mark_node("TypeIdentifier");
         node.name = token.value;
@@ -1050,7 +1050,7 @@ export function package_parser_parseUnaryExpression(parser, inline) {
 }
 export function package_parser_parseNewExpression(parser, inline) {
     parser.advance();
-    let className = parser.expect("IDENTIFIER");
+    let className = parser.expect("SYMBOL_XID");
     if (className.type == "ParseError") {
         return className;
     }
@@ -1152,7 +1152,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
                 awaitNode.argument = expr;
                 expr = awaitNode;
             } else {
-                let property = parser.expect("IDENTIFIER");
+                let property = parser.expect("SYMBOL_XID");
                 if (property && property.type == "ParseError") {
                     return property;
                 }
@@ -1163,7 +1163,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
             }
         } else if (parser.current_token.type == "DOUBLE_COLON") {
             parser.advance();
-            let methodName = parser.expect("IDENTIFIER");
+            let methodName = parser.expect("SYMBOL_XID");
             if (methodName && methodName.type == "ParseError") {
                 return methodName;
             }
@@ -1171,7 +1171,7 @@ export function package_parser_parsePostfixExpression(parser, inline) {
             namespacePath.push(methodName.value);
             while (parser.current_token.type == "DOUBLE_COLON") {
                 parser.advance();
-                let nextName = parser.expect("IDENTIFIER");
+                let nextName = parser.expect("SYMBOL_XID");
                 if (nextName && nextName.type == "ParseError") {
                     return nextName;
                 }
@@ -1270,7 +1270,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
         node.value = value;
         return node;
     }
-    if (parser.current_token.type == "IDENTIFIER") {
+    if (parser.current_token.type == "SYMBOL_XID") {
         let name = parser.current_token.value;
         parser.advance();
         if (parser.current_token.type == "LBRACE" && !inline) {
@@ -1332,7 +1332,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
     }
     if (parser.current_token.type == "NEW") {
         parser.advance();
-        let className = parser.expect("IDENTIFIER");
+        let className = parser.expect("SYMBOL_XID");
         if (className && className.type == "ParseError") {
             return className;
         }
@@ -1428,7 +1428,7 @@ export function package_parser_parseAtomicExpression(parser, inline) {
         node.properties = [];
         if (parser.current_token.type != "RBRACE") {
             while (
-                parser.current_token.type == "IDENTIFIER" ||
+                parser.current_token.type == "SYMBOL_XID" ||
                 parser.current_token.type == "STRING"
             ) {
                 let key = parser.current_token.value;
@@ -1490,12 +1490,12 @@ export function package_parser_parseTermParameters(parser) {
 }
 export function package_parser_parseTypedParameter(parser) {
     let paramName = null;
-    if (parser.current_token.type == "IDENTIFIER") {
-        paramName = parser.expect("IDENTIFIER");
+    if (parser.current_token.type == "SYMBOL_XID") {
+        paramName = parser.expect("SYMBOL_XID");
     } else if (parser.current_token.type == "SELF") {
         paramName = parser.expect("SELF");
     } else {
-        paramName = parser.expect("IDENTIFIER");
+        paramName = parser.expect("SYMBOL_XID");
     }
     if (paramName && paramName.type == "ParseError") {
         return paramName;
@@ -1677,7 +1677,7 @@ export function package_parser_parsePostfixTypeExpression(parser) {
     return expr;
 }
 export function package_parser_parseAtomicTypeExpression(parser) {
-    if (parser.current_token.type == "IDENTIFIER") {
+    if (parser.current_token.type == "SYMBOL_XID") {
         let name = parser.current_token.value;
         parser.advance();
         let node = parser.mark_node("TypeIdentifier");
@@ -1731,7 +1731,7 @@ export function package_parser_parseAtomicTypeExpression(parser) {
         let properties = [];
         if (parser.current_token.type != "RBRACE") {
             while (
-                parser.current_token.type == "IDENTIFIER" ||
+                parser.current_token.type == "SYMBOL_XID" ||
                 parser.current_token.type == "STRING"
             ) {
                 let key = parser.current_token.value;
@@ -1869,7 +1869,7 @@ export function package_parser_parseStatement(parser) {
         let nextIndex = parser.position + 1;
         if (
             nextIndex < parser.tokens.length &&
-            parser.tokens[nextIndex].type == "IDENTIFIER"
+            parser.tokens[nextIndex].type == "SYMBOL_XID"
         ) {
             let afterNameIndex = nextIndex + 1;
             if (
@@ -1910,7 +1910,7 @@ export function package_parser_parseStatement(parser) {
 }
 export function package_parser_parseLetStatement(parser) {
     parser.advance();
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if (name && name.type == "ParseError") {
         return name;
     }
@@ -1939,14 +1939,14 @@ export function package_parser_parseNamespaceStatement(parser) {
         parser.advance();
         isMainNamespace = true;
     }
-    let identifier = parser.expect("IDENTIFIER");
+    let identifier = parser.expect("SYMBOL_XID");
     if (identifier.type == "ParseError") {
         return identifier;
     }
     path.push(identifier.value);
     while (parser.current_token.type == "DOUBLE_COLON") {
         parser.advance();
-        identifier = parser.expect("IDENTIFIER");
+        identifier = parser.expect("SYMBOL_XID");
         if (identifier.type == "ParseError") {
             return identifier;
         }
@@ -1964,14 +1964,14 @@ export function package_parser_parseNamespaceStatement(parser) {
 export function package_parser_parseUsingStatement(parser) {
     parser.advance();
     let path = [];
-    let identifier = parser.expect("IDENTIFIER");
+    let identifier = parser.expect("SYMBOL_XID");
     if (identifier.type == "ParseError") {
         return identifier;
     }
     path.push(identifier.value);
     while (parser.current_token.type == "DOUBLE_COLON") {
         parser.advance();
-        identifier = parser.expect("IDENTIFIER");
+        identifier = parser.expect("SYMBOL_XID");
         if (identifier.type == "ParseError") {
             return identifier;
         }
@@ -1987,7 +1987,7 @@ export function package_parser_parseUsingStatement(parser) {
 }
 export function package_parser_parseAttributeStatement(parser) {
     parser.advance();
-    let jsToken = parser.expect("IDENTIFIER");
+    let jsToken = parser.expect("SYMBOL_XID");
     if (jsToken.type == "ParseError") {
         return jsToken;
     }
@@ -2023,7 +2023,7 @@ export function package_parser_parseAttributeStatement(parser) {
     if (microToken.type == "ParseError") {
         return microToken;
     }
-    let functionName = parser.expect("IDENTIFIER");
+    let functionName = parser.expect("SYMBOL_XID");
     if (functionName.type == "ParseError") {
         return functionName;
     }
@@ -2033,14 +2033,14 @@ export function package_parser_parseAttributeStatement(parser) {
     }
     let parameters = [];
     if (parser.current_token.type != "RPAREN") {
-        let param = parser.expect("IDENTIFIER");
+        let param = parser.expect("SYMBOL_XID");
         if (param.type == "ParseError") {
             return param;
         }
         parameters.push(param.value);
         while (parser.current_token.type == "COMMA") {
             parser.advance();
-            param = parser.expect("IDENTIFIER");
+            param = parser.expect("SYMBOL_XID");
             if (param.type == "ParseError") {
                 return param;
             }
@@ -2065,7 +2065,7 @@ export function package_parser_parseAttributeStatement(parser) {
 }
 export function package_parser_parseMicroFunctionDeclaration(parser) {
     parser.advance();
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if (name && name.type == "ParseError") {
         return name;
     }
@@ -2115,7 +2115,7 @@ export function package_parser_parse_keyword(
     node_type
 ) {
     parser.advance();
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if (name && name.type == "ParseError") {
         return name;
     }
@@ -2128,7 +2128,7 @@ export function package_parser_parse_keyword(
 export function package_parser_parse_inheritor(parser, node) {
     if (parser.current_token.type == "EXTENDS") {
         parser.advance();
-        let superName = parser.expect("IDENTIFIER");
+        let superName = parser.expect("SYMBOL_XID");
         if (superName && superName.type == "ParseError") {
             return superName;
         }
@@ -2260,7 +2260,7 @@ export function package_parser_parseClassMember(parser) {
     }
     if (parser.current_token.type == "MICRO") {
         parser.advance();
-        let name = parser.expect("IDENTIFIER");
+        let name = parser.expect("SYMBOL_XID");
         if (name && name.type == "ParseError") {
             return name;
         }
@@ -2322,7 +2322,7 @@ export function package_parser_parseClassMember(parser) {
         methodNode.isStatic = !isInstanceMethod;
         return methodNode;
     }
-    if (parser.current_token.type == "IDENTIFIER") {
+    if (parser.current_token.type == "SYMBOL_XID") {
         let nextIndex = parser.position + 1;
         if (nextIndex < parser.tokens.length) {
             let next_token = parser.tokens[nextIndex];
@@ -2331,7 +2331,7 @@ export function package_parser_parseClassMember(parser) {
                 next_token.type == "ASSIGN" ||
                 next_token.type == "SEMICOLON"
             ) {
-                let name = parser.expect("IDENTIFIER");
+                let name = parser.expect("SYMBOL_XID");
                 if (name && name.type == "ParseError") {
                     return name;
                 }
@@ -2374,7 +2374,7 @@ export function package_parser_parseClassMember(parser) {
 }
 export function package_parser_parse_function_declaration(parser) {
     parser.advance();
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if (name && name.type == "ParseError") {
         return name;
     }
@@ -3192,7 +3192,22 @@ class package_codegen_JsCodeGeneration {
     write(text) {
         this.buffer = this.buffer + text;
         if (this.js_mapping) {
-            this.js_mapping.generate_with_mapping(text, false, 0);
+            let i = 0;
+            let newline_count = 0;
+            while (i < text.length) {
+                if (text[i] == "\n") {
+                    newline_count = newline_count + 1;
+                }
+                i = i + 1;
+            }
+            if (newline_count > 0) {
+                this.js_mapping.current_line =
+                    this.js_mapping.current_line + newline_count;
+                this.js_mapping.current_column = 0;
+            } else {
+                this.js_mapping.current_column =
+                    this.js_mapping.current_column + text.length;
+            }
         }
     }
 
@@ -3206,7 +3221,22 @@ class package_codegen_JsCodeGeneration {
         let full_line = current_indent + text + "\n";
         this.buffer = this.buffer + full_line;
         if (this.js_mapping) {
-            this.js_mapping.generate_with_mapping(full_line, false, 0);
+            let i = 0;
+            let newline_count = 0;
+            while (i < full_line.length) {
+                if (full_line[i] == "\n") {
+                    newline_count = newline_count + 1;
+                }
+                i = i + 1;
+            }
+            if (newline_count > 0) {
+                this.js_mapping.current_line =
+                    this.js_mapping.current_line + newline_count;
+                this.js_mapping.current_column = 0;
+            } else {
+                this.js_mapping.current_column =
+                    this.js_mapping.current_column + full_line.length;
+            }
         }
     }
 
@@ -3218,6 +3248,22 @@ class package_codegen_JsCodeGeneration {
             } else {
                 this.js_mapping.generate_with_mapping(text, false, 0);
             }
+        }
+    }
+
+    create_source_span_from_node(node, file_name) {
+        if (node && node.has_valid_position()) {
+            let end_line = node.line;
+            let end_column = node.column + node.length;
+            return new package_generation_SourceSpan(
+                file_name,
+                node.line,
+                node.column,
+                end_line,
+                end_column
+            );
+        } else {
+            return false;
         }
     }
 
@@ -3359,6 +3405,21 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_identifier_expression(node) {
+        console.log(JSON.stringify(node));
+        if (this.js_mapping) {
+            if (node && node.has_valid_position) {
+                if (node.has_valid_position()) {
+                    let source_span = this.create_source_span_from_node(
+                        node,
+                        this.current_source_file
+                    );
+                    if (source_span) {
+                        this.write_identifier(node.name, source_span, 0);
+                        return node.name;
+                    }
+                }
+            }
+        }
         return node.name;
     }
 

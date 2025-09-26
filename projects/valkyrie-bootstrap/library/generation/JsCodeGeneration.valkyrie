@@ -39,9 +39,24 @@ class JsCodeGeneration {
     
     micro write(self, text: String) -> unit {
         self.buffer = self.buffer + text;
-        # Update source map position if enabled
+        # Update source map position if enabled (不传递源映射信息，只更新位置)
         if self.js_mapping {
-            self.js_mapping.generate_with_mapping(text, false, 0);
+            # 更新位置但不添加映射，因为这里没有具体的源位置信息
+            let i = 0;
+            let newline_count = 0;
+            while i < text.length {
+                if text[i] == "\n" {
+                    newline_count = newline_count + 1;
+                }
+                i = i + 1;
+            }
+            
+            if newline_count > 0 {
+                self.js_mapping.current_line = self.js_mapping.current_line + newline_count;
+                self.js_mapping.current_column = 0;
+            } else {
+                self.js_mapping.current_column = self.js_mapping.current_column + text.length;
+            }
         }
     }
     
@@ -54,9 +69,24 @@ class JsCodeGeneration {
         }
         let full_line = current_indent + text + "\n";
         self.buffer = self.buffer + full_line;
-        # Update source map position if enabled
+        # Update source map position if enabled (不传递源映射信息，只更新位置)
         if self.js_mapping {
-            self.js_mapping.generate_with_mapping(full_line, false, 0);
+            # 更新位置但不添加映射，因为这里没有具体的源位置信息
+            let i = 0;
+            let newline_count = 0;
+            while i < full_line.length {
+                if full_line[i] == "\n" {
+                    newline_count = newline_count + 1;
+                }
+                i = i + 1;
+            }
+            
+            if newline_count > 0 {
+                self.js_mapping.current_line = self.js_mapping.current_line + newline_count;
+                self.js_mapping.current_column = 0;
+            } else {
+                self.js_mapping.current_column = self.js_mapping.current_column + full_line.length;
+            }
         }
     }
     
@@ -69,6 +99,17 @@ class JsCodeGeneration {
             } else {
                 self.js_mapping.generate_with_mapping(text, false, 0);
             }
+        }
+    }
+
+    # 从 Node 创建 SourceSpan 的辅助函数
+    micro create_source_span_from_node(self, node, file_name: String) {
+        if node && node.has_valid_position() {
+            let end_line = node.line;
+            let end_column = node.column + node.length;
+            return new SourceSpan(file_name, node.line, node.column, end_line, end_column);
+        } else {
+            return false;
         }
     }
 
@@ -227,6 +268,19 @@ class JsCodeGeneration {
     
     # 生成标识符表达式
     micro generate_identifier_expression(self, node: Node) -> String {
+        # 检查 node 是否有 has_valid_position 方法
+        console.log(JSON.stringify(node));
+        if self.js_mapping {
+            if node && node.has_valid_position {
+                if node.has_valid_position() {
+                    let source_span = self.create_source_span_from_node(node, self.current_source_file);
+                    if source_span {
+                        self.write_identifier(node.name, source_span, 0);
+                        return node.name;
+                    }
+                }
+            }
+        }
         return node.name;
     }
     

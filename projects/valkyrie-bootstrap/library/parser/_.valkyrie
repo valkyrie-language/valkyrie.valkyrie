@@ -46,7 +46,7 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
     if parser.current_token.type == "MICRO" {
         # 检查是否是顶级 micro function
         let nextIndex = parser.position + 1;
-        if nextIndex < parser.tokens.length && parser.tokens[nextIndex].type == "IDENTIFIER" {
+        if nextIndex < parser.tokens.length && parser.tokens[nextIndex].type == "SYMBOL_XID" {
             let afterNameIndex = nextIndex + 1;
             if afterNameIndex < parser.tokens.length && parser.tokens[afterNameIndex].type == "LPAREN" {
                 return parseMicroFunctionDeclaration(parser);
@@ -96,7 +96,7 @@ micro parseStatement(parser: ValkyrieParser) -> Node {
 
 micro parseLetStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'let'
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if name && name.type == "ParseError" {
         return name;
     }
@@ -133,13 +133,13 @@ micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
         isMainNamespace = true;
     }
 
-    let identifier = parser.expect("IDENTIFIER");
+    let identifier = parser.expect("SYMBOL_XID");
     if (identifier.type == "ParseError") { return identifier; }
     path.push(identifier.value);
 
     while (parser.current_token.type == "DOUBLE_COLON") {
         parser.advance();
-        identifier = parser.expect("IDENTIFIER");
+        identifier = parser.expect("SYMBOL_XID");
         if (identifier.type == "ParseError") { return identifier; }
         path.push(identifier.value);
     }
@@ -157,13 +157,13 @@ micro parseUsingStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'using'
     let path = [];
 
-    let identifier = parser.expect("IDENTIFIER");
+    let identifier = parser.expect("SYMBOL_XID");
     if (identifier.type == "ParseError") { return identifier; }
     path.push(identifier.value);
 
     while (parser.current_token.type == "DOUBLE_COLON") {
         parser.advance();
-        identifier = parser.expect("IDENTIFIER");
+        identifier = parser.expect("SYMBOL_XID");
         if (identifier.type == "ParseError") { return identifier; }
         path.push(identifier.value);
     }
@@ -180,7 +180,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip '↯'
 
     # 期望 js 标识符
-    let jsToken = parser.expect("IDENTIFIER");
+    let jsToken = parser.expect("SYMBOL_XID");
     if jsToken.type == "ParseError" { return jsToken; }
     if jsToken.value != "js" {
         let error = {};
@@ -216,7 +216,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
     if microToken.type == "ParseError" { return microToken; }
 
     # 解析函数名
-    let functionName = parser.expect("IDENTIFIER");
+    let functionName = parser.expect("SYMBOL_XID");
     if functionName.type == "ParseError" { return functionName; }
 
     # 解析参数列表
@@ -225,13 +225,13 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
 
     let parameters = [];
     if parser.current_token.type != "RPAREN" {
-        let param = parser.expect("IDENTIFIER");
+        let param = parser.expect("SYMBOL_XID");
         if param.type == "ParseError" { return param; }
         parameters.push(param.value);
 
         while parser.current_token.type == "COMMA" {
             parser.advance(); # skip comma
-            param = parser.expect("IDENTIFIER");
+            param = parser.expect("SYMBOL_XID");
             if param.type == "ParseError" { return param; }
             parameters.push(param.value);
         }
@@ -256,7 +256,7 @@ micro parseAttributeStatement(parser: ValkyrieParser) -> Node {
 # 解析顶级 micro function 语法: micro name(params) { ... }
 micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if name && name.type == "ParseError" {
         return name;
     }
@@ -313,7 +313,7 @@ micro parseMicroFunctionDeclaration(parser: ValkyrieParser) -> Node {
 # 解析关键词并返回节点类型
 micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type: String) -> Node {
     parser.advance(); # skip keyword
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if name && name.type == "ParseError" {
         return name;
     }
@@ -329,7 +329,7 @@ micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type:
 micro parse_inheritor(parser: ValkyrieParser, node: Node) -> Node {
     if parser.current_token.type == "EXTENDS" {
         parser.advance(); # skip 'extends'
-        let superName = parser.expect("IDENTIFIER");
+        let superName = parser.expect("SYMBOL_XID");
         if superName && superName.type == "ParseError" {
             return superName;
         }
@@ -493,7 +493,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
     # 检查是否是 micro 方法
     if parser.current_token.type == "MICRO" {
         parser.advance(); # skip 'micro'
-        let name = parser.expect("IDENTIFIER");
+        let name = parser.expect("SYMBOL_XID");
         if name && name.type == "ParseError" {
             return name;
         }
@@ -572,13 +572,13 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
     }
 
     # 检查是否是 field（标识符后面可能跟 : 类型, = 值, 或 ;）
-    if parser.current_token.type == "IDENTIFIER" {
+    if parser.current_token.type == "SYMBOL_XID" {
         let nextIndex = parser.position + 1;
         if nextIndex < parser.tokens.length {
             let next_token = parser.tokens[nextIndex];
             if next_token.type == "COLON" || next_token.type == "ASSIGN" || next_token.type == "SEMICOLON" {
                 # 这是一个 field
-                let name = parser.expect("IDENTIFIER");
+                let name = parser.expect("SYMBOL_XID");
                 if name && name.type == "ParseError" {
                     return name;
                 }
@@ -628,7 +628,7 @@ micro parseClassMember(parser: ValkyrieParser) -> Node {
 
 micro parse_function_declaration(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'micro'
-    let name = parser.expect("IDENTIFIER");
+    let name = parser.expect("SYMBOL_XID");
     if name && name.type == "ParseError" {
         return name;
     }

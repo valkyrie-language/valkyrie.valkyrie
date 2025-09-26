@@ -283,5 +283,5 @@ micro get_keyword_type(value: String) -> String {
     if value == "await" { return "AWAIT"; }
     if value == "is" { return "IS"; }
     if value == "as" { return "AS"; }
-    return "IDENTIFIER";
+    return "SYMBOL_XID";
 }

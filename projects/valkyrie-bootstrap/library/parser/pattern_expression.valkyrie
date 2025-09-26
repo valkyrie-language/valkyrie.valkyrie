@@ -4,7 +4,7 @@ namespace package::parser;
 micro parsePatternExpression(parser) {
     let token = parser.current_token;
     
-    if token.type == "IDENTIFIER" {
+    if token.type == "SYMBOL_XID" {
         parser.advance();
         let node = parser.mark_node("TypeIdentifier");
         node.name = token.value;
