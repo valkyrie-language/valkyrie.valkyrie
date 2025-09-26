@@ -1,7 +1,15 @@
 import fs from "fs";
-import {package_compiler_generate_single_js} from "@valkyrie-language/valkyrie-bootstrap";
 import {execSync} from "child_process";
 import path from "path";
+import { fileURLToPath } from 'url';
+
+// 动态导入新版 bootstrap 编译器
+const bootstrapCompilerPath = 'file:///E:/RustroverProjects/nyar-framework/valkyrie.valkyrie/projects/valkyrie-bootstrap/bootstrap/index.js';
+const compiler = await import(bootstrapCompilerPath);
+
+// 获取编译器函数
+const package_compiler_generate_single_js = compiler.package_compiler_generate_single_js;
+const package_compiler_package_compiler_compile_text = compiler.package_compiler_package_compiler_compile_text;
 
 
 /**
@@ -111,8 +119,24 @@ class LegionBootstrap {
         // 使用 Valkyrie 编译器生成单个 JS 文件
         const result = package_compiler_generate_single_js(fileContents);
         
-        // 处理编译结果
-        const compiledCode = (result && typeof result === 'object' && result.code) ? result.code : result;
+        // 处理编译结果 - 新版编译器返回对象格式
+        let compiledCode;
+        if (result && typeof result === 'object') {
+            if (result.success === false) {
+                throw new Error(`库文件编译失败: ${result.error}`);
+            }
+            if (result.success === true) {
+                compiledCode = result.code;
+            } else if (result.code) {
+                compiledCode = result.code;
+            } else {
+                compiledCode = result;
+            }
+        } else if (typeof result === 'string' && result.startsWith('Error:')) {
+            throw new Error(`库文件编译失败: ${result}`);
+        } else {
+            compiledCode = result;
+        }
         
         const outputPath = path.join(this.distDir, 'index.js');
         fs.writeFileSync(outputPath, compiledCode);
@@ -164,8 +188,24 @@ class LegionBootstrap {
 
         const result = package_compiler_generate_single_js(fileContents);
         
-        // 处理编译结果
-        let compiledCode = (result && typeof result === 'object' && result.code) ? result.code : result;
+        // 处理编译结果 - 新版编译器返回对象格式
+        let compiledCode;
+        if (result && typeof result === 'object') {
+            if (result.success === false) {
+                throw new Error(`二进制文件编译失败: ${result.error}`);
+            }
+            if (result.success === true) {
+                compiledCode = result.code;
+            } else if (result.code) {
+                compiledCode = result.code;
+            } else {
+                compiledCode = result;
+            }
+        } else if (typeof result === 'string' && result.startsWith('Error:')) {
+            throw new Error(`二进制文件编译失败: ${result}`);
+        } else {
+            compiledCode = result;
+        }
 
         // 添加库导入
         compiledCode = `// 导入库文件\nimport * as library from './index.js';\n\n` + compiledCode;

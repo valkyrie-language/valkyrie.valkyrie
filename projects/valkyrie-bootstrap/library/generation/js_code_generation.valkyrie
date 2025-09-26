@@ -146,7 +146,7 @@ class JsCodeGeneration {
                 if args.length > 0 {
                     args = args + ", ";
                 }
-                args = args + "function(" + closureParams + ") " + closureBody;
+                args = args + "micro(" + closureParams + ") " + closureBody;
             }
 
             return callee + "(" + args + ")";
@@ -173,7 +173,7 @@ class JsCodeGeneration {
                 body = self.generate_statement(node.body);
             }
 
-            return "function(" + params + ") " + body;
+            return "micro(" + params + ") " + body;
         }
 
         if node.type == "NewExpression" {

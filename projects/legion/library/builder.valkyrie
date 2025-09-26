@@ -170,12 +170,12 @@ micro watch_project(builder, project_path) {
         "ignoreInitial": true
     });
     
-    watcher.on("change", function(path) {
+    watcher.on("change", micro(path) {
         console.log("File changed: " + path);
         build_project(builder, project_path);
     });
     
-    watcher.on("add", function(path) {
+    watcher.on("add", micro(path) {
         console.log("File added: " + path);
         build_project(builder, project_path);
     });
