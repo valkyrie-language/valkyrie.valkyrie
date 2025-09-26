@@ -124,7 +124,7 @@ micro compile_with_compiler(compiler: Compiler, file_contents: Map<String, Strin
 
             if stmt.`type` == "NamespaceStatement" {
                 current_namespace = join_name_path(stmt.path, "::");
-                if stmt.isMainNamespace {
+                if stmt.is_main_namespace {
                     current_namespace = current_namespace + "!";
 
                     # In standard mode, check for duplicate main namespaces

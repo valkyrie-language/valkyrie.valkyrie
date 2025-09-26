@@ -84,7 +84,7 @@ micro resolve_multiple_namespaces(ast: Node) -> Node {
 
         if stmt.`type` == "NamespaceStatement" {
             let namespace_path = join_name_path(stmt.path, "::");
-            if stmt.isMainNamespace {
+            if stmt.is_main_namespace {
                 namespace_path = namespace_path + "!";
             }
             manager.current_namespace = namespace_path;

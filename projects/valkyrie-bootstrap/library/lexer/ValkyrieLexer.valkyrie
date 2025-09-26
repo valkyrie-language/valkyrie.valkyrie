@@ -280,33 +280,34 @@ micro is_digit(ch: String) -> Bool {
 }
 
 micro get_keyword_type(value: String) -> String {
-    if value == "micro" { return "MICRO"; }
-    if value == "let" { return "LET"; }
-    if value == "if" { return "IF"; }
-    if value == "else" { return "ELSE"; }
-    if value == "while" { return "WHILE"; }
-    if value == "until" { return "UNTIL"; }
-    if value == "return" { return "RETURN"; }
-    if value == "true" { return "BOOLEAN"; }
-    if value == "false" { return "BOOLEAN"; }
-    if value == "namespace" { return "NAMESPACE"; }
-    if value == "using" { return "USING"; }
-    if value == "class" { return "CLASS"; }
-    if value == "singleton" { return "SINGLETON"; }
-    if value == "trait" { return "TRAIT"; }
-    if value == "constructor" { return "CONSTRUCTOR"; }
-    if value == "self" { return "SELF"; }
-    if value == "Self" { return "SELF"; }
-    if value == "extends" { return "EXTENDS"; }
-    if value == "implements" { return "IMPLEMENTS"; }
-    if value == "new" { return "NEW"; }
-    if value == "default" { return "DEFAULT"; }
-    if value == "await" { return "AWAIT"; }
-    if value == "is" { return "IS"; }
-    if value == "as" { return "AS"; }
-    if value == "match" { return "MATCH"; }
-    if value == "when" { return "WHEN"; }
-    if value == "case" { return "CASE"; }
-    if value == "type" { return "TYPE"; }
-    return "SYMBOL_XID";
+    match value {
+        case "micro": return "MICRO";
+        case "let": return "LET";
+        case "if": return "IF";
+        case "else": return "ELSE";
+        case "while": return "WHILE";
+        case "until": return "UNTIL";
+        case "return": return "RETURN";
+        case "true": return "BOOLEAN";
+        case "false": return "BOOLEAN";
+        case "namespace": return "NAMESPACE";
+        case "using": return "USING";
+        case "class": return "CLASS";
+        case "singleton": return "SINGLETON";
+        case "trait": return "TRAIT";
+        case "constructor": return "CONSTRUCTOR";
+        case "self": return "SELF";
+        case "extends": return "EXTENDS";
+        case "implements": return "IMPLEMENTS";
+        case "new": return "NEW";
+        case "default": return "DEFAULT";
+        case "await": return "AWAIT";
+        case "is": return "IS";
+        case "as": return "AS";
+        case "match": return "MATCH";
+        case "when": return "WHEN";
+        case "case": return "CASE";
+        case "type": return "TYPE";
+        else: return "SYMBOL_XID";
+    };
 }

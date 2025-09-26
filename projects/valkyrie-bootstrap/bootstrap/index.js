@@ -122,7 +122,7 @@ export function package_compiler_compile_with_compiler(
                     stmt.path,
                     "::"
                 );
-                if (stmt.isMainNamespace) {
+                if (stmt.is_main_namespace) {
                     current_namespace = current_namespace + "!";
                     if (compiler.options.mode == "standard") {
                         if (
@@ -455,7 +455,7 @@ export function package_compiler_validate_namespace_rules(ast, mode) {
         let stmt = ast.statements[i];
         if (stmt.type == "NamespaceStatement") {
             has_namespace = true;
-            if (stmt.isMainNamespace) {
+            if (stmt.is_main_namespace) {
                 has_main_namespace = true;
             }
         }
@@ -643,7 +643,7 @@ export function package_compiler_resolve_multiple_namespaces(ast) {
                 stmt.path,
                 "::"
             );
-            if (stmt.isMainNamespace) {
+            if (stmt.is_main_namespace) {
                 namespace_path = namespace_path + "!";
             }
             manager.current_namespace = namespace_path;
@@ -764,91 +764,63 @@ export function package_lexer_is_digit(ch) {
     return ch >= "0" && ch <= "9";
 }
 export function package_lexer_get_keyword_type(value) {
-    if (value == "micro") {
+    if (value === "micro") {
         return "MICRO";
-    }
-    if (value == "let") {
+    } else if (value === "let") {
         return "LET";
-    }
-    if (value == "if") {
+    } else if (value === "if") {
         return "IF";
-    }
-    if (value == "else") {
+    } else if (value === "else") {
         return "ELSE";
-    }
-    if (value == "while") {
+    } else if (value === "while") {
         return "WHILE";
-    }
-    if (value == "until") {
+    } else if (value === "until") {
         return "UNTIL";
-    }
-    if (value == "return") {
+    } else if (value === "return") {
         return "RETURN";
-    }
-    if (value == "true") {
+    } else if (value === "true") {
         return "BOOLEAN";
-    }
-    if (value == "false") {
+    } else if (value === "false") {
         return "BOOLEAN";
-    }
-    if (value == "namespace") {
+    } else if (value === "namespace") {
         return "NAMESPACE";
-    }
-    if (value == "using") {
+    } else if (value === "using") {
         return "USING";
-    }
-    if (value == "class") {
+    } else if (value === "class") {
         return "CLASS";
-    }
-    if (value == "singleton") {
+    } else if (value === "singleton") {
         return "SINGLETON";
-    }
-    if (value == "trait") {
+    } else if (value === "trait") {
         return "TRAIT";
-    }
-    if (value == "constructor") {
+    } else if (value === "constructor") {
         return "CONSTRUCTOR";
-    }
-    if (value == "self") {
+    } else if (value === "self") {
         return "SELF";
-    }
-    if (value == "Self") {
-        return "SELF";
-    }
-    if (value == "extends") {
+    } else if (value === "extends") {
         return "EXTENDS";
-    }
-    if (value == "implements") {
+    } else if (value === "implements") {
         return "IMPLEMENTS";
-    }
-    if (value == "new") {
+    } else if (value === "new") {
         return "NEW";
-    }
-    if (value == "default") {
+    } else if (value === "default") {
         return "DEFAULT";
-    }
-    if (value == "await") {
+    } else if (value === "await") {
         return "AWAIT";
-    }
-    if (value == "is") {
+    } else if (value === "is") {
         return "IS";
-    }
-    if (value == "as") {
+    } else if (value === "as") {
         return "AS";
-    }
-    if (value == "match") {
+    } else if (value === "match") {
         return "MATCH";
-    }
-    if (value == "when") {
+    } else if (value === "when") {
         return "WHEN";
-    }
-    if (value == "case") {
+    } else if (value === "case") {
         return "CASE";
-    }
-    if (value == "type") {
+    } else if (value === "type") {
         return "TYPE";
+    } else {
+        return "SYMBOL_XID";
     }
-    return "SYMBOL_XID";
 }
 export function package_parser_parsePatternExpression(parser) {
     let token = parser.current_token;
@@ -892,61 +864,45 @@ export function package_parser_parsePatternExpression(parser) {
     }
 }
 export function package_parser_getOperatorPrecedence(tokenType) {
-    if (tokenType == "ASSIGN") {
+    if (tokenType === "ASSIGN") {
         return 1;
-    }
-    if (tokenType == "OR") {
+    } else if (tokenType === "OR") {
         return 2;
-    }
-    if (tokenType == "AND") {
+    } else if (tokenType === "AND") {
         return 3;
-    }
-    if (tokenType == "EQ") {
+    } else if (tokenType === "EQ") {
         return 4;
-    }
-    if (tokenType == "NE") {
+    } else if (tokenType === "NE") {
         return 4;
-    }
-    if (tokenType == "GT") {
+    } else if (tokenType === "GT") {
         return 5;
-    }
-    if (tokenType == "LT") {
+    } else if (tokenType === "LT") {
         return 5;
-    }
-    if (tokenType == "GTE") {
+    } else if (tokenType === "GTE") {
         return 5;
-    }
-    if (tokenType == "LTE") {
+    } else if (tokenType === "LTE") {
         return 5;
-    }
-    if (tokenType == "IS") {
+    } else if (tokenType === "IS") {
         return 5;
-    }
-    if (tokenType == "AS") {
+    } else if (tokenType === "AS") {
         return 5;
-    }
-    if (tokenType == "PIPE") {
+    } else if (tokenType === "PIPE") {
         return 6;
-    }
-    if (tokenType == "AMPERSAND") {
+    } else if (tokenType === "AMPERSAND") {
         return 6;
-    }
-    if (tokenType == "PLUS") {
+    } else if (tokenType === "PLUS") {
         return 7;
-    }
-    if (tokenType == "MINUS") {
+    } else if (tokenType === "MINUS") {
         return 7;
-    }
-    if (tokenType == "MULTIPLY") {
+    } else if (tokenType === "MULTIPLY") {
         return 8;
-    }
-    if (tokenType == "DIVIDE") {
+    } else if (tokenType === "DIVIDE") {
         return 8;
-    }
-    if (tokenType == "MODULO") {
+    } else if (tokenType === "MODULO") {
         return 8;
+    } else {
+        return -1;
     }
-    return -1;
 }
 export function package_parser_isRightAssociative(tokenType) {
     return tokenType == "ASSIGN";
@@ -2093,10 +2049,10 @@ export function package_parser_parseLetStatement(parser) {
 export function package_parser_parseNamespaceStatement(parser) {
     parser.advance();
     let path = [];
-    let isMainNamespace = false;
+    let is_main_namespace = false;
     if (parser.current_token.type == "BANG") {
         parser.advance();
-        isMainNamespace = true;
+        package_compiler_is_main_namespace = true;
     }
     let identifier = parser.expectIdentifier();
     if (identifier.type == "ParseError") {
@@ -2117,7 +2073,7 @@ export function package_parser_parseNamespaceStatement(parser) {
     }
     let node = parser.mark_node("NamespaceStatement");
     node.path = path;
-    node.isMainNamespace = isMainNamespace;
+    node.is_main_namespace = package_compiler_is_main_namespace;
     return node;
 }
 export function package_parser_parseUsingStatement(parser) {
@@ -2701,19 +2657,19 @@ class package_analyzer_Analyzer {
         if (!node) {
             return;
         }
-        if (node.type == "ClassStatement") {
+        if (node.type === "ClassStatement") {
             this.visit_class_statement(node);
-        } else if (node.type == "FunctionStatement") {
+        } else if (node.type === "FunctionStatement") {
             this.visit_function_statement(node);
-        } else if (node.type == "LetStatement") {
+        } else if (node.type === "LetStatement") {
             this.visit_let_statement(node);
-        } else if (node.type == "Identifier") {
+        } else if (node.type === "Identifier") {
             this.visit_identifier(node);
-        } else if (node.type == "MicroCall") {
+        } else if (node.type === "MicroCall") {
             this.visit_micro_call(node);
-        } else if (node.type == "NamespaceStatement") {
+        } else if (node.type === "NamespaceStatement") {
             this.visit_namespace_statement(node);
-        } else if (node.type == "UsingStatement") {
+        } else if (node.type === "UsingStatement") {
             this.visit_using_statement(node);
         } else {
             this.visit_generic_node(node);
@@ -3954,79 +3910,57 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_expression(node) {
-        if (node.type == "Number") {
+        if (node.type === "Number") {
             return this.generate_number_expression(node);
-        }
-        if (node.type == "String") {
+        } else if (node.type === "String") {
             return this.generate_string_expression(node);
-        }
-        if (node.type == "Boolean") {
+        } else if (node.type === "Boolean") {
             return this.generate_boolean_expression(node);
-        }
-        if (node.type == "Identifier") {
+        } else if (node.type === "Identifier") {
             return this.generate_identifier_expression(node);
-        }
-        if (node.type == "BinaryOp") {
+        } else if (node.type === "BinaryOp") {
             return this.generate_binary_op_expression(node);
-        }
-        if (node.type == "Assignment") {
+        } else if (node.type === "Assignment") {
             return this.generate_assignment_expression(node);
-        }
-        if (node.type == "TypeCheck") {
+        } else if (node.type === "TypeCheck") {
             return this.generate_type_check_expression(node);
-        }
-        if (node.type == "OptionalTypeCheck") {
+        } else if (node.type === "OptionalTypeCheck") {
             return this.generate_optional_type_check_expression(node);
-        }
-        if (node.type == "TypeCast") {
+        } else if (node.type === "TypeCast") {
             return this.generate_type_cast_expression(node);
-        }
-        if (node.type == "OptionalTypeCast") {
+        } else if (node.type === "OptionalTypeCast") {
             return this.generate_optional_type_cast_expression(node);
-        }
-        if (node.type == "MicroCall") {
+        } else if (node.type === "MicroCall") {
             return this.generate_micro_call_expression(node);
-        }
-        if (node.type == "AnonymousFunction") {
+        } else if (node.type === "AnonymousFunction") {
             return this.generate_anonymous_function_expression(node);
-        }
-        if (node.type == "NewExpression") {
+        } else if (node.type === "NewExpression") {
             return this.generate_new_expression(node);
-        }
-        if (node.type == "AwaitExpression") {
+        } else if (node.type === "AwaitExpression") {
             return this.generate_await_expression(node);
-        }
-        if (node.type == "PropertyAccess") {
+        } else if (node.type === "PropertyAccess") {
             return this.generate_property_access_expression(node);
-        }
-        if (node.type == "StaticMethodCall") {
+        } else if (node.type === "StaticMethodCall") {
             return this.generate_static_method_call_expression(node);
-        }
-        if (node.type == "StaticPropertyAccess") {
+        } else if (node.type === "StaticPropertyAccess") {
             return this.generate_static_property_access_expression(node);
-        }
-        if (node.type == "ArrayAccess") {
+        } else if (node.type === "ArrayAccess") {
             return this.generate_array_access_expression(node);
-        }
-        if (node.type == "ObjectLiteral") {
+        } else if (node.type === "ObjectLiteral") {
             return this.generate_object_literal_expression(node);
-        }
-        if (node.type == "ArrayLiteral") {
+        } else if (node.type === "ArrayLiteral") {
             return this.generate_array_literal_expression(node);
-        }
-        if (node.type == "UnaryOp") {
+        } else if (node.type === "UnaryOp") {
             return this.generate_unary_op_expression(node);
-        }
-        if (node.type == "ThisExpression") {
+        } else if (node.type === "ThisExpression") {
             return this.generate_this_expression(node);
-        }
-        if (node.type == "DefaultValue") {
+        } else if (node.type === "DefaultValue") {
             return this.generate_default_value_expression(node);
-        }
-        if (node.type == "MatchExpression") {
+        } else if (node.type === "MatchExpression") {
             return this.generate_match_expression(node);
+        } else {
+            return "/* Unknown expression: " + node.type + " */";
         }
-        return "/* Unknown expression: " + node.type + " */";
     }
 
     generate_number_expression(node) {
@@ -4293,55 +4227,41 @@ class package_codegen_JsCodeGeneration {
     }
 
     generate_statement(node) {
-        if (node.type == "LetStatement") {
+        if (node.type === "LetStatement") {
             return this.generate_let_statement(node);
-        }
-        if (node.type == "NamespaceStatement") {
+        } else if (node.type === "NamespaceStatement") {
             return this.generate_namespace_statement(node);
-        }
-        if (node.type == "UsingStatement") {
+        } else if (node.type === "UsingStatement") {
             return this.generate_using_statement(node);
-        }
-        if (node.type == "JSAttributeStatement") {
+        } else if (node.type === "JSAttributeStatement") {
             return this.generate_js_attribute_statement(node);
-        }
-        if (node.type == "ImportJsStatement") {
+        } else if (node.type === "ImportJsStatement") {
             return this.generate_import_js_statement(node);
-        }
-        if (node.type == "MicroDeclaration") {
+        } else if (node.type === "MicroDeclaration") {
             return this.generate_micro_declaration(node);
-        }
-        if (node.type == "MemberStatement") {
+        } else if (node.type === "MemberStatement") {
             return this.generate_member_statement(node);
-        }
-        if (node.type == "IfStatement") {
+        } else if (node.type === "IfStatement") {
             return this.generate_if_statement(node);
-        }
-        if (node.type == "WhileStatement") {
+        } else if (node.type === "WhileStatement") {
             return this.generate_while_statement(node);
-        }
-        if (node.type == "UntilStatement") {
+        } else if (node.type === "UntilStatement") {
             return this.generate_until_statement(node);
-        }
-        if (node.type == "ReturnStatement") {
+        } else if (node.type === "ReturnStatement") {
             return this.generate_return_statement(node);
-        }
-        if (node.type == "Block") {
+        } else if (node.type === "Block") {
             return this.generate_block_statement(node);
-        }
-        if (node.type == "ExpressionStatement") {
+        } else if (node.type === "ExpressionStatement") {
             return this.generate_expression_statement(node);
-        }
-        if (node.type == "ClassDeclaration") {
+        } else if (node.type === "ClassDeclaration") {
             return this.generate_class_declaration(node);
-        }
-        if (node.type == "TraitDeclaration") {
+        } else if (node.type === "TraitDeclaration") {
             return this.generate_trait_declaration(node);
-        }
-        if (node.type == "SingletonDeclaration") {
+        } else if (node.type === "SingletonDeclaration") {
             return this.generate_singleton_declaration(node);
+        } else {
+            return "/* Unknown statement: " + node.type + " */";
         }
-        return "/* Unknown statement: " + node.type + " */";
     }
 
     generate_let_statement(node) {
@@ -4351,7 +4271,7 @@ class package_codegen_JsCodeGeneration {
 
     generate_namespace_statement(node) {
         let namespacePath = this.join_name_path(node.path, "::");
-        if (node.isMainNamespace) {
+        if (node.is_main_namespace) {
             return "// namespace! " + namespacePath + ";";
         } else {
             return "// namespace " + namespacePath + ";";
@@ -4876,7 +4796,7 @@ class package_codegen_JsCodeGeneration {
         let is_first_when = true;
         while (i < node.branches.length) {
             let branch = node.branches[i];
-            if (branch.type == "WhenBranch") {
+            if (branch.type === "WhenBranch") {
                 let condition = this.generate_expression(branch.condition);
                 if (is_first_when) {
                     result = result + "if (" + condition + ") {\n";
@@ -4887,12 +4807,12 @@ class package_codegen_JsCodeGeneration {
                 result =
                     result + this.generate_branch_statements(branch.statements);
                 result = result + "}";
-            } else if (branch.type == "ElseBranch") {
+            } else if (branch.type === "ElseBranch") {
                 result = result + " else {\n";
                 result =
                     result + this.generate_branch_statements(branch.statements);
                 result = result + "}";
-            } else if (branch.type == "CaseBranch") {
+            } else if (branch.type === "CaseBranch") {
                 let pattern_value = this.generate_pattern_expression(
                     branch.pattern
                 );
@@ -4918,8 +4838,11 @@ class package_codegen_JsCodeGeneration {
                 result =
                     result + this.generate_branch_statements(branch.statements);
                 result = result + "}";
-            } else if (branch.type == "TypeBranch") {
+            } else if (branch.type === "TypeBranch") {
                 result = result + "// TODO: Type branch not implemented yet\n";
+            } else {
+                result =
+                    result + "// Unknown branch type: " + branch.type + "\n";
             }
             i = i + 1;
         }

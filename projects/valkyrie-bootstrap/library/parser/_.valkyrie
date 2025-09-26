@@ -125,12 +125,12 @@ micro parseLetStatement(parser: ValkyrieParser) -> Node {
 micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
     parser.advance(); # skip 'namespace'
     let path = [];
-    let isMainNamespace = false;
+    let is_main_namespace = false;
 
     # 检查是否为主空间（namespace!）
     if (parser.current_token.`type` == "BANG") {
         parser.advance(); # skip '!'
-        isMainNamespace = true;
+        is_main_namespace = true;
     }
 
     let identifier = parser.expectIdentifier();
@@ -149,7 +149,7 @@ micro parseNamespaceStatement(parser: ValkyrieParser) -> Node {
 
     let node = parser.mark_node("NamespaceStatement");
     node.path = path;
-    node.isMainNamespace = isMainNamespace;
+    node.is_main_namespace = is_main_namespace;
     return node;
 }
 

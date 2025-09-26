@@ -469,13 +469,6 @@ micro get_main_namespace_name(namespace_path: String) -> String {
     return namespace_path;
 }
 
-
-
-
-
-
-
-
 # Validate namespace rules
 micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
     let has_namespace = false;
@@ -487,7 +480,7 @@ micro validate_namespace_rules(ast: Node, mode: String) -> Map<String, String> {
 
         if stmt.`type` == "NamespaceStatement" {
             has_namespace = true;
-            if stmt.isMainNamespace {
+            if stmt.is_main_namespace {
                 has_main_namespace = true;
             }
         }

@@ -345,7 +345,7 @@ micro parseTypedParameters(parser: ValkyrieParser) -> Array<Node> {
 # 在文件末尾添加三个具体的类型提示解析函数
 # 解析类型提示 (: Typing)
 micro parseTypeHint(parser: ValkyrieParser) -> Node {
-    if (parser.currentToken.`type` == "Colon") {
+    if parser.currentToken.`type` == "Colon" {
         parser.advance();
         return parser.parseTypeExpression();
     }
@@ -354,7 +354,7 @@ micro parseTypeHint(parser: ValkyrieParser) -> Node {
 
 # 解析返回类型 (-> Typing)
 micro parseReturnType(parser: ValkyrieParser) -> Node {
-    if (parser.currentToken.`type` == "Arrow") {
+    if parser.currentToken.`type` == "Arrow" {
         parser.advance();
         return self.parseTypeExpression();
     }
@@ -363,7 +363,7 @@ micro parseReturnType(parser: ValkyrieParser) -> Node {
 
 # 解析效果类型 (/ Typing)
 micro parseEffectType(parser: ValkyrieParser) -> Node {
-    if (parser.currentToken.`type` == "Slash") {
+    if parser.currentToken.`type` == "Slash" {
         parser.advance();
         return parser.parseTypeExpression();
     }
