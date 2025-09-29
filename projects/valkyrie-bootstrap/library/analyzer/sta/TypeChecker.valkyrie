@@ -14,30 +14,30 @@ class TypeChecker {
         self.errors = [];
         self.warnings = [];
     }
-    
+
     # 对符号表执行类型检查
     micro check_symbol_table(self, symbol_table: SymbolTable) {
         # 清空之前的错误和警告
         self.errors = [];
         self.warnings = [];
-        
+
         # 检查所有符号
         let all_symbols = symbol_table.get_all_symbols();
         self.check_symbols(all_symbols);
     }
-    
+
     # 检查符号集合
     micro check_symbols(self, symbols: Object) {
         # 简化实现：遍历所有符号进行类型检查
         # TODO: 实现实际的符号遍历逻辑
     }
-    
+
     # 检查单个符号的类型
     micro check_symbol_type(self, symbol: Symbol) {
         if !symbol {
             return;
         }
-        
+
         # 根据符号类型进行不同的检查
         if symbol.symbol_type == "variable" {
             self.check_variable_type(symbol);
@@ -55,32 +55,32 @@ class TypeChecker {
             self.check_static_access_type(symbol);
         }
     }
-    
+
     # 检查变量类型
     micro check_variable_type(self, symbol: Symbol) {
         # 如果没有显式类型声明，尝试从值推断
         if !symbol.data_type && symbol.value {
             symbol.data_type = self.type_factory.infer_from_literal(symbol.value);
         }
-        
+
         # 如果仍然没有类型，设为 unknown
         if !symbol.data_type {
             symbol.data_type = self.type_factory.get_builtin_type("unknown");
             self.add_warning("Variable '" + symbol.name + "' has unknown type");
         }
     }
-    
+
     # 检查函数类型
     micro check_function_type(self, symbol: Symbol) {
         # 检查函数返回类型
         if !symbol.data_type {
             symbol.data_type = self.type_factory.get_builtin_type("void");
         }
-        
+
         # TODO: 检查函数参数类型
         # TODO: 检查函数体中的类型一致性
     }
-    
+
     # 检查类类型
     micro check_class_type(self, symbol: Symbol) {
         # 类本身的类型就是类名
@@ -88,26 +88,26 @@ class TypeChecker {
             let class_type = new Type(symbol.name);
             symbol.data_type = class_type;
         }
-        
+
         # TODO: 检查类成员的类型
     }
-    
+
     # 检查微函数调用类型
     micro check_micro_call_type(self, symbol: Symbol) {
         # TODO: 检查微函数调用的参数类型匹配
         # TODO: 推断调用结果的类型
-        
+
         # 暂时设为 unknown
         if !symbol.data_type {
             symbol.data_type = self.type_factory.get_builtin_type("unknown");
         }
     }
-    
+
     # 检查 flags 类型
     micro check_flags_type(self, symbol: Symbol) {
         # 创建 flags 类型
         let flags_type = self.type_factory.create_flags(symbol.name);
-        
+
         # 检查 flags 成员
         if symbol.members {
             let i = 0;
@@ -120,15 +120,15 @@ class TypeChecker {
                 i = i + 1;
             }
         }
-        
+
         symbol.data_type = flags_type;
     }
-    
+
     # 检查 eidos 类型
     micro check_eidos_type(self, symbol: Symbol) {
         # 创建 eidos 类型
         let eidos_type = self.type_factory.create_eidos(symbol.name);
-        
+
         # 检查 eidos 成员
         if symbol.members {
             let i = 0;
@@ -141,21 +141,21 @@ class TypeChecker {
                 i = i + 1;
             }
         }
-        
+
         symbol.data_type = eidos_type;
     }
-    
+
     # 检查静态访问类型（:: 操作符）
     micro check_static_access_type(self, symbol: Symbol) {
         # 获取左侧类型（flags 或 eidos）
         let left_type = symbol.left_type;
         let member_name = symbol.member_name;
-        
+
         if !left_type {
             self.add_error("Cannot resolve type for static access");
             return;
         }
-        
+
         # 检查是否为 flags 或 eidos 类型
         if left_type.is_flags || left_type.is_eidos {
             # 检查成员是否存在
@@ -163,61 +163,61 @@ class TypeChecker {
                 self.add_error("Member '" + member_name + "' not found in " + left_type.name);
                 return;
             }
-            
+
             # 静态访问的结果类型是成员的值类型（通常是整数）
             symbol.data_type = self.type_factory.get_builtin_type("i32");
         } else {
             self.add_error("Static access (::) can only be used with flags or eidos types");
         }
     }
-    
+
     # 检查是否为整数值
     micro is_integer_value(self, value: Object) -> bool {
         # 简化实现：检查是否为数字
         return typeof(value) == "number" && value % 1 == 0;
     }
-    
+
     # 检查类型兼容性
     micro check_type_compatibility(self, expected: Type, actual: Type, context: String) -> bool {
         if !expected || !actual {
             return false;
         }
-        
+
         if expected.is_compatible_with(actual) {
             return true;
         }
-        
+
         # 记录类型不匹配错误
         let error_msg = "Type mismatch in " + context + ": expected " + expected.to_string() + ", got " + actual.to_string();
         self.add_error(error_msg);
         return false;
     }
-    
+
     # 添加类型错误
     micro add_error(self, message: String) {
         self.errors.push(message);
     }
-    
+
     # 添加类型警告
     micro add_warning(self, message: String) {
         self.warnings.push(message);
     }
-    
+
     # 获取类型检查错误
     micro get_errors(self) -> Array {
         return self.errors;
     }
-    
+
     # 获取类型检查警告
     micro get_warnings(self) -> Array {
         return self.warnings;
     }
-    
+
     # 检查是否有错误
     micro has_errors(self) -> bool {
         return self.errors.length > 0;
     }
-    
+
     # 检查是否有警告
     micro has_warnings(self) -> bool {
         return self.warnings.length > 0;

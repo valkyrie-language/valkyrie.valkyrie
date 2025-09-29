@@ -1,0 +1,7 @@
+namespace package::analyzer::sta;
+
+⍝ 复合类型，如类、结构体、数组等。
+class CompositeType {
+    ⍝ 复合类型的成员（字段、方法等）列表。
+    members: Array<Symbol>; ⍝ 假设 Symbol 类在其他地方定义
+}

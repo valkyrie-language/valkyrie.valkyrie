@@ -1,0 +1,12 @@
+namespace package::analyzer::rtta;
+
+⍝ 抽象数据类型 (ADT) 变体描述符，用于枚举或联合类型的变体信息。
+⍝ 对于 `eidos` (枚举) 类型，每个枚举成员都将对应一个 `AdtVariantDescriptor`。
+⍝ 在模式匹配时，除了检查 `ValkyrieTypeDescriptor` 确保具名类型一致外，
+⍝ 还会通过此描述符检查具体的变体标签 (`tag_value`)，以实现安全的模式匹配。
+class AdtVariantDescriptor {
+    ⍝ 变体的标签值，用于在运行时区分不同的变体。
+    tag_value: usize;
+    ⍝ 变体所包含的数据类型描述符（如果变体携带数据）。
+    data_type_descriptor: ValkyrieTypeDescriptor;
+}

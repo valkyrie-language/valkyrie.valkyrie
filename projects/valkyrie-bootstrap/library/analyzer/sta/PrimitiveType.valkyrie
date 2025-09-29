@@ -1,0 +1,7 @@
+namespace package::analyzer::sta;
+
+⍝ 原始类型，如整数、浮点数、布尔值等。
+class PrimitiveType {
+    ⍝ 原始类型的值范围或精度信息（可选）。
+    range_info: String;
+}

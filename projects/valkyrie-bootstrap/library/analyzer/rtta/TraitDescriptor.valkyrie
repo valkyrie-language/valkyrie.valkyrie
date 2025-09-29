@@ -1,0 +1,12 @@
+namespace package::analyzer::rtta;
+
+⍝ Trait 描述符，包含 Trait 的元数据。
+⍝ 用于描述一个 Trait 及其关联的方法和类型，无论其 `impl` 块在何处定义。
+class TraitDescriptor {
+    ⍝ Trait 的完全限定名。
+    name: String;
+    ⍝ Trait 定义的所有方法描述符数组。
+    methods: Array<MethodDescriptor>;
+    ⍝ Trait 定义的所有关联类型描述符数组。
+    associated_types: Array<TypeAliasDescriptor>;
+}

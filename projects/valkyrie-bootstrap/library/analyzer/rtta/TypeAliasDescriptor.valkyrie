@@ -1,0 +1,9 @@
+namespace package::analyzer::rtta;
+
+⍝ 类型别名描述符，包含类型别名的元数据。
+class TypeAliasDescriptor {
+    ⍝ 类型别名的名称。
+    name: String;
+    ⍝ 类型别名所指向的实际类型描述符。
+    aliased_type: ValkyrieTypeDescriptor;
+}

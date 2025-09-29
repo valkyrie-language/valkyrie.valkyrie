@@ -1,0 +1,11 @@
+namespace package::analyzer::rtta;
+
+⍝ 方法描述符，包含方法的元数据。
+class MethodDescriptor {
+    ⍝ 方法的名称。
+    name: String;
+    ⍝ 方法的签名（包括参数类型和返回类型）。
+    signature: String;
+    ⍝ 指示方法是否为静态方法。
+    is_static: Boolean;
+}

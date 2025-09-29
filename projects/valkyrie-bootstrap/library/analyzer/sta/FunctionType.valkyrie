@@ -1,0 +1,9 @@
+namespace package::analyzer::sta;
+
+⍝ 函数或方法类型。
+class FunctionType {
+    ⍝ 参数类型列表。
+    parameter_types: Array<Type>;
+    ⍝ 返回类型。
+    return_type: Type;
+}

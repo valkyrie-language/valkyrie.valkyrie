@@ -1,0 +1,23 @@
+namespace package::analyzer::rtta;
+
+⍝ Valkyrie 类型描述符，包含运行时类型信息。
+⍝ 每个具名类型（包括 `eidos` 和 `flags`）都将拥有一个唯一的 `ValkyrieTypeDescriptor` 实例。
+⍝ 即使底层表示相同（例如都为 `usize`），不同的具名类型也会有不同的描述符。
+class ValkyrieTypeDescriptor {
+    ⍝ 类型的完全限定名，例如 `package::module::MyClass` 或 `package::module::Color`。
+    ⍝ 在类型比较时，首先会比较此名称以确保具名类型的一致性。
+    name: String;
+    ⍝ 类型在内存中的大小（字节）。
+    size: usize;
+    ⍝ 类型在内存中的对齐要求（字节）。
+    alignment: usize;
+    ⍝ 父类型描述符的数组，用于表示继承关系或子类型关系。
+    parents: Array<ValkyrieTypeDescriptor>;
+    ⍝ 该类型实现的所有 Trait 的描述符数组。
+    traits: Array<TraitDescriptor>;
+    ⍝ 该类型拥有的所有方法（包括静态方法和实例方法）的描述符数组。
+    methods: Array<MethodDescriptor>;
+    ⍝ 运行时类型标识符。在 WASM-GC 环境中，这可以映射到其 `rtt` (Runtime Type) 机制。
+    ⍝ 对于 Valkyrie 而言，它代表了更高级别的具名类型标识，用于在运行时区分不同的具名类型。
+    runtime_type_id: String;
+}

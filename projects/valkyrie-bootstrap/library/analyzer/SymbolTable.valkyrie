@@ -2,102 +2,32 @@ namespace package::analyzer;
 
 using package::analyzer::Symbol;
 
-# SymbolTable 管理符号表和作用域
+⍝ 符号表类，用于管理程序中的所有符号
 class SymbolTable {
+    ⍝ 存储符号的映射，键为符号的完全限定名字符串，值为 Symbol 实例
+    symbols: Map<String, Symbol>;
+
     constructor() {
-        # 符号映射表
         self.symbols = {};
-        
-        # 作用域栈
-        self.scopes = [];
-        
-        # 当前作用域
-        self.current_scope = false;
     }
-    
-    # 进入新作用域
-    micro enter_scope(self, scope_name: String) {
-        let scope = {
-            name: scope_name,
-            symbols: {},
-            parent: self.current_scope
-        };
-        
-        self.scopes.push(scope);
-        self.current_scope = scope;
-    }
-    
-    # 退出当前作用域
-    micro exit_scope(self) {
-        if self.scopes.length > 0 {
-            self.scopes.pop();
-            if self.scopes.length > 0 {
-                self.current_scope = self.scopes[self.scopes.length - 1];
-            } else {
-                self.current_scope = false;
-            }
-        }
-    }
-    
-    # 添加符号到当前作用域
+
+    ⍝ 添加一个符号到符号表
     micro add_symbol(self, symbol: Symbol) {
-        if self.current_scope && symbol.name {
-            self.current_scope.symbols[symbol.name] = symbol;
-            symbol.scope = self.current_scope;
+        let fqn = symbol.get_fqn();
+        if self.symbols[fqn] {
+            ⍝ 可以在这里添加错误处理，例如符号重定义错误
+            console.log("Error: Symbol '" + fqn + "' already defined.");
         }
-        
-        # 同时添加到全局符号表
-        if symbol.name {
-            self.symbols[symbol.name] = symbol;
-        }
+        self.symbols[fqn] = symbol;
     }
-    
-    # 查找符号（支持作用域链查找）
-    micro find_symbol(self, name: String) -> Symbol {
-        # 先在当前作用域查找
-        let scope = self.current_scope;
-        while scope {
-            if scope.symbols[name] {
-                return scope.symbols[name];
-            }
-            scope = scope.parent;
-        }
-        
-        # 在全局符号表查找
-        if self.symbols[name] {
-            return self.symbols[name];
-        }
-        
-        return false;
+
+    ⍝ 根据完全限定名查找符号
+    micro lookup_symbol(self, fqn: String) -> Symbol {
+        return self.symbols[fqn];
     }
-    
-    # 获取当前作用域的所有符号
-    micro get_current_scope_symbols(self) -> Object {
-        if self.current_scope {
-            return self.current_scope.symbols;
-        }
-        return {};
-    }
-    
-    # 获取所有符号
-    micro get_all_symbols(self) -> Object {
-        return self.symbols;
-    }
-    
-    # 获取当前命名空间路径
-    micro get_current_namespace(self) -> Array {
-        if !self.current_scope {
-            return [];
-        }
-        
-        # 从作用域栈构建命名空间路径
-        let `namespace` = [];
-        let scope = self.current_scope;
-        while scope && scope.name != "global" {
-            `namespace`.unshift(scope.name);
-            scope = scope.parent;
-        }
-        
-        return `namespace`;
+
+    ⍝ 检查符号是否存在
+    micro has_symbol(self, fqn: String) -> Boolean {
+        return self.symbols[fqn] != undefined;
     }
 }

@@ -11,33 +11,33 @@ class Analyzer {
         self.symbol_table = new SymbolTable();
         self.type_checker = new TypeChecker();
     }
-    
+
     # 分析 AST 节点，返回符号表
     micro analyze(self, ast: Node) -> SymbolTable {
         self.symbol_table.enter_scope("global");
         self.visit_node(ast);
-        
+
         # 执行类型检查
         self.type_checker.check_symbol_table(self.symbol_table);
-        
+
         return self.symbol_table;
     }
-    
+
     # 获取类型检查错误
     micro get_type_errors(self) -> Array {
         return self.type_checker.get_errors();
     }
-    
+
     # 获取类型检查警告
     micro get_type_warnings(self) -> Array {
         return self.type_checker.get_warnings();
     }
-    
+
     # 检查是否有类型错误
     micro has_type_errors(self) -> bool {
         return self.type_checker.has_errors();
     }
-    
+
     # 访问节点并创建对应的符号
     micro visit_node(self, node: Node) {
         if !node {
@@ -70,42 +70,42 @@ class Analyzer {
             }
         }
     }
-    
+
     # 访问类声明
     micro visit_class_statement(self, node: Node) {
         let symbol = Symbol.from_node(node, "class");
         symbol.is_exported = true;
         self.symbol_table.add_symbol(symbol);
-        
+
         # 进入类作用域
         if symbol.name {
             self.symbol_table.enter_scope(symbol.name);
         }
     }
-    
+
     # 访问函数声明
     micro visit_function_statement(self, node: Node) {
         let symbol = Symbol.from_node(node, "function");
         symbol.is_exported = true;
         self.symbol_table.add_symbol(symbol);
-        
+
         # 进入函数作用域
         if symbol.name {
             self.symbol_table.enter_scope(symbol.name);
         }
     }
-    
+
     # 访问变量声明
     micro visit_let_statement(self, node: Node) {
         let symbol = Symbol.from_node(node, "variable");
         symbol.is_mutable = true;
         self.symbol_table.add_symbol(symbol);
     }
-    
+
     # 访问标识符
     micro visit_identifier(self, node: Node) {
         let symbol = Symbol.from_node(node, "identifier");
-        
+
         # 如果有 namepath，处理命名空间解析
         if node.namepath && node.namepath.length > 1 {
             # 检查是否在当前命名空间下
@@ -121,7 +121,7 @@ class Analyzer {
                     }
                     i = i + 1;
                 }
-                
+
                 if is_in_namespace {
                     symbol.namespace_path = current_namespace;
                     symbol.resolved_name = node.namepath[node.namepath.length - 1];
@@ -129,7 +129,7 @@ class Analyzer {
                 }
             }
         }
-        
+
         # 查找是否已存在该符号
         let existing = self.symbol_table.find_symbol(symbol.name);
         if existing {
@@ -140,30 +140,30 @@ class Analyzer {
             self.symbol_table.add_symbol(symbol);
         }
     }
-    
+
     # 访问微函数调用
     micro visit_micro_call(self, node: Node) {
         let symbol = Symbol.from_node(node, "micro_call");
         self.symbol_table.add_symbol(symbol);
     }
-    
+
     # 访问命名空间声明
     micro visit_namespace_statement(self, node: Node) {
         let symbol = Symbol.from_node(node, "namespace");
         self.symbol_table.add_symbol(symbol);
-        
+
         # 进入命名空间作用域
         if symbol.name {
             self.symbol_table.enter_scope(symbol.name);
         }
     }
-    
+
     # 访问 using 声明
     micro visit_using_statement(self, node: Node) {
         let symbol = Symbol.from_node(node, "using");
         self.symbol_table.add_symbol(symbol);
     }
-    
+
     # 访问通用节点
     micro visit_generic_node(self, node: Node) {
         # 对于其他类型的节点，创建通用符号
