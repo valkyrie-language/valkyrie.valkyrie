@@ -8,19 +8,6 @@ class Node {
         self.length = length;      # 节点在源文件中的长度（字节）
         self.line = line;          # 行号（UTF-16，与 LSP 兼容）
         self.column = column;      # 列号（UTF-16，与 LSP 兼容）
-        # 如果没有提供位置信息，使用默认值
-        if offset == false {
-            self.offset = 0;
-        }
-        if length == false {
-            self.length = 0;
-        }
-        if line == false {
-            self.line = 1;
-        }
-        if column == false {
-            self.column = 1;
-        }
     }
     
     # 获取节点的源位置信息
