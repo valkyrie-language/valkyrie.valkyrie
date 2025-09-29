@@ -308,13 +308,25 @@ micro parse_keyword(parser: ValkyrieParser, expected_keyword: String, node_type:
 
 # 解析继承关系 (extends)
 micro parse_inheritor(parser: ValkyrieParser, node: Node) -> Node {
-    if parser.current_token.`type` == "EXTENDS" {
-        parser.advance(); # skip 'extends'
-        let superName = parser.parse_identifier();
-        if superName && superName.`type` == "ParseError" {
-            return superName;
+    if parser.current_token.`type` == "LPAREN" {
+        parser.advance(); # skip '('
+        node.superClasses = [];
+        while parser.current_token.`type` != "RPAREN" && parser.current_token.`type` != "EOF" {
+            let superName = parser.parse_identifier();
+            if superName && superName.`type` == "ParseError" {
+                return superName;
+            }
+            node.superClasses.push(superName.value);
+            if parser.current_token.`type` == "COMMA" {
+                parser.advance(); # skip ','
+            } else {
+                break;
+            }
         }
-        node.superClass = superName.value;
+        let rparen = parser.expect("RPAREN");
+        if rparen && rparen.`type` == "ParseError" {
+            return rparen;
+        }
     }
     return node;
 }

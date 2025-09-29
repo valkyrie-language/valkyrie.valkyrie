@@ -1,38 +1,834 @@
-class package__analyzer__rtti__AdtVariantDescriptor {
+// using ;
+// using ;
+// using ;
+// using ;
+class package__analyzer__Analyzer {
     constructor() {
-        self.tag_value = undefined;
-        self.data_type_descriptor = undefined;
+        this.symbol_table = new package__analyzer__SymbolTable();
+        this.type_checker = new package__analyzer__TypeChecker();
+    }
+
+    analyze(ast) {
+        this.symbol_table.enter_scope("global");
+        this.visit_node(ast);
+        this.type_checker.check_symbol_table(this.symbol_table);
+        return this.symbol_table;
+    }
+
+    get_type_errors() {
+        return this.type_checker.get_errors();
+    }
+
+    get_type_warnings() {
+        return this.type_checker.get_warnings();
+    }
+
+    has_type_errors() {
+        return this.type_checker.has_errors();
+    }
+
+    visit_node(node) {
+        if (!node) {
+            return;
+        }
+        if (node.type === "ClassStatement") {
+            this.visit_class_statement(node);
+        } else if (node.type === "FunctionStatement") {
+            this.visit_function_statement(node);
+        } else if (node.type === "LetStatement") {
+            this.visit_let_statement(node);
+        } else if (node.type === "Identifier") {
+            this.visit_identifier(node);
+        } else if (node.type === "MicroCall") {
+            this.visit_micro_call(node);
+        } else if (node.type === "NamespaceStatement") {
+            this.visit_namespace_statement(node);
+        } else if (node.type === "UsingStatement") {
+            this.visit_using_statement(node);
+        } else {
+            this.visit_generic_node(node);
+        }
+        if (node.children) {
+            let i = 0;
+            while (i < node.children.length) {
+                this.visit_node(node.children[i]);
+                i = i + 1;
+            }
+        }
+    }
+
+    visit_class_statement(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "class");
+        symbol.is_exported = true;
+        this.symbol_table.add_symbol(symbol);
+        if (symbol.name) {
+            this.symbol_table.enter_scope(symbol.name);
+        }
+    }
+
+    visit_function_statement(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "function");
+        symbol.is_exported = true;
+        this.symbol_table.add_symbol(symbol);
+        if (symbol.name) {
+            this.symbol_table.enter_scope(symbol.name);
+        }
+    }
+
+    visit_let_statement(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "variable");
+        symbol.is_mutable = true;
+        this.symbol_table.add_symbol(symbol);
+    }
+
+    visit_identifier(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "identifier");
+        if (node.namepath && node.namepath.length > 1) {
+            let current_namespace = this.symbol_table.get_current_namespace();
+            if (current_namespace) {
+                let is_in_namespace = true;
+                let i = 0;
+                while (i < current_namespace.length) {
+                    if (
+                        i >= node.namepath.length ||
+                        node.namepath[i] != current_namespace[i]
+                    ) {
+                        is_in_namespace = false;
+                        break;
+                    }
+                    i = i + 1;
+                }
+                if (is_in_namespace) {
+                    symbol.namespace_path = current_namespace;
+                    symbol.resolved_name =
+                        node.namepath[node.namepath.length - 1];
+                    symbol.full_namepath = node.namepath;
+                }
+            }
+        }
+        let existing = this.symbol_table.find_symbol(symbol.name);
+        if (existing) {
+            existing.references.push(symbol);
+        } else {
+            this.symbol_table.add_symbol(symbol);
+        }
+    }
+
+    visit_micro_call(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "micro_call");
+        this.symbol_table.add_symbol(symbol);
+    }
+
+    visit_namespace_statement(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "namespace");
+        this.symbol_table.add_symbol(symbol);
+        if (symbol.name) {
+            this.symbol_table.enter_scope(symbol.name);
+        }
+    }
+
+    visit_using_statement(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "using");
+        this.symbol_table.add_symbol(symbol);
+    }
+
+    visit_generic_node(node) {
+        let symbol = package__analyzer__Symbol.from_node(node, "generic");
+        if (symbol.name) {
+            this.symbol_table.add_symbol(symbol);
+        }
     }
 }
-class package__analyzer__rtti__MethodDescriptor {
-    constructor() {
-        self.name = undefined;
-        self.signature = undefined;
-        self.is_static = undefined;
+class package__analyzer__Type {
+    constructor(name) {
+        this.name = name;
+        this.is_primitive = false;
+        this.is_nullable = false;
+        this.is_array = false;
+        this.is_flags = false;
+        this.is_eidos = false;
+        this.element_type = false;
+        this.properties = {};
+        this.members = {};
+    }
+
+    static create_primitive(type_name) {
+        let ty = new package__analyzer__Type(type_name);
+        ty.is_primitive = true;
+        return ty;
+    }
+
+    static create_array(element_type) {
+        let ty = new package__analyzer__Type(element_type.name + "[]");
+        ty.is_array = true;
+        ty.element_type = element_type;
+        return ty;
+    }
+
+    static create_nullable(base_type) {
+        let ty = new package__analyzer__Type(base_type.name + "?");
+        ty.is_nullable = true;
+        ty.element_type = base_type;
+        return ty;
+    }
+
+    static create_flags(type_name, members) {
+        let ty = new package__analyzer__Type(type_name);
+        ty.is_flags = true;
+        ty.members = members;
+        return ty;
+    }
+
+    static create_eidos(type_name, members) {
+        let ty = new package__analyzer__Type(type_name);
+        ty.is_eidos = true;
+        ty.members = members;
+        return ty;
+    }
+
+    is_compatible_with(other) {
+        if (this.name == other.name) {
+            return true;
+        }
+        if (other.is_nullable && this.element_type) {
+            return this.is_compatible_with(other.element_type);
+        }
+        if (this.is_array && other.is_array) {
+            if (this.element_type && other.element_type) {
+                return this.element_type.is_compatible_with(other.element_type);
+            }
+        }
+        return false;
+    }
+
+    to_string() {
+        return this.name;
     }
 }
-class package__analyzer__rtti__TraitDescriptor {
+class package__analyzer__TypeFactory {
     constructor() {
-        self.name = undefined;
-        self.methods = undefined;
-        self.associated_types = undefined;
+        this.builtin_types = {};
+        this.setup_builtin_types();
+    }
+
+    setup_builtin_types() {
+        this.builtin_types["bool"] =
+            package__analyzer__Type.create_primitive("bool");
+        this.builtin_types["i32"] =
+            package__analyzer__Type.create_primitive("i32");
+        this.builtin_types["i64"] =
+            package__analyzer__Type.create_primitive("i64");
+        this.builtin_types["f32"] =
+            package__analyzer__Type.create_primitive("f32");
+        this.builtin_types["f64"] =
+            package__analyzer__Type.create_primitive("f64");
+        this.builtin_types["String"] =
+            package__analyzer__Type.create_primitive("String");
+        this.builtin_types["Object"] =
+            package__analyzer__Type.create_primitive("Object");
+        this.builtin_types["void"] =
+            package__analyzer__Type.create_primitive("void");
+        this.builtin_types["unknown"] =
+            package__analyzer__Type.create_primitive("unknown");
+        this.builtin_types["any"] =
+            package__analyzer__Type.create_primitive("any");
+    }
+
+    get_builtin_type(name) {
+        if (this.builtin_types[name]) {
+            return this.builtin_types[name];
+        }
+        return this.builtin_types["unknown"];
+    }
+
+    is_builtin_type(name) {
+        return this.builtin_types[name] != false;
+    }
+
+    infer_from_literal(value) {
+        if (value == "true" || value == "false") {
+            return this.builtin_types["bool"];
+        }
+        if (this.is_integer_literal(value)) {
+            return this.builtin_types["i32"];
+        }
+        if (this.is_float_literal(value)) {
+            return this.builtin_types["f64"];
+        }
+        if (this.is_string_literal(value)) {
+            return this.builtin_types["String"];
+        }
+        return this.builtin_types["unknown"];
+    }
+
+    is_integer_literal(value) {
+        return true;
+    }
+
+    is_float_literal(value) {
+        return true;
+    }
+
+    is_string_literal(value) {
+        return true;
     }
 }
-class package__analyzer__rtti__TypeAliasDescriptor {
+// using ;
+// using ;
+// using ;
+// using ;
+// using ;
+class package__analyzer__TypeChecker {
     constructor() {
-        self.name = undefined;
-        self.aliased_type = undefined;
+        this.type_factory = new package__analyzer__TypeFactory();
+        this.errors = [];
+        this.warnings = [];
+    }
+
+    check_symbol_table(symbol_table) {
+        this.errors = [];
+        this.warnings = [];
+        let all_symbols = symbol_table.get_all_symbols();
+        this.check_symbols(all_symbols);
+    }
+
+    check_symbols(symbols) {}
+
+    check_symbol_type(symbol) {
+        if (!symbol) {
+            return;
+        }
+        if (symbol.symbol_type == "variable") {
+            this.check_variable_type(symbol);
+        } else if (symbol.symbol_type == "function") {
+            this.check_function_type(symbol);
+        } else if (symbol.symbol_type == "class") {
+            this.check_class_type(symbol);
+        } else if (symbol.symbol_type == "micro_call") {
+            this.check_micro_call_type(symbol);
+        } else if (symbol.symbol_type == "flags") {
+            this.check_flags_type(symbol);
+        } else if (symbol.symbol_type == "eidos") {
+            this.check_eidos_type(symbol);
+        } else if (symbol.symbol_type == "static_access") {
+            this.check_static_access_type(symbol);
+        }
+    }
+
+    check_variable_type(symbol) {
+        if (!symbol.data_type && symbol.value) {
+            symbol.data_type = this.type_factory.infer_from_literal(
+                symbol.value
+            );
+        }
+        if (!symbol.data_type) {
+            symbol.data_type = this.type_factory.get_builtin_type("unknown");
+            this.add_warning("Variable '" + symbol.name + "' has unknown type");
+        }
+    }
+
+    check_function_type(symbol) {
+        if (!symbol.data_type) {
+            symbol.data_type = this.type_factory.get_builtin_type("void");
+        }
+    }
+
+    check_class_type(symbol) {
+        if (!symbol.data_type) {
+            let class_type = new package__analyzer__Type(symbol.name);
+            symbol.data_type = class_type;
+        }
+    }
+
+    check_micro_call_type(symbol) {
+        if (!symbol.data_type) {
+            symbol.data_type = this.type_factory.get_builtin_type("unknown");
+        }
+    }
+
+    check_flags_type(symbol) {
+        let flags_type = this.type_factory.create_flags(symbol.name);
+        if (symbol.members) {
+            let i = 0;
+            while (i < symbol.members.length) {
+                let member = symbol.members[i];
+                if (member.value && !this.is_integer_value(member.value)) {
+                    this.add_error(
+                        "Flags member '" +
+                            member.name +
+                            "' must have integer value"
+                    );
+                }
+                i = i + 1;
+            }
+        }
+        symbol.data_type = flags_type;
+    }
+
+    check_eidos_type(symbol) {
+        let eidos_type = this.type_factory.create_eidos(symbol.name);
+        if (symbol.members) {
+            let i = 0;
+            while (i < symbol.members.length) {
+                let member = symbol.members[i];
+                if (member.value && !this.is_integer_value(member.value)) {
+                    this.add_error(
+                        "Eidos member '" +
+                            member.name +
+                            "' must have integer value"
+                    );
+                }
+                i = i + 1;
+            }
+        }
+        symbol.data_type = eidos_type;
+    }
+
+    check_static_access_type(symbol) {
+        let left_type = symbol.left_type;
+        let member_name = symbol.member_name;
+        if (!left_type) {
+            this.add_error("Cannot resolve type for static access");
+            return;
+        }
+        if (left_type.is_flags || left_type.is_eidos) {
+            if (!left_type.members || !left_type.members[member_name]) {
+                this.add_error(
+                    "Member '" +
+                        member_name +
+                        "' not found in " +
+                        left_type.name
+                );
+                return;
+            }
+            symbol.data_type = this.type_factory.get_builtin_type("i32");
+        } else {
+            this.add_error(
+                "Static access (::) can only be used with flags or eidos types"
+            );
+        }
+    }
+
+    is_integer_value(value) {
+        return typeof value == "number" && value % 1 == 0;
+    }
+
+    check_type_compatibility(expected, actual, context) {
+        if (!expected || !actual) {
+            return false;
+        }
+        if (expected.is_compatible_with(actual)) {
+            return true;
+        }
+        let error_msg =
+            "Type mismatch in " +
+            context +
+            ": expected " +
+            expected.to_string() +
+            ", got " +
+            actual.to_string();
+        this.add_error(error_msg);
+        return false;
+    }
+
+    add_error(message) {
+        this.errors.push(message);
+    }
+
+    add_warning(message) {
+        this.warnings.push(message);
+    }
+
+    get_errors() {
+        return this.errors;
+    }
+
+    get_warnings() {
+        return this.warnings;
+    }
+
+    has_errors() {
+        return this.errors.length > 0;
+    }
+
+    has_warnings() {
+        return this.warnings.length > 0;
     }
 }
-class package__analyzer__rtti__ValkyrieTypeDescriptor {
+// using ;
+class package__analyzer__Symbol {
+    constructor(namepath, symbol_type, kind, declaration_node) {
+        self.full_name = undefined;
+        self.symbol_type = undefined;
+        self.kind = undefined;
+        self.declaration_node = undefined;
+        this.full_name = namepath;
+        this.symbol_type = symbol_type;
+        this.kind = kind;
+        this.declaration_node = declaration_node;
+    }
+
+    get_short_name() {
+        if (this.full_name.length > 0) {
+            return this.full_name[this.full_name.length - 1];
+        }
+        return "";
+    }
+
+    get_fqn() {
+        return this.full_name.join("::");
+    }
+}
+// using ;
+class package__analyzer__SymbolTable {
     constructor() {
-        self.name = undefined;
-        self.size = undefined;
-        self.alignment = undefined;
-        self.parents = undefined;
-        self.traits = undefined;
-        self.methods = undefined;
-        self.runtime_type_id = undefined;
+        self.symbols = undefined;
+        this.symbols = {};
+    }
+
+    add_symbol(symbol) {
+        let fqn = symbol.get_fqn();
+        if (this.symbols[fqn]) {
+            console.log("Error: Symbol '" + fqn + "' already defined.");
+        }
+        this.symbols[fqn] = symbol;
+    }
+
+    lookup_symbol(fqn) {
+        return this.symbols[fqn];
+    }
+
+    has_symbol(fqn) {
+        return this.symbols[fqn] != undefined;
+    }
+}
+// using ;
+// using ;
+// using ;
+class package__compiler__DependencyAnalyzer {
+    constructor() {
+        this.dependencies = {};
+        this.reverse_dependencies = {};
+    }
+
+    topological_sort(file_contents) {
+        let file_names = Object.keys(file_contents);
+        let visited = {};
+        let sorted = [];
+        let i = 0;
+        while (i < file_names.length) {
+            visited[file_names[i]] = false;
+            i = i + 1;
+        }
+        let j = 0;
+        while (j < file_names.length) {
+            this.simple_dfs_visit(file_names[j], visited, sorted);
+            j = j + 1;
+        }
+        return { sorted: sorted, error: null };
+    }
+
+    simple_dfs_visit(file_path, visited, sorted) {
+        if (visited[file_path]) {
+            return;
+        }
+        visited[file_path] = true;
+        let dependencies = this.dependencies[file_path];
+        if (dependencies != null) {
+            let i = 0;
+            while (i < dependencies.length) {
+                this.simple_dfs_visit(dependencies[i], visited, sorted);
+                i = i + 1;
+            }
+        }
+        sorted.push(file_path);
+    }
+}
+class package__compiler__NamespaceGroup {
+    constructor(path) {
+        this.path = path;
+        this.namespaces = [];
+        this.declarations = [];
+        this.unique_names = {};
+    }
+
+    add_namespace(part) {
+        this.namespaces.push(part);
+    }
+
+    collect_declarations() {
+        this.declarations = [];
+        let ns_index = 0;
+        while (ns_index < this.namespaces.length) {
+            let namespace = this.namespaces[ns_index];
+            if (namespace.body && namespace.body.length > 0) {
+                let stmt_index = 0;
+                while (stmt_index < namespace.body.length) {
+                    let statement = namespace.body[stmt_index];
+                    this.add_declaration(statement);
+                    stmt_index = stmt_index + 1;
+                }
+            }
+            ns_index = ns_index + 1;
+        }
+    }
+
+    add_declaration(declaration) {
+        if (declaration && declaration.type) {
+            let valid_types = Array();
+            valid_types.push("UsingStatement");
+            valid_types.push("ClassDeclaration");
+            valid_types.push("MicroDeclaration");
+            valid_types.push("SingletonDeclaration");
+            valid_types.push("EidosDeclaration");
+            valid_types.push("FlagsDeclaration");
+            valid_types.push("TraitDeclaration");
+            let is_valid = false;
+            let type_index = 0;
+            while (type_index < valid_types.length) {
+                if (valid_types[type_index] == declaration.type) {
+                    is_valid = true;
+                    break;
+                }
+                type_index = type_index + 1;
+            }
+            if (is_valid) {
+                this.declarations.push(declaration);
+            }
+        }
+    }
+
+    generate_unique_name(declaration, namespace_path) {
+        if (
+            declaration.type == "UsingStatement" &&
+            declaration.path &&
+            declaration.path.name_path
+        ) {
+            let fqn_parts = [];
+            let name_index = 0;
+            while (name_index < declaration.path.name_path.length) {
+                let identifier = declaration.path.name_path[name_index];
+                if (identifier && identifier.name) {
+                    fqn_parts.push(identifier.name);
+                }
+                name_index = name_index + 1;
+            }
+            return fqn_parts.join("__");
+        }
+        let base_name = "";
+        if (declaration.name) {
+            base_name = declaration.name;
+        }
+        if (base_name == "") {
+            return "";
+        }
+        let full_path = namespace_path.slice();
+        full_path.push(base_name);
+        return full_path.join("__");
+    }
+
+    resolve() {
+        this.collect_declarations();
+        let decl_index = 0;
+        while (decl_index < this.declarations.length) {
+            let declaration = this.declarations[decl_index];
+            let unique_name = this.generate_unique_name(declaration, this.path);
+            if (unique_name != "") {
+                this.unique_names[unique_name] = declaration;
+                declaration.unique_name = unique_name;
+            }
+            decl_index = decl_index + 1;
+        }
+        let ns_index = 0;
+        while (ns_index < this.namespaces.length) {
+            let namespace = this.namespaces[ns_index];
+            if (namespace.body && namespace.body.length > 0) {
+                let stmt_index = 0;
+                while (stmt_index < namespace.body.length) {
+                    let statement = namespace.body[stmt_index];
+                    this.resolve_statement(statement);
+                    stmt_index = stmt_index + 1;
+                }
+            }
+            ns_index = ns_index + 1;
+        }
+    }
+
+    resolve_statement(statement) {
+        if (!statement) {
+            return;
+        }
+        if (statement.type === "UsingStatement") {
+            return;
+        } else if (statement.type === "ClassDeclaration") {
+            statement.unique_name = this.resolve_unique_name(statement.name);
+            if (statement.superClasses && statement.superClasses.length > 0) {
+                statement.superClassesUniqueNames = [];
+                let super_class_index = 0;
+                while (super_class_index < statement.superClasses.length) {
+                    let super_class_name =
+                        statement.superClasses[super_class_index];
+                    statement.superClassesUniqueNames.push(
+                        this.resolve_unique_name(super_class_name)
+                    );
+                    super_class_index = super_class_index + 1;
+                }
+            }
+            let member_index = 0;
+            while (member_index < statement.members.length) {
+                let member = statement.members[member_index];
+                this.resolve_statement(member);
+                member_index = member_index + 1;
+            }
+        } else if (statement.type === "Property") {
+        } else if (statement.type === "MicroDeclaration") {
+            statement.unique_name = this.resolve_unique_name(statement.name);
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "SingletonDeclaration") {
+            this.resolve_expression(statement.initializer);
+        } else if (statement.type === "EidosDeclaration") {
+            statement.unique_name = this.resolve_unique_name(statement.name);
+        } else if (statement.type === "ConstructorStatement") {
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "MemberStatement") {
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "ReturnStatement") {
+            this.resolve_expression(statement.value);
+        } else if (statement.type === "LetStatement") {
+            this.resolve_expression(statement.value);
+        } else if (statement.type === "WhileStatement") {
+            this.resolve_expression(statement.condition);
+            this.resolve_statement(statement.body);
+        } else if (statement.type === "IfStatement") {
+            this.resolve_expression(statement.condition);
+            this.resolve_statement(statement.thenBranch);
+            this.resolve_statement(statement.elseBranch);
+        } else if (statement.type === "Block") {
+            let stmt = 0;
+            while (stmt < statement.statements.length) {
+                let stmt_node = statement.statements[stmt];
+                this.resolve_statement(stmt_node);
+                stmt = stmt + 1;
+            }
+        } else if (statement.type === "ExpressionStatement") {
+            this.resolve_expression(statement.expression);
+        } else {
+            console.log(
+                "Unsolved statement type:",
+                JSON.stringify(statement.type)
+            );
+        }
+    }
+
+    resolve_expression(expression) {
+        if (!expression) {
+            return;
+        }
+        if (expression.type === "String") {
+        } else if (expression.type === "Number") {
+        } else if (expression.type === "Boolean") {
+        } else if (expression.type === "ThisExpression") {
+        } else if (expression.type === "Assignment") {
+            this.resolve_expression(expression.left);
+            this.resolve_expression(expression.right);
+        } else if (expression.type === "BinaryOp") {
+            this.resolve_expression(expression.left);
+            this.resolve_expression(expression.right);
+        } else if (expression.type === "UnaryOp") {
+            this.resolve_expression(expression.operand);
+        } else if (expression.type === "PropertyAccess") {
+            this.resolve_expression(expression.object);
+        } else if (expression.type === "MicroCall") {
+            this.resolve_expression(expression.callee);
+            let args = 0;
+            while (args < expression.arguments.length) {
+                let stmt_node = expression.arguments[args];
+                this.resolve_expression(stmt_node);
+                args = args + 1;
+            }
+        } else if (expression.type === "String") {
+            console.log("String:", expression);
+        } else if (expression.type === "ArrayLiteral") {
+            let args = 0;
+            while (args < expression.elements.length) {
+                let stmt_node = expression.elements[args];
+                this.resolve_expression(stmt_node);
+                args = args + 1;
+            }
+        } else if (expression.type === "ArrayAccess") {
+            this.resolve_expression(expression.object);
+            this.resolve_expression(expression.index);
+        } else if (expression.type === "PropertyAccess") {
+            console.log("PropertyAccess:", expression);
+        } else if (expression.type === "ObjectLiteral") {
+            let prop_index = 0;
+            while (prop_index < expression.properties.length) {
+                let prop = expression.properties[prop_index];
+                this.resolve_expression(prop.value);
+                prop_index = prop_index + 1;
+            }
+        } else if (expression.type === "Property") {
+            console.log("Property:", expression);
+        } else if (expression.type === "PropertyAccess") {
+            console.log("PropertyAccess:", expression);
+        } else if (expression.type === "MatchExpression") {
+            let case_index = 0;
+            while (case_index < expression.branches.length) {
+                let case_stmt = expression.branches[case_index];
+                this.resolve_expression(case_stmt.expression);
+                this.resolve_statement(case_stmt.body);
+                case_index = case_index + 1;
+            }
+        } else if (expression.type === "CaseBranch") {
+            console.log("CaseBranch:", expression);
+        } else if (expression.type === "NewExpression") {
+            this.resolve_expression(expression.className);
+            let args = 0;
+            while (args < expression.arguments.length) {
+                let stmt_node = expression.arguments[args];
+                this.resolve_expression(stmt_node);
+                args = args + 1;
+            }
+        } else if (expression.type === "MemberExpression") {
+            this.resolve_expression(expression.object);
+            this.resolve_expression(expression.property);
+        } else if (expression.type === "CallExpression") {
+            this.resolve_expression(expression.callee);
+            if (expression.arguments && expression.arguments.length > 0) {
+                let arg_index = 0;
+                while (arg_index < expression.arguments.length) {
+                    this.resolve_expression(expression.arguments[arg_index]);
+                    arg_index = arg_index + 1;
+                }
+            }
+        } else if (expression.type === "AnonymousFunction") {
+            this.resolve_statement(expression.body);
+        } else if (expression.type === "NamePath") {
+            let identifier_name = expression.name_path[0].name;
+            expression.unique_name = this.resolve_unique_name(identifier_name);
+        } else if (expression.type === "Block") {
+            console.trace("Block:", expression);
+        } else {
+            console.log(
+                "Unsolved expression type:",
+                JSON.stringify(expression.type)
+            );
+        }
+    }
+
+    resolve_unique_name(name) {
+        let unique_names = Object.keys(this.unique_names);
+        let name_index = 0;
+        while (name_index < unique_names.length) {
+            let unique_name = unique_names[name_index];
+            let parts = unique_name.split("__");
+            let last_part = parts[parts.length - 1];
+            if (last_part == name) {
+                return unique_name;
+            }
+            name_index = name_index + 1;
+        }
+        return name;
     }
 }
 // using ;
@@ -1149,323 +1945,6 @@ class package__compiler__CompilerStatistics {
 // using ;
 // using ;
 // using ;
-class package__compiler__DependencyAnalyzer {
-    constructor() {
-        this.dependencies = {};
-        this.reverse_dependencies = {};
-    }
-
-    topological_sort(file_contents) {
-        let file_names = Object.keys(file_contents);
-        let visited = {};
-        let sorted = [];
-        let i = 0;
-        while (i < file_names.length) {
-            visited[file_names[i]] = false;
-            i = i + 1;
-        }
-        let j = 0;
-        while (j < file_names.length) {
-            this.simple_dfs_visit(file_names[j], visited, sorted);
-            j = j + 1;
-        }
-        return { sorted: sorted, error: null };
-    }
-
-    simple_dfs_visit(file_path, visited, sorted) {
-        if (visited[file_path]) {
-            return;
-        }
-        visited[file_path] = true;
-        let dependencies = this.dependencies[file_path];
-        if (dependencies != null) {
-            let i = 0;
-            while (i < dependencies.length) {
-                this.simple_dfs_visit(dependencies[i], visited, sorted);
-                i = i + 1;
-            }
-        }
-        sorted.push(file_path);
-    }
-}
-class package__compiler__NamespaceGroup {
-    constructor(path) {
-        this.path = path;
-        this.namespaces = [];
-        this.declarations = [];
-        this.unique_names = {};
-    }
-
-    add_namespace(part) {
-        this.namespaces.push(part);
-    }
-
-    collect_declarations() {
-        this.declarations = [];
-        let ns_index = 0;
-        while (ns_index < this.namespaces.length) {
-            let namespace = this.namespaces[ns_index];
-            if (namespace.body && namespace.body.length > 0) {
-                let stmt_index = 0;
-                while (stmt_index < namespace.body.length) {
-                    let statement = namespace.body[stmt_index];
-                    this.add_declaration(statement);
-                    stmt_index = stmt_index + 1;
-                }
-            }
-            ns_index = ns_index + 1;
-        }
-    }
-
-    add_declaration(declaration) {
-        if (declaration && declaration.type) {
-            let valid_types = Array();
-            valid_types.push("UsingStatement");
-            valid_types.push("ClassDeclaration");
-            valid_types.push("MicroDeclaration");
-            valid_types.push("SingletonDeclaration");
-            valid_types.push("EidosDeclaration");
-            valid_types.push("FlagsDeclaration");
-            valid_types.push("TraitDeclaration");
-            let is_valid = false;
-            let type_index = 0;
-            while (type_index < valid_types.length) {
-                if (valid_types[type_index] == declaration.type) {
-                    is_valid = true;
-                    break;
-                }
-                type_index = type_index + 1;
-            }
-            if (is_valid) {
-                this.declarations.push(declaration);
-            }
-        }
-    }
-
-    generate_unique_name(declaration, namespace_path) {
-        if (
-            declaration.type == "UsingStatement" &&
-            declaration.path &&
-            declaration.path.name_path
-        ) {
-            let fqn_parts = [];
-            let name_index = 0;
-            while (name_index < declaration.path.name_path.length) {
-                let identifier = declaration.path.name_path[name_index];
-                if (identifier && identifier.name) {
-                    fqn_parts.push(identifier.name);
-                }
-                name_index = name_index + 1;
-            }
-            return fqn_parts.join("__");
-        }
-        let base_name = "";
-        if (declaration.name) {
-            base_name = declaration.name;
-        }
-        if (base_name == "") {
-            return "";
-        }
-        let full_path = namespace_path.slice();
-        full_path.push(base_name);
-        return full_path.join("__");
-    }
-
-    resolve() {
-        this.collect_declarations();
-        let decl_index = 0;
-        while (decl_index < this.declarations.length) {
-            let declaration = this.declarations[decl_index];
-            let unique_name = this.generate_unique_name(declaration, this.path);
-            if (unique_name != "") {
-                this.unique_names[unique_name] = declaration;
-                declaration.unique_name = unique_name;
-            }
-            decl_index = decl_index + 1;
-        }
-        let ns_index = 0;
-        while (ns_index < this.namespaces.length) {
-            let namespace = this.namespaces[ns_index];
-            if (namespace.body && namespace.body.length > 0) {
-                let stmt_index = 0;
-                while (stmt_index < namespace.body.length) {
-                    let statement = namespace.body[stmt_index];
-                    this.resolve_statement(statement);
-                    stmt_index = stmt_index + 1;
-                }
-            }
-            ns_index = ns_index + 1;
-        }
-    }
-
-    resolve_statement(statement) {
-        if (!statement) {
-            return;
-        }
-        if (statement.type === "UsingStatement") {
-            return;
-        } else if (statement.type === "ClassDeclaration") {
-            statement.unique_name = this.resolve_unique_name(statement.name);
-            let member_index = 0;
-            while (member_index < statement.members.length) {
-                let member = statement.members[member_index];
-                this.resolve_statement(member);
-                member_index = member_index + 1;
-            }
-        } else if (statement.type === "Property") {
-        } else if (statement.type === "MicroDeclaration") {
-            statement.unique_name = this.resolve_unique_name(statement.name);
-            this.resolve_statement(statement.body);
-        } else if (statement.type === "SingletonDeclaration") {
-            this.resolve_expression(statement.initializer);
-        } else if (statement.type === "EidosDeclaration") {
-            statement.unique_name = this.resolve_unique_name(statement.name);
-        } else if (statement.type === "ConstructorStatement") {
-            this.resolve_statement(statement.body);
-        } else if (statement.type === "MemberStatement") {
-            this.resolve_statement(statement.body);
-        } else if (statement.type === "ReturnStatement") {
-            this.resolve_expression(statement.value);
-        } else if (statement.type === "LetStatement") {
-            this.resolve_expression(statement.value);
-        } else if (statement.type === "WhileStatement") {
-            this.resolve_expression(statement.condition);
-            this.resolve_statement(statement.body);
-        } else if (statement.type === "IfStatement") {
-            this.resolve_expression(statement.condition);
-            this.resolve_statement(statement.thenBranch);
-            this.resolve_statement(statement.elseBranch);
-        } else if (statement.type === "Block") {
-            let stmt = 0;
-            while (stmt < statement.statements.length) {
-                let stmt_node = statement.statements[stmt];
-                this.resolve_statement(stmt_node);
-                stmt = stmt + 1;
-            }
-        } else if (statement.type === "ExpressionStatement") {
-            this.resolve_expression(statement.expression);
-        } else {
-            console.log(
-                "Unsolved statement type:",
-                JSON.stringify(statement.type)
-            );
-        }
-    }
-
-    resolve_expression(expression) {
-        if (!expression) {
-            return;
-        }
-        if (expression.type === "String") {
-        } else if (expression.type === "Number") {
-        } else if (expression.type === "Boolean") {
-        } else if (expression.type === "ThisExpression") {
-        } else if (expression.type === "Assignment") {
-            this.resolve_expression(expression.left);
-            this.resolve_expression(expression.right);
-        } else if (expression.type === "BinaryOp") {
-            this.resolve_expression(expression.left);
-            this.resolve_expression(expression.right);
-        } else if (expression.type === "UnaryOp") {
-            this.resolve_expression(expression.operand);
-        } else if (expression.type === "PropertyAccess") {
-            this.resolve_expression(expression.object);
-        } else if (expression.type === "MicroCall") {
-            this.resolve_expression(expression.callee);
-            let args = 0;
-            while (args < expression.arguments.length) {
-                let stmt_node = expression.arguments[args];
-                this.resolve_expression(stmt_node);
-                args = args + 1;
-            }
-        } else if (expression.type === "String") {
-            console.log("String:", expression);
-        } else if (expression.type === "ArrayLiteral") {
-            let args = 0;
-            while (args < expression.elements.length) {
-                let stmt_node = expression.elements[args];
-                this.resolve_expression(stmt_node);
-                args = args + 1;
-            }
-        } else if (expression.type === "ArrayAccess") {
-            this.resolve_expression(expression.object);
-            this.resolve_expression(expression.index);
-        } else if (expression.type === "PropertyAccess") {
-            console.log("PropertyAccess:", expression);
-        } else if (expression.type === "ObjectLiteral") {
-            let prop_index = 0;
-            while (prop_index < expression.properties.length) {
-                let prop = expression.properties[prop_index];
-                this.resolve_expression(prop.value);
-                prop_index = prop_index + 1;
-            }
-        } else if (expression.type === "Property") {
-            console.log("Property:", expression);
-        } else if (expression.type === "PropertyAccess") {
-            console.log("PropertyAccess:", expression);
-        } else if (expression.type === "MatchExpression") {
-            let case_index = 0;
-            while (case_index < expression.branches.length) {
-                let case_stmt = expression.branches[case_index];
-                this.resolve_expression(case_stmt.expression);
-                this.resolve_statement(case_stmt.body);
-                case_index = case_index + 1;
-            }
-        } else if (expression.type === "CaseBranch") {
-            console.log("CaseBranch:", expression);
-        } else if (expression.type === "NewExpression") {
-            this.resolve_expression(expression.className);
-            let args = 0;
-            while (args < expression.arguments.length) {
-                let stmt_node = expression.arguments[args];
-                this.resolve_expression(stmt_node);
-                args = args + 1;
-            }
-        } else if (expression.type === "MemberExpression") {
-            this.resolve_expression(expression.object);
-            this.resolve_expression(expression.property);
-        } else if (expression.type === "CallExpression") {
-            this.resolve_expression(expression.callee);
-            if (expression.arguments && expression.arguments.length > 0) {
-                let arg_index = 0;
-                while (arg_index < expression.arguments.length) {
-                    this.resolve_expression(expression.arguments[arg_index]);
-                    arg_index = arg_index + 1;
-                }
-            }
-        } else if (expression.type === "AnonymousFunction") {
-            this.resolve_statement(expression.body);
-        } else if (expression.type === "NamePath") {
-            let identifier_name = expression.name_path[0].name;
-            expression.unique_name = this.resolve_unique_name(identifier_name);
-        } else if (expression.type === "Block") {
-            console.trace("Block:", expression);
-        } else {
-            console.log(
-                "Unsolved expression type:",
-                JSON.stringify(expression.type)
-            );
-        }
-    }
-
-    resolve_unique_name(name) {
-        let unique_names = Object.keys(this.unique_names);
-        let name_index = 0;
-        while (name_index < unique_names.length) {
-            let unique_name = unique_names[name_index];
-            let parts = unique_name.split("__");
-            let last_part = parts[parts.length - 1];
-            if (last_part == name) {
-                return unique_name;
-            }
-            name_index = name_index + 1;
-        }
-        return name;
-    }
-}
-// using ;
-// using ;
-// using ;
 // using ;
 // using ;
 // using ;
@@ -1628,6 +2107,43 @@ export function package__compiler__compile_asts_with_options(
     let compiler = new package__compiler__Compiler(options);
     return package__compiler__compile_with_compiler(compiler, file_contents);
 }
+class package__analyzer__rtta__AdtVariantDescriptor {
+    constructor() {
+        self.tag_value = undefined;
+        self.data_type_descriptor = undefined;
+    }
+}
+class package__analyzer__rtta__MethodDescriptor {
+    constructor() {
+        self.name = undefined;
+        self.signature = undefined;
+        self.is_static = undefined;
+    }
+}
+class package__analyzer__rtta__TraitDescriptor {
+    constructor() {
+        self.name = undefined;
+        self.methods = undefined;
+        self.associated_types = undefined;
+    }
+}
+class package__analyzer__rtta__TypeAliasDescriptor {
+    constructor() {
+        self.name = undefined;
+        self.aliased_type = undefined;
+    }
+}
+class package__analyzer__rtta__ValkyrieTypeDescriptor {
+    constructor() {
+        self.name = undefined;
+        self.size = undefined;
+        self.alignment = undefined;
+        self.parents = undefined;
+        self.traits = undefined;
+        self.methods = undefined;
+        self.runtime_type_id = undefined;
+    }
+}
 class package__analyzer__sta__CompositeType {
     constructor() {
         self.members = undefined;
@@ -1642,73 +2158,6 @@ class package__analyzer__sta__FunctionType {
 class package__analyzer__sta__PrimitiveType {
     constructor() {
         self.range_info = undefined;
-    }
-}
-class package__analyzer__sta__Type {
-    static equals(other) {
-        return false;
-    }
-
-    static is_assignable_to(target) {
-        return false;
-    }
-}
-class package__analyzer__sta__TypeChecker {
-    static check_expression(expression) {
-        return null;
-    }
-
-    static check_statement(statement) {}
-
-    static are_types_compatible(type1, type2) {
-        return false;
-    }
-}
-// using ;
-class package__analyzer__Symbol {
-    constructor(namepath, symbol_type, kind, declaration_node) {
-        self.full_name = undefined;
-        self.symbol_type = undefined;
-        self.kind = undefined;
-        self.declaration_node = undefined;
-        this.full_name = namepath;
-        this.symbol_type = symbol_type;
-        this.kind = kind;
-        this.declaration_node = declaration_node;
-    }
-
-    get_short_name() {
-        if (this.full_name.length > 0) {
-            return this.full_name[this.full_name.length - 1];
-        }
-        return "";
-    }
-
-    get_fqn() {
-        return this.full_name.join("::");
-    }
-}
-// using ;
-class package__analyzer__SymbolTable {
-    constructor() {
-        self.symbols = undefined;
-        this.symbols = {};
-    }
-
-    add_symbol(symbol) {
-        let fqn = symbol.get_fqn();
-        if (this.symbols[fqn]) {
-            console.log("Error: Symbol '" + fqn + "' already defined.");
-        }
-        this.symbols[fqn] = symbol;
-    }
-
-    lookup_symbol(fqn) {
-        return this.symbols[fqn];
-    }
-
-    has_symbol(fqn) {
-        return this.symbols[fqn] != undefined;
     }
 }
 class package__ast__IdentifierNode {
@@ -2474,13 +2923,9 @@ class package__generation__JsCodeGeneration {
 
     generate_class_declaration(node) {
         let className = node.unique_name;
-        let superClass = node.superClass;
+        let superClasses = node.superClassesUniqueNames;
         let members = node.members;
-        let result = "class " + className;
-        if (superClass) {
-            result = result + " extends " + superClass;
-        }
-        result = result + " {\n";
+        let result = "class " + className + " {\n";
         let hasExplicitConstructor = false;
         let explicitConstructor = null;
         let fieldInits = "";
@@ -2528,9 +2973,6 @@ class package__generation__JsCodeGeneration {
                 j = j + 1;
             }
             result = result + "  constructor(" + params + ") {\n";
-            if (superClass) {
-                result = result + "    super();\n";
-            }
             result = result + fieldInits;
             let ctorBody = this.generate_statement(explicitConstructor.body);
             if (ctorBody.startsWith("{\n") && ctorBody.endsWith("\n}")) {
@@ -2540,9 +2982,6 @@ class package__generation__JsCodeGeneration {
             result = result + "  }\n\n";
         } else if (fieldInits != "") {
             result = result + "  constructor() {\n";
-            if (superClass) {
-                result = result + "    super();\n";
-            }
             result = result + fieldInits;
             result = result + "  }\n\n";
         }
@@ -2597,7 +3036,35 @@ class package__generation__JsCodeGeneration {
             i = i + 1;
         }
         result = result + "}";
+        if (superClasses && superClasses.length > 0) {
+            result = result + this.apply_mixins(className, superClasses);
+        }
         return result;
+    }
+
+    apply_mixins(targetClass, mixins) {
+        let mixinCode = "";
+        let i = 0;
+        while (i < mixins.length) {
+            let mixin = mixins[i];
+            mixinCode =
+                mixinCode +
+                "Object.getOwnPropertyNames(" +
+                mixin +
+                ".prototype).forEach(name => {\n";
+            mixinCode = mixinCode + "    if (name !== 'constructor') {\n";
+            mixinCode =
+                mixinCode +
+                "        Object.defineProperty(" +
+                targetClass +
+                ".prototype, name, Object.getOwnPropertyDescriptor(" +
+                mixin +
+                ".prototype, name));\n";
+            mixinCode = mixinCode + "    }\n";
+            mixinCode = mixinCode + "});\n";
+            i = i + 1;
+        }
+        return mixinCode;
     }
 
     generate_trait_declaration(node) {
@@ -5482,13 +5949,28 @@ export function package__parser__parse_keyword(
     return node;
 }
 export function package__parser__parse_inheritor(parser, node) {
-    if (parser.current_token.type == "EXTENDS") {
+    if (parser.current_token.type == "LPAREN") {
         parser.advance();
-        let superName = parser.parse_identifier();
-        if (superName && superName.type == "ParseError") {
-            return superName;
+        node.superClasses = [];
+        while (
+            parser.current_token.type != "RPAREN" &&
+            parser.current_token.type != "EOF"
+        ) {
+            let superName = parser.parse_identifier();
+            if (superName && superName.type == "ParseError") {
+                return superName;
+            }
+            node.superClasses.push(superName.value);
+            if (parser.current_token.type == "COMMA") {
+                parser.advance();
+            } else {
+                break;
+            }
         }
-        node.superClass = superName.value;
+        let rparen = parser.expect("RPAREN");
+        if (rparen && rparen.type == "ParseError") {
+            return rparen;
+        }
     }
     return node;
 }

@@ -147,6 +147,15 @@ class NamespaceGroup {
                 return;
             case "ClassDeclaration":
                 statement.unique_name = self.resolve_unique_name(statement.name);
+                if statement.superClasses && statement.superClasses.length > 0 {
+                    statement.superClassesUniqueNames = [];
+                    let super_class_index = 0;
+                    while super_class_index < statement.superClasses.length {
+                        let super_class_name = statement.superClasses[super_class_index];
+                        statement.superClassesUniqueNames.push(self.resolve_unique_name(super_class_name));
+                        super_class_index = super_class_index + 1;
+                    }
+                }
                 let member_index = 0;
                 while member_index < statement.members.length {
                     let member = statement.members[member_index];

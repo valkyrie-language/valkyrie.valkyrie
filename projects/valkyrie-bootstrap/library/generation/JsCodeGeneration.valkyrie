@@ -828,17 +828,12 @@ class JsCodeGeneration {
     micro generate_class_declaration(self, node: Node) -> String {
         # 直接使用 name 字段（已经是解析后的名称）
         let className = node.unique_name;
-        let superClass = node.superClass;
+        let superClasses = node.superClassesUniqueNames; # Use superClassesUniqueNames for mixins
         let members = node.members;
 
-        let result = "class " + className;
+        let result = "class " + className + " {\n";
 
-        # 添加继承
-        if superClass {
-            result = result + " extends " + superClass;
-        }
-
-        result = result + " {\n";
+        # Removed inheritance via 'extends' keyword
 
         # 检查是否有显式构造函数
         let hasExplicitConstructor = false;
@@ -881,9 +876,7 @@ class JsCodeGeneration {
                 j = j + 1;
             }
             result = result + "  constructor(" + params + ") {\n";
-            if superClass {
-                result = result + "    super();\n";
-            }
+            # No super() call for mixins
             result = result + fieldInits;
             let ctorBody = self.generate_statement(explicitConstructor.body);
             # 移格外层的大括号，只保留内容
@@ -895,9 +888,7 @@ class JsCodeGeneration {
         } else if fieldInits != "" {
             # 自动生成构造函数用于字段初始化
             result = result + "  constructor() {\n";
-            if superClass {
-                result = result + "    super();\n";
-            }
+            # No super() call for mixins
             result = result + fieldInits;
             result = result + "  }\n\n";
         }
@@ -946,9 +937,31 @@ class JsCodeGeneration {
         }
 
         result = result + "}";
+
+        # Apply mixins
+        if superClasses && superClasses.length > 0 {
+            result = result + self.apply_mixins(className, superClasses);
+        }
+
         return result;
     }
     
+    # Helper micro-function to apply mixins
+    micro apply_mixins(self, targetClass: String, mixins: Array) -> String {
+        let mixinCode = "";
+        let i = 0;
+        while i < mixins.length {
+            let mixin = mixins[i];
+            mixinCode = mixinCode + "Object.getOwnPropertyNames(" + mixin + ".prototype).forEach(name => {\n";
+            mixinCode = mixinCode + "    if (name !== 'constructor') {\n";
+            mixinCode = mixinCode + "        Object.defineProperty(" + targetClass + ".prototype, name, Object.getOwnPropertyDescriptor(" + mixin + ".prototype, name));\n";
+            mixinCode = mixinCode + "    }\n";
+            mixinCode = mixinCode + "});\n";
+            i = i + 1;
+        }
+        return mixinCode;
+    }
+
     # 生成 trait 声明
     micro generate_trait_declaration(self, node: Node) -> String {
         # 为 trait 生成占位符，暂时不需要完整的代码生成
