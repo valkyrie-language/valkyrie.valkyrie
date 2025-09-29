@@ -1,6 +1,6 @@
 namespace package::analyzer;
 
-using package::parser::Node;
+using package::ast::Node;
 
 ⍝ 符号类，表示程序中的一个命名实体（如变量、函数、类、Trait 等）
 class Symbol {

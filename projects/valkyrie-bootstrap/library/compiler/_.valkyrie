@@ -10,7 +10,7 @@ using package::compiler::CompilerOptions;
 using package::lexer::ValkyrieLexer;
 using package::parser::parse;
 using package::generation::JsCodeGeneration;
-using package::parser::Node;
+using package::ast::Node;
 using package::compiler::DependencyAnalyzer;
 using package::compiler::CompilerOptions;
 using package::compiler::CompilerDiagnostics;

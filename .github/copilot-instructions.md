@@ -77,7 +77,7 @@ class SimpleCalculator {
 
 ### Important Syntax Notes:
 - **Namespace Declaration**: `namespace package::compiler;` (use `::` for nested namespaces)
-- **Using Statements**: `using package::parser::Node;` (import specific classes/functions)
+- **Using Statements**: `using package::ast::Node;` (import specific classes/functions)
 - **Method Parameters**: Include `self` as first parameter for class methods
 - **Field Declaration**: `field = 42;` (simple field assignment)
 - **Constructor**: Use `constructor(param)` for class constructors

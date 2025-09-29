@@ -1,6 +1,6 @@
 namespace package::generation;
 
-using package::parser::Node;
+using package::ast::Node;
 using package::generation::join_name_path;
 using package::generation::SourceMapBuilder;
 using package::generation::JsSourceMapping;

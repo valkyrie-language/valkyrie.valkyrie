@@ -1,6 +1,6 @@
 namespace package::parser;
 
-using package::parser::Node;
+using package::ast::Node;
 
 # NodeMetadata 存储节点的元数据信息
 # 这样可以保持 Node 的不可变性，同时提供必要的解析信息

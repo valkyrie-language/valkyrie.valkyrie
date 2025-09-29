@@ -4,7 +4,7 @@ using package::compiler::ScopeManager;
 using package::compiler::CompilerOptions;
 using package::compiler::CompilerDiagnostics;
 using package::compiler::LintLevel;
-using package::parser::Node;
+using package::ast::Node;
 using package::compiler::ScopeManager;
 using package::generation::join_name_path;
 

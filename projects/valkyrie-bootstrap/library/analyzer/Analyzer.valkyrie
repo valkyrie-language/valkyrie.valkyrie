@@ -1,6 +1,6 @@
 namespace package::analyzer;
 
-using package::parser::Node;
+using package::ast::Node;
 using package::analyzer::Symbol;
 using package::analyzer::SymbolTable;
 using package::analyzer::TypeChecker;
