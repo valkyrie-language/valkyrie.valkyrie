@@ -131,6 +131,9 @@ class ValkyrieLexer {
             if self.current_char == "#" {
                 self.skip_comment();
                 continue;
+            } else if self.current_char == "⍝" {
+                self.skip_comment();
+                continue;
             }
 
             let line = self.line;

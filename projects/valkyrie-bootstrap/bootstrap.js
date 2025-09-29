@@ -68,8 +68,8 @@ export async function compileSourceWithCompiler(
 ) {
     try {
         // Use the existing compiler function
-        if (typeof compiler.package_compiler_compile_text === "function") {
-            const result = compiler.package_compiler_compile_text(
+        if (typeof compiler.package__compiler__compile_text === "function") {
+            const result = compiler.package__compiler__compile_text(
                 source,
                 isTest
             );
@@ -129,7 +129,7 @@ export async function compileSourceWithCompiler(
             return { success: true, code: code };
         } else {
             throw new Error(
-                "package_compiler_compile_text function not found in compiler module"
+                "package__compiler__compile_text function not found in compiler module"
             );
         }
     } catch (err) {

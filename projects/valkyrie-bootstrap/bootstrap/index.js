@@ -575,6 +575,19 @@ class package__analyzer__TypeChecker {
         return this.warnings.length > 0;
     }
 }
+class package__ast__IdentifierNode {
+    constructor() {
+        this.type = "Identifier";
+        this.name = "";
+    }
+}
+class package__ast__NamepathNode {
+    constructor() {
+        this.type = "NamePath";
+        this.name = "";
+        this.name_path = [];
+    }
+}
 // using ;
 // using ;
 // using ;
@@ -3932,6 +3945,9 @@ class package__lexer__ValkyrieLexer {
             if (this.current_char == "#") {
                 this.skip_comment();
                 continue;
+            } else if (this.current_char == "⍝") {
+                this.skip_comment();
+                continue;
             }
             let line = this.line;
             let column = this.column;
@@ -4300,19 +4316,6 @@ class package__optimizer__transforms__ConstantFoldingTransform {
 
     get_name() {
         return this.base_transform.get_name();
-    }
-}
-class package__ast__IdentifierNode {
-    constructor() {
-        this.type = "Identifier";
-        this.name = "";
-    }
-}
-class package__ast__NamepathNode {
-    constructor() {
-        this.type = "NamePath";
-        this.name = "";
-        this.name_path = [];
     }
 }
 class package__parser__Node {
